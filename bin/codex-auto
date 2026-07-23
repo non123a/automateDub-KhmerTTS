@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+"""Run Codex and auto-resume after transient 503 retry-limit failures."""
+
+from __future__ import annotations
+
+import argparse
+import errno
+import os
+import pty
+import re
+import selectors
+import shutil
+import signal
+import subprocess
+import sys
+import termios
+import time
+import tty
+from collections import deque
+from dataclasses import dataclass
+
+
+RETRYABLE_PATTERNS = (
+    re.compile(r"\b503\b", re.IGNORECASE),
+    re.compile(r"service unavailable", re.IGNORECASE),
+)
+
+RETRY_LIMIT_PATTERNS = (
+    re.compile(r"exceeded retry limit", re.IGNORECASE),
+    re.compile(r"retry limit exceeded", re.IGNORECASE),
+    re.compile(r"maximum retries", re.IGNORECASE),
+    re.compile(r"max retries", re.IGNORECASE),
+)
+
+
+@dataclass(frozen=True)
+class Options:
+    wait_seconds: int
+    max_resumes: int
+    rerun: bool
+    codex_args: list[str]
+
+
+def parse_args(argv: list[str]) -> Options:
+    parser = argparse.ArgumentParser(
+        prog="codex-auto",
+        description=(
+            "Run Codex and, when it exits after a 503 retry-limit failure, "
+            "wait and continue the last session."
+        ),
+    )
+    parser.add_argument(
+        "--wait",
+        type=int,
+        default=int(os.environ.get("CODEX_AUTO_WAIT_SECONDS", "30")),
+        help="seconds to wait before continuing after a retryable failure",
+    )
+    parser.add_argument(
+        "--max-resumes",
+        type=int,
+        default=int(os.environ.get("CODEX_AUTO_MAX_RESUMES", "0")),
+        help="maximum auto-resume attempts; 0 means unlimited",
+    )
+    parser.add_argument(
+        "--rerun",
+        action="store_true",
+        help="rerun the original codex command instead of `codex resume --last`",
+    )
+    parser.add_argument(
+        "codex_args",
+        nargs=argparse.REMAINDER,
+        help="arguments passed to codex; prefix with -- if needed",
+    )
+    args = parser.parse_args(argv)
+
+    codex_args = args.codex_args
+    if codex_args[:1] == ["--"]:
+        codex_args = codex_args[1:]
+
+    if args.wait < 0:
+        parser.error("--wait must be zero or greater")
+    if args.max_resumes < 0:
+        parser.error("--max-resumes must be zero or greater")
+
+    return Options(
+        wait_seconds=args.wait,
+        max_resumes=args.max_resumes,
+        rerun=args.rerun,
+        codex_args=codex_args,
+    )
+
+
+def is_retryable_failure(exit_code: int, transcript: str) -> bool:
+    if exit_code == 0:
+        return False
+
+    has_retryable_status = any(pattern.search(transcript) for pattern in RETRYABLE_PATTERNS)
+    has_retry_limit = any(pattern.search(transcript) for pattern in RETRY_LIMIT_PATTERNS)
+    return has_retryable_status and has_retry_limit
+
+
+def write_status(message: str) -> None:
+    sys.stderr.write(f"\n[codex-auto] {message}\n")
+    sys.stderr.flush()
+
+
+def resize_pty(master_fd: int) -> None:
+    if not sys.stdout.isatty():
+        return
+
+    try:
+        size = shutil.get_terminal_size()
+        # termios expects rows, columns.
+        winsize = size.lines.to_bytes(2, "little") + size.columns.to_bytes(2, "little")
+        winsize += b"\x00\x00\x00\x00"
+        import fcntl
+
+        fcntl.ioctl(master_fd, termios.TIOCSWINSZ, winsize)
+    except OSError:
+        return
+
+
+def run_interactive(command: list[str]) -> tuple[int, str]:
+    master_fd, slave_fd = pty.openpty()
+    resize_pty(master_fd)
+
+    old_stdin_attrs = None
+    if sys.stdin.isatty():
+        old_stdin_attrs = termios.tcgetattr(sys.stdin.fileno())
+        tty.setraw(sys.stdin.fileno())
+
+    transcript_chunks: deque[str] = deque(maxlen=512)
+    process = subprocess.Popen(
+        command,
+        stdin=slave_fd,
+        stdout=slave_fd,
+        stderr=slave_fd,
+        close_fds=True,
+        env=os.environ.copy(),
+    )
+    os.close(slave_fd)
+
+    selector = selectors.DefaultSelector()
+    selector.register(master_fd, selectors.EVENT_READ)
+    if sys.stdin.isatty():
+        selector.register(sys.stdin.fileno(), selectors.EVENT_READ)
+
+    def forward_signal(signum: int, _frame: object) -> None:
+        if process.poll() is None:
+            process.send_signal(signum)
+
+    previous_sigwinch = signal.getsignal(signal.SIGWINCH)
+    signal.signal(signal.SIGWINCH, lambda signum, frame: resize_pty(master_fd))
+    previous_sigint = signal.getsignal(signal.SIGINT)
+    signal.signal(signal.SIGINT, forward_signal)
+    previous_sigterm = signal.getsignal(signal.SIGTERM)
+    signal.signal(signal.SIGTERM, forward_signal)
+
+    try:
+        while True:
+            if process.poll() is not None:
+                try:
+                    while True:
+                        data = os.read(master_fd, 4096)
+                        if not data:
+                            break
+                        sys.stdout.buffer.write(data)
+                        sys.stdout.buffer.flush()
+                        transcript_chunks.append(data.decode(errors="replace"))
+                except OSError as exc:
+                    if exc.errno != errno.EIO:
+                        raise
+                break
+
+            for key, _ in selector.select(timeout=0.1):
+                if key.fileobj == master_fd:
+                    try:
+                        data = os.read(master_fd, 4096)
+                    except OSError as exc:
+                        if exc.errno == errno.EIO:
+                            continue
+                        raise
+                    if data:
+                        sys.stdout.buffer.write(data)
+                        sys.stdout.buffer.flush()
+                        transcript_chunks.append(data.decode(errors="replace"))
+                else:
+                    data = os.read(sys.stdin.fileno(), 4096)
+                    if data:
+                        os.write(master_fd, data)
+    finally:
+        selector.close()
+        os.close(master_fd)
+        if old_stdin_attrs is not None:
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old_stdin_attrs)
+        signal.signal(signal.SIGWINCH, previous_sigwinch)
+        signal.signal(signal.SIGINT, previous_sigint)
+        signal.signal(signal.SIGTERM, previous_sigterm)
+
+    return process.wait(), "".join(transcript_chunks)
+
+
+def command_for_attempt(options: Options, attempt: int) -> list[str]:
+    if attempt == 0 or options.rerun:
+        return ["codex", *options.codex_args]
+    return ["codex", "resume", "--last"]
+
+
+def sleep_before_resume(seconds: int) -> None:
+    if seconds == 0:
+        return
+
+    for remaining in range(seconds, 0, -1):
+        sys.stderr.write(f"\r[codex-auto] retrying in {remaining:02d}s ")
+        sys.stderr.flush()
+        time.sleep(1)
+    sys.stderr.write("\n")
+    sys.stderr.flush()
+
+
+def main(argv: list[str]) -> int:
+    options = parse_args(argv)
+    resume_count = 0
+    attempt = 0
+
+    while True:
+        command = command_for_attempt(options, attempt)
+        exit_code, transcript = run_interactive(command)
+
+        if not is_retryable_failure(exit_code, transcript):
+            return exit_code
+
+        resume_count += 1
+        if options.max_resumes and resume_count > options.max_resumes:
+            write_status(
+                f"hit retryable Codex failure, but --max-resumes={options.max_resumes} is exhausted"
+            )
+            return exit_code
+
+        action = "rerun original command" if options.rerun else "resume last session"
+        write_status(
+            f"detected 503 retry-limit failure; will {action} after {options.wait_seconds}s"
+        )
+        sleep_before_resume(options.wait_seconds)
+        attempt += 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
