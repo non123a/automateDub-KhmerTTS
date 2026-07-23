@@ -19,6 +19,8 @@ class ToolConfig:
     nbw_base_url: str = "https://www.nbwcode.top/v1"
     nbw_automatedub_api_key: str | None = None
     localization_model: str = "gpt-5.5"
+    tts_provider: str = "nbwcode"
+    tts_model: str = "gpt-4o-mini-tts"
 
 
 def load_tool_config(env_file: Path | None = Path(".env")) -> ToolConfig:
@@ -41,6 +43,8 @@ def load_tool_config(env_file: Path | None = Path(".env")) -> ToolConfig:
         or "https://www.nbwcode.top/v1",
         nbw_automatedub_api_key=get_config_value("NBW_AUTOMATEDUB_API_KEY"),
         localization_model=get_config_value("LOCALIZATION_MODEL", "gpt-5.5") or "gpt-5.5",
+        tts_provider=get_config_value("TTS_PROVIDER", "nbwcode") or "nbwcode",
+        tts_model=get_config_value("TTS_MODEL", "gpt-4o-mini-tts") or "gpt-4o-mini-tts",
     )
 
 

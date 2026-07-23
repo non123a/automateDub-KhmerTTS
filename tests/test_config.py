@@ -23,6 +23,8 @@ def test_load_tool_config_reads_environment(monkeypatch):
     monkeypatch.setenv("NBW_BASE_URL", "https://gateway.example/v1")
     monkeypatch.setenv("NBW_AUTOMATEDUB_API_KEY", "test-key")
     monkeypatch.setenv("LOCALIZATION_MODEL", "test-model")
+    monkeypatch.setenv("TTS_PROVIDER", "nbwcode")
+    monkeypatch.setenv("TTS_MODEL", "test-tts-model")
 
     tool_config = config.load_tool_config(env_file=None)
 
@@ -34,22 +36,30 @@ def test_load_tool_config_reads_environment(monkeypatch):
     assert tool_config.nbw_base_url == "https://gateway.example/v1"
     assert tool_config.nbw_automatedub_api_key == "test-key"
     assert tool_config.localization_model == "test-model"
+    assert tool_config.tts_provider == "nbwcode"
+    assert tool_config.tts_model == "test-tts-model"
 
 
 def test_load_tool_config_uses_nbw_defaults(monkeypatch):
     monkeypatch.delenv("NBW_BASE_URL", raising=False)
     monkeypatch.delenv("LOCALIZATION_MODEL", raising=False)
+    monkeypatch.delenv("TTS_PROVIDER", raising=False)
+    monkeypatch.delenv("TTS_MODEL", raising=False)
 
     tool_config = config.load_tool_config(env_file=None)
 
     assert tool_config.nbw_base_url == "https://www.nbwcode.top/v1"
     assert tool_config.localization_model == "gpt-5.5"
+    assert tool_config.tts_provider == "nbwcode"
+    assert tool_config.tts_model == "gpt-4o-mini-tts"
 
 
 def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
     monkeypatch.delenv("NBW_BASE_URL", raising=False)
     monkeypatch.delenv("NBW_AUTOMATEDUB_API_KEY", raising=False)
     monkeypatch.delenv("LOCALIZATION_MODEL", raising=False)
+    monkeypatch.delenv("TTS_PROVIDER", raising=False)
+    monkeypatch.delenv("TTS_MODEL", raising=False)
     env_file = tmp_path / ".env"
     env_file.write_text(
         "\n".join(
@@ -58,6 +68,8 @@ def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
                 "NBW_BASE_URL=https://gateway.example/v1",
                 "NBW_AUTOMATEDUB_API_KEY=test-key",
                 'LOCALIZATION_MODEL="test model"',
+                "TTS_PROVIDER=nbwcode",
+                "TTS_MODEL=test-tts-model",
             ]
         ),
         encoding="utf-8",
@@ -68,6 +80,8 @@ def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
     assert tool_config.nbw_base_url == "https://gateway.example/v1"
     assert tool_config.nbw_automatedub_api_key == "test-key"
     assert tool_config.localization_model == "test model"
+    assert tool_config.tts_provider == "nbwcode"
+    assert tool_config.tts_model == "test-tts-model"
 
 
 def test_environment_overrides_dotenv(monkeypatch, tmp_path):

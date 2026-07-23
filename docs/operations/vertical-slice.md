@@ -1,6 +1,6 @@
 # Vertical Slice Operations
 
-Status: VS2 implemented.
+Status: VS3 implemented.
 
 The vertical-slice implementation proves the product workflow one step at a time before replacing shortcuts with the frozen production architecture.
 
@@ -36,6 +36,8 @@ The generated WAV uses:
 - `NBW_BASE_URL` for VS2 localization
 - `NBW_AUTOMATEDUB_API_KEY` for VS2 localization
 - `LOCALIZATION_MODEL` for VS2 localization
+- `TTS_PROVIDER` for VS3 speech generation
+- `TTS_MODEL` for VS3 speech generation
 
 ## Setup
 
@@ -166,6 +168,8 @@ Configure the localizer by creating a `.env` file in the repository root:
 NBW_BASE_URL=https://www.nbwcode.top/v1
 NBW_AUTOMATEDUB_API_KEY=...
 LOCALIZATION_MODEL=gpt-5.5
+TTS_PROVIDER=nbwcode
+TTS_MODEL=gpt-4o-mini-tts
 ```
 
 The CLI loads `.env` automatically. Values exported in the shell take precedence
@@ -211,12 +215,47 @@ Localization prompt priorities:
 8. Keep punctuation suitable for spoken dialogue.
 9. Return valid JSON only.
 
+## VS3: Khmer Speech Generation
+
+VS3 extends the same command:
+
+```bash
+uv run automatedub dub movie.mp4 output/
+```
+
+Expected outputs:
+
+```text
+output/audio.wav
+output/transcript.json
+output/translation_prompt.json
+output/translation.json
+output/tts/0000.wav
+output/tts/0001.wav
+```
+
+VS3 consumes `output/translation.json` and does not modify it. It writes one WAV
+file per translated segment to `output/tts/`, using zero-padded segment IDs for
+file names. It does not merge audio, replace movie audio, render MP4, or perform
+timing adjustment.
+
+To run only VS3 against an existing output directory:
+
+```bash
+uv run automatedub tts output/
+```
+
+If a segment fails, VS3 continues with the remaining segments and writes failed
+segment records to:
+
+```text
+output/tts/errors.json
+```
+
 ## Current Shortcut Boundaries
 
 The current vertical slice intentionally does not implement:
 
-- translation
-- TTS
 - rendering
 - database
 - workflow engine

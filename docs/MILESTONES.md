@@ -41,12 +41,15 @@ Success:
 
 ## VS3: Khmer Speech Generation
 
+Status: implemented.
+
 Type: voice step.
 
 Success:
 
 - translated segments produce Khmer speech audio using one synthetic voice
-- generated audio metadata records segment mapping and duration
+- one WAV file is generated per successful translated segment
+- failed segments are logged
 
 ## VS4: Dialogue Replacement And Mix
 

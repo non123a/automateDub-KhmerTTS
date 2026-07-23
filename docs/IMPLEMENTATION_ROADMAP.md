@@ -101,20 +101,22 @@ Exit:
 
 ## Phase VS3: Khmer Speech Generation
 
+Status: implemented.
+
 Goal: synthesize Khmer speech for translated segments using one voice.
 
 Scope:
 
 - integrate one Khmer-capable TTS path
 - use one synthetic voice
-- generate one audio file per segment or a stitched speech track
-- record generated duration in simple metadata
+- generate one audio file per segment
+- write failed segment records to a simple error log
 - no voice profiles, cloning, emotional control, or provider registry
 
 Exit:
 
 - translated segments produce Khmer speech audio.
-- tests cover TTS request construction and audio artifact bookkeeping with mocked provider output.
+- tests cover TTS request construction, per-segment files, and failure bookkeeping with mocked provider output.
 
 ## Phase VS4: Dialogue Replacement And Mix
 

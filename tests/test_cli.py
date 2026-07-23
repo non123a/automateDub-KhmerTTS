@@ -14,16 +14,25 @@ def test_dub_command_returns_success_and_prints_artifact_paths(monkeypatch, tmp_
     expected_transcript = output_dir / "transcript.json"
     expected_translation = output_dir / "translation.json"
     expected_prompt = output_dir / "translation_prompt.json"
+    expected_tts_dir = output_dir / "tts"
 
     def fake_run_dub(
         input_arg: Path,
         output_arg: Path,
         tool_config=None,
-    ) -> tuple[Path, Path, Path, Path]:
+    ) -> tuple[Path, Path, Path, Path, Path, int, int]:
         assert input_arg == input_path
         assert output_arg == output_dir
         assert tool_config is None
-        return expected_audio, expected_transcript, expected_translation, expected_prompt
+        return (
+            expected_audio,
+            expected_transcript,
+            expected_translation,
+            expected_prompt,
+            expected_tts_dir,
+            2,
+            1,
+        )
 
     monkeypatch.setattr(cli, "run_dub", fake_run_dub)
 
@@ -35,6 +44,9 @@ def test_dub_command_returns_success_and_prints_artifact_paths(monkeypatch, tmp_
     assert f"transcript written: {expected_transcript}" in output
     assert f"translation prompt written: {expected_prompt}" in output
     assert f"translation written: {expected_translation}" in output
+    assert f"tts written: {expected_tts_dir}" in output
+    assert "tts segments generated: 2" in output
+    assert "tts segments failed: 1" in output
 
 
 def test_dub_command_returns_error_for_vs0_failure(monkeypatch, tmp_path, capsys):
@@ -45,7 +57,7 @@ def test_dub_command_returns_error_for_vs0_failure(monkeypatch, tmp_path, capsys
         input_arg: Path,
         output_arg: Path,
         tool_config=None,
-    ) -> tuple[Path, Path, Path, Path]:
+    ) -> tuple[Path, Path, Path, Path, Path, int, int]:
         raise cli.VS0Error("ffmpeg is not available on PATH")
 
     monkeypatch.setattr(cli, "run_dub", fake_run_dub)
@@ -54,6 +66,26 @@ def test_dub_command_returns_error_for_vs0_failure(monkeypatch, tmp_path, capsys
 
     assert exit_code == 2
     assert "error: ffmpeg is not available on PATH" in capsys.readouterr().err
+
+
+def test_tts_command_returns_success_and_prints_counts(monkeypatch, tmp_path, capsys):
+    output_dir = tmp_path / "output"
+    expected_tts_dir = output_dir / "tts"
+
+    def fake_run_tts(output_arg: Path, tool_config=None) -> tuple[Path, int, int]:
+        assert output_arg == output_dir
+        assert tool_config is None
+        return expected_tts_dir, 3, 1
+
+    monkeypatch.setattr(cli, "run_tts", fake_run_tts)
+
+    exit_code = cli.main(["tts", str(output_dir)])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert f"tts written: {expected_tts_dir}" in output
+    assert "tts segments generated: 3" in output
+    assert "tts segments failed: 1" in output
 
 
 def test_doctor_command_prints_checks(monkeypatch, capsys):

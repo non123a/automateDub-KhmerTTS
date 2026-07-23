@@ -134,15 +134,19 @@ output/audio.wav
 output/transcript.json
 output/translation_prompt.json
 output/translation.json
+output/tts/0000.wav
+output/tts/0001.wav
 ```
 
-VS2 localization uses NBWCode as an OpenAI-compatible provider. Create a local
-`.env` file in the repository root:
+VS2 localization and VS3 speech generation use NBWCode. Create a local `.env`
+file in the repository root:
 
 ```bash
 NBW_BASE_URL=https://www.nbwcode.top/v1
 NBW_AUTOMATEDUB_API_KEY=...
 LOCALIZATION_MODEL=gpt-5.5
+TTS_PROVIDER=nbwcode
+TTS_MODEL=gpt-4o-mini-tts
 ```
 
 The CLI loads `.env` automatically. Shell environment variables still override
@@ -150,3 +154,13 @@ values in `.env` when both are present.
 
 The localizer prefers `/responses` and automatically falls back to `/chat/completions` if
 the configured provider does not support Responses.
+
+VS3 reads `output/translation.json` and writes one WAV per translated segment to
+`output/tts/`. Failed TTS segments are recorded in `output/tts/errors.json`.
+
+To generate speech from an existing translation without rerunning audio
+extraction, transcription, or localization:
+
+```bash
+uv run automatedub tts output/
+```
