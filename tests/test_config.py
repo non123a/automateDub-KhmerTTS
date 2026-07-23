@@ -20,11 +20,73 @@ def test_load_tool_config_reads_environment(monkeypatch):
     monkeypatch.setenv("AUTOMATEDUB_FFPROBE_BIN", "custom-ffprobe")
     monkeypatch.setenv("AUTOMATEDUB_WHISPER_CPP_BIN", "custom-whisper")
     monkeypatch.setenv("AUTOMATEDUB_WHISPER_MODEL", "/models/model.bin")
+    monkeypatch.setenv("NBW_BASE_URL", "https://gateway.example/v1")
+    monkeypatch.setenv("NBW_AUTOMATEDUB_API_KEY", "test-key")
+    monkeypatch.setenv("LOCALIZATION_MODEL", "test-model")
 
-    tool_config = config.load_tool_config()
+    tool_config = config.load_tool_config(env_file=None)
 
     assert tool_config.homebrew_path == "brew"
     assert tool_config.ffmpeg_path == "custom-ffmpeg"
     assert tool_config.ffprobe_path == "custom-ffprobe"
     assert tool_config.whisper_cpp_path == "custom-whisper"
     assert str(tool_config.whisper_model_path) == "/models/model.bin"
+    assert tool_config.nbw_base_url == "https://gateway.example/v1"
+    assert tool_config.nbw_automatedub_api_key == "test-key"
+    assert tool_config.localization_model == "test-model"
+
+
+def test_load_tool_config_uses_nbw_defaults(monkeypatch):
+    monkeypatch.delenv("NBW_BASE_URL", raising=False)
+    monkeypatch.delenv("LOCALIZATION_MODEL", raising=False)
+
+    tool_config = config.load_tool_config(env_file=None)
+
+    assert tool_config.nbw_base_url == "https://www.nbwcode.top/v1"
+    assert tool_config.localization_model == "gpt-5.5"
+
+
+def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
+    monkeypatch.delenv("NBW_BASE_URL", raising=False)
+    monkeypatch.delenv("NBW_AUTOMATEDUB_API_KEY", raising=False)
+    monkeypatch.delenv("LOCALIZATION_MODEL", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "\n".join(
+            [
+                "# AutomateDub local config",
+                "NBW_BASE_URL=https://gateway.example/v1",
+                "NBW_AUTOMATEDUB_API_KEY=test-key",
+                'LOCALIZATION_MODEL="test model"',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    tool_config = config.load_tool_config(env_file=env_file)
+
+    assert tool_config.nbw_base_url == "https://gateway.example/v1"
+    assert tool_config.nbw_automatedub_api_key == "test-key"
+    assert tool_config.localization_model == "test model"
+
+
+def test_environment_overrides_dotenv(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALIZATION_MODEL", "env-model")
+    env_file = tmp_path / ".env"
+    env_file.write_text("LOCALIZATION_MODEL=dotenv-model", encoding="utf-8")
+
+    tool_config = config.load_tool_config(env_file=env_file)
+
+    assert tool_config.localization_model == "env-model"
+
+
+def test_parse_dotenv_line_supports_export_and_inline_comments():
+    assert config.parse_dotenv_line("export NBW_AUTOMATEDUB_API_KEY=test-key") == (
+        "NBW_AUTOMATEDUB_API_KEY",
+        "test-key",
+    )
+    assert config.parse_dotenv_line("LOCALIZATION_MODEL=gpt-5.5 # default model") == (
+        "LOCALIZATION_MODEL",
+        "gpt-5.5",
+    )
+    assert config.parse_dotenv_line("# comment") is None

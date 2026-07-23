@@ -10,7 +10,12 @@ from automatedub.config import ToolConfig, load_tool_config
 from automatedub.doctor import doctor_succeeded, run_doctor
 from automatedub.setup import SetupError, run_setup
 from automatedub.vertical_slice.audio import VS0Error, extract_audio
-from automatedub.vertical_slice.paths import transcript_output_path
+from automatedub.vertical_slice.localization import NBWCodeDialogueLocalizer, VS2Error
+from automatedub.vertical_slice.paths import (
+    transcript_output_path,
+    translation_output_path,
+    translation_prompt_output_path,
+)
 from automatedub.vertical_slice.transcription import VS1Error, WhisperCppTranscriber
 
 
@@ -44,13 +49,21 @@ def run_dub(
     input_path: Path,
     output_dir: Path,
     tool_config: ToolConfig | None = None,
-) -> tuple[Path, Path]:
+) -> tuple[Path, Path, Path, Path]:
     config = tool_config or load_tool_config()
     audio_path = extract_audio(input_path=input_path, output_dir=output_dir, tool_config=config)
     transcript_path = transcript_output_path(output_dir.expanduser())
     transcriber = WhisperCppTranscriber(config)
     transcriber.transcribe(audio_path=audio_path, transcript_path=transcript_path)
-    return audio_path, transcript_path
+    translation_path = translation_output_path(output_dir.expanduser())
+    prompt_path = translation_prompt_output_path(output_dir.expanduser())
+    localizer = NBWCodeDialogueLocalizer(config)
+    localizer.localize(
+        transcript_path=transcript_path,
+        translation_path=translation_path,
+        prompt_path=prompt_path,
+    )
+    return audio_path, transcript_path, translation_path, prompt_path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -59,9 +72,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "doctor":
         checks = run_doctor(load_tool_config())
-        for check in checks:
-            status = "ok" if check.ok else "error"
-            print(f"{status}: {check.name}: {check.detail}")
+        print_doctor_checks(checks)
         return 0 if doctor_succeeded(checks) else 2
 
     if args.command == "setup":
@@ -78,14 +89,57 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "dub":
         try:
-            audio_path, transcript_path = run_dub(args.input, args.output_dir)
-        except (VS0Error, VS1Error) as exc:
+            audio_path, transcript_path, translation_path, prompt_path = run_dub(
+                args.input,
+                args.output_dir,
+            )
+        except (VS0Error, VS1Error, VS2Error) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
 
         print(f"audio extracted: {audio_path}")
         print(f"transcript written: {transcript_path}")
+        print(f"translation prompt written: {prompt_path}")
+        print(f"translation written: {translation_path}")
         return 0
 
     parser.error(f"unknown command: {args.command}")
     return 2
+
+
+def print_doctor_checks(checks) -> None:
+    general_checks = [check for check in checks if not check.name.startswith("nbw ")]
+    nbw_checks = {check.name: check for check in checks if check.name.startswith("nbw ")}
+
+    for check in general_checks:
+        status = "ok" if check.ok else "error"
+        print(f"{status}: {check.name}: {check.detail}")
+
+    if nbw_checks:
+        print()
+        print("=== NBWCode ===")
+        print()
+        print("Base URL:")
+        print(format_doctor_value(nbw_checks.get("nbw base url")))
+        print()
+        print("API Key:")
+        print(format_doctor_value(nbw_checks.get("nbw api key")))
+        print()
+        print("Model:")
+        print(format_doctor_value(nbw_checks.get("nbw model")))
+        print()
+        print("Endpoint:")
+        print(format_doctor_value(nbw_checks.get("nbw endpoint")))
+        print()
+        print("Authentication:")
+        print(format_doctor_value(nbw_checks.get("nbw authentication")))
+        print()
+        print("Connectivity:")
+        print(format_doctor_value(nbw_checks.get("nbw connectivity")))
+
+
+def format_doctor_value(check) -> str:
+    if check is None:
+        return "✗ Missing"
+    symbol = "✓" if check.ok else "✗"
+    return f"{symbol} {check.detail}"

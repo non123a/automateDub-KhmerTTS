@@ -78,19 +78,25 @@ Exit:
 
 ## Phase VS2: Khmer Translation
 
+Status: implemented.
+
 Goal: produce Khmer text for each transcript segment.
 
 Scope:
 
-- integrate one LLM translation path
-- translate segment-by-segment or in small batches
+- integrate one LLM dialogue-localization path
+- use NBWCode as an OpenAI-compatible provider through a generic `DialogueLocalizer` boundary
+- prefer `/responses` and automatically fall back to `/chat/completions`
+- localize segment-by-segment or in small batches
 - preserve segment timestamps
-- write translated transcript JSON
+- write `output/translation.json`
+- write `output/translation_prompt.json`
+- preserve `output/transcript.json` unchanged
 - no style guide, character memory, or localization intelligence yet
 
 Exit:
 
-- one Chinese transcript produces Khmer segment text.
+- one Chinese transcript produces Khmer localized dialogue.
 - tests cover translation response parsing and fallback errors with mocked provider output.
 
 ## Phase VS3: Khmer Speech Generation

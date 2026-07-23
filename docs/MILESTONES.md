@@ -28,13 +28,15 @@ Success:
 - extracted audio produces timestamped Chinese transcript JSON
 - provider response parsing is tested with mocks
 
-## VS2: Khmer Translation
+## VS2: Khmer Dialogue Localization
+
+Status: implemented.
 
 Type: AI step.
 
 Success:
 
-- transcript JSON produces Khmer translated transcript JSON
+- transcript JSON produces `translation.json` with Khmer localized dialogue
 - segment timestamps are preserved
 
 ## VS3: Khmer Speech Generation

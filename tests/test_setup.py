@@ -22,7 +22,15 @@ def test_run_setup_downloads_missing_model_and_runs_doctor(monkeypatch, tmp_path
     def fake_download(url, destination):
         destination.write_bytes(b"model")
 
-    result = setup.run_setup(ToolConfig(whisper_model_path=model_path), download_file=fake_download)
+    result = setup.run_setup(
+        ToolConfig(
+            whisper_model_path=model_path,
+            nbw_base_url="https://gateway.example/v1",
+            nbw_automatedub_api_key="test-key",
+            localization_model="test-model",
+        ),
+        download_file=fake_download,
+    )
 
     assert result.downloaded_model is True
     assert result.model_path == model_path
@@ -41,7 +49,14 @@ def test_run_setup_reuses_existing_model(monkeypatch, tmp_path):
         lambda config: [DoctorCheck("ffmpeg", True, "/usr/bin/ffmpeg")],
     )
 
-    result = setup.run_setup(ToolConfig(whisper_model_path=model_path))
+    result = setup.run_setup(
+        ToolConfig(
+            whisper_model_path=model_path,
+            nbw_base_url="https://gateway.example/v1",
+            nbw_automatedub_api_key="test-key",
+            localization_model="test-model",
+        )
+    )
 
     assert result.downloaded_model is False
     assert result.model_path == model_path

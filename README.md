@@ -132,4 +132,21 @@ Expected results:
 ```text
 output/audio.wav
 output/transcript.json
+output/translation_prompt.json
+output/translation.json
 ```
+
+VS2 localization uses NBWCode as an OpenAI-compatible provider. Create a local
+`.env` file in the repository root:
+
+```bash
+NBW_BASE_URL=https://www.nbwcode.top/v1
+NBW_AUTOMATEDUB_API_KEY=...
+LOCALIZATION_MODEL=gpt-5.5
+```
+
+The CLI loads `.env` automatically. Shell environment variables still override
+values in `.env` when both are present.
+
+The localizer prefers `/responses` and automatically falls back to `/chat/completions` if
+the configured provider does not support Responses.
