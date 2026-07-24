@@ -98,6 +98,11 @@ def check_cambai(tool_config: ToolConfig) -> list[DoctorCheck]:
             bool(tool_config.camb_language),
             tool_config.camb_language or "Missing",
         ),
+        DoctorCheck(
+            "camb tts sync offset",
+            True,
+            f"{tool_config.tts_sync_offset_ms} ms",
+        ),
     ]
 
 

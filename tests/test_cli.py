@@ -357,6 +357,7 @@ def test_doctor_command_prints_checks(monkeypatch, capsys):
         DoctorCheck("camb model", True, DEFAULT_TTS_MODEL),
         DoctorCheck("camb voice id", True, "170542"),
         DoctorCheck("camb language", True, "km-kh"),
+        DoctorCheck("camb tts sync offset", True, "200 ms"),
     ]
     monkeypatch.setattr(cli, "run_doctor", lambda config: checks)
     monkeypatch.setattr(cli, "doctor_succeeded", lambda doctor_checks: False)
@@ -379,6 +380,7 @@ def test_doctor_command_prints_checks(monkeypatch, capsys):
     assert f"Model:\n✓ {DEFAULT_TTS_MODEL}" in output
     assert "Voice ID:\n✓ 170542" in output
     assert "Language:\n✓ km-kh" in output
+    assert "TTS Sync Offset:\n✓ 200 ms" in output
 
 
 def test_setup_command_prints_result(monkeypatch, tmp_path, capsys):

@@ -26,6 +26,7 @@ class ToolConfig:
     camb_api_key: str | None = None
     camb_language: str = "km-kh"
     camb_voice_id: str | None = None
+    tts_sync_offset_ms: int = 200
 
 
 def load_tool_config(env_file: Path | None = Path(".env")) -> ToolConfig:
@@ -33,6 +34,12 @@ def load_tool_config(env_file: Path | None = Path(".env")) -> ToolConfig:
 
     def get_config_value(name: str, default: str | None = None) -> str | None:
         return os.environ.get(name, dotenv_values.get(name, default))
+
+    def get_config_int(name: str, default: int) -> int:
+        raw_value = get_config_value(name, str(default))
+        if raw_value is None:
+            return default
+        return int(raw_value)
 
     return ToolConfig(
         homebrew_path=get_config_value("AUTOMATEDUB_HOMEBREW_BIN", "brew") or "brew",
@@ -53,6 +60,7 @@ def load_tool_config(env_file: Path | None = Path(".env")) -> ToolConfig:
         camb_api_key=get_config_value("CAMB_API_KEY"),
         camb_language=get_config_value("CAMB_LANGUAGE", "km-kh") or "km-kh",
         camb_voice_id=get_config_value("CAMB_VOICE_ID"),
+        tts_sync_offset_ms=get_config_int("TTS_SYNC_OFFSET_MS", 200),
     )
 
 

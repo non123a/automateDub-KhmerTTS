@@ -69,7 +69,7 @@ def run_mix(
     source_duration = probe_audio_duration(ffprobe, source_audio_path)
 
     segments = load_translation_segments(translation_path)
-    speech_tracks = build_speech_tracks(segments, tts_dir)
+    speech_tracks = build_speech_tracks(segments, tts_dir, config)
     write_mix_plan(
         mix_plan_path=mix_plan_path,
         source_audio_path=source_audio_path,
@@ -77,6 +77,7 @@ def run_mix(
         tts_dir=tts_dir,
         mixed_audio_path=mixed_audio_path,
         source_duration=source_duration,
+        tts_sync_offset_ms=config.tts_sync_offset_ms,
         segments=segments,
         speech_tracks=speech_tracks,
     )
@@ -201,6 +202,7 @@ def load_translation_segments(translation_path: Path) -> list[MixTranslationSegm
 def build_speech_tracks(
     segments: list[MixTranslationSegment],
     tts_dir: Path,
+    tool_config: ToolConfig,
 ) -> list[MixSpeechTrack]:
     tracks: list[MixSpeechTrack] = []
     for segment in segments:
@@ -212,7 +214,10 @@ def build_speech_tracks(
                 id=segment.id,
                 start=segment.start,
                 end=segment.end,
-                delay_ms=max(0, int(round(segment.start * 1000))),
+                delay_ms=max(
+                    0,
+                    int(round(segment.start * 1000)) + tool_config.tts_sync_offset_ms,
+                ),
                 tts_path=tts_path,
             )
         )
@@ -266,7 +271,7 @@ def build_mix_filter_complex(speech_tracks: list[MixSpeechTrack]) -> str:
         mix_inputs.append(label)
     filters.append(
         f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:"
-        "duration=longest:dropout_transition=0[mixed]"
+        "duration=longest:dropout_transition=0:normalize=0[mixed]"
     )
     return ";".join(filters)
 
@@ -278,6 +283,7 @@ def write_mix_plan(
     tts_dir: Path,
     mixed_audio_path: Path,
     source_duration: float,
+    tts_sync_offset_ms: int,
     segments: list[MixTranslationSegment],
     speech_tracks: list[MixSpeechTrack],
 ) -> None:
@@ -291,6 +297,7 @@ def write_mix_plan(
         "source_duration_seconds": source_duration,
         "source_volume": SOURCE_AUDIO_DUCK_VOLUME,
         "sample_rate": MIX_SAMPLE_RATE,
+        "tts_sync_offset_ms": tts_sync_offset_ms,
         "mixed_segments": len(speech_tracks),
         "skipped_segments": len(segments) - len(speech_tracks),
         "segments": [
@@ -298,7 +305,10 @@ def write_mix_plan(
                 "id": segment.id,
                 "start": segment.start,
                 "end": segment.end,
-                "delay_ms": max(0, int(round(segment.start * 1000))),
+                "delay_ms": max(
+                    0,
+                    int(round(segment.start * 1000)) + tts_sync_offset_ms,
+                ),
                 "tts_path": str(Path(tts_dir.name) / f"{segment.id:04d}.wav"),
                 "status": "included" if segment.id in included_ids else "missing_tts",
             }

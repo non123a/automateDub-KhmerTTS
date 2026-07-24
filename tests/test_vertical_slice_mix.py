@@ -65,15 +65,40 @@ def test_build_speech_tracks_skips_missing_tts_files(tmp_path):
         mix.MixTranslationSegment(id=12, start=1.25, end=2.0, target_text="លាហើយ។"),
     ]
 
-    tracks = mix.build_speech_tracks(segments, tts_dir)
+    tracks = mix.build_speech_tracks(segments, tts_dir, ToolConfig())
 
     assert tracks == [
         mix.MixSpeechTrack(
             id=12,
             start=1.25,
             end=2.0,
-            delay_ms=1250,
+            delay_ms=1450,
             tts_path=tts_dir / "0012.wav",
+        )
+    ]
+
+
+def test_build_speech_tracks_applies_custom_sync_offset(tmp_path):
+    tts_dir = tmp_path / "tts"
+    tts_dir.mkdir()
+    (tts_dir / "0000.wav").write_bytes(b"RIFF fake WAVE")
+    segments = [
+        mix.MixTranslationSegment(id=0, start=1.25, end=2.0, target_text="សួស្តី។"),
+    ]
+
+    tracks = mix.build_speech_tracks(
+        segments,
+        tts_dir,
+        ToolConfig(tts_sync_offset_ms=325),
+    )
+
+    assert tracks == [
+        mix.MixSpeechTrack(
+            id=0,
+            start=1.25,
+            end=2.0,
+            delay_ms=1575,
+            tts_path=tts_dir / "0000.wav",
         )
     ]
 
@@ -114,7 +139,7 @@ def test_build_mix_command_delays_generated_speech(tmp_path):
     assert "[0:a]volume=0.35[base]" in filter_complex
     assert "adelay=0:all=1[seg1]" in filter_complex
     assert "adelay=1250:all=1[seg2]" in filter_complex
-    assert "amix=inputs=3:duration=longest:dropout_transition=0[mixed]" in filter_complex
+    assert "amix=inputs=3:duration=longest:dropout_transition=0:normalize=0[mixed]" in filter_complex
     assert command[-1] == str(output_audio)
 
 
@@ -157,8 +182,10 @@ def test_run_mix_writes_plan_and_mixed_audio(monkeypatch, tmp_path):
     assert result.mixed_audio_path.read_bytes() == b"mixed"
     plan = json.loads(result.mix_plan_path.read_text(encoding="utf-8"))
     assert plan["source_duration_seconds"] == 2.5
+    assert plan["tts_sync_offset_ms"] == 200
     assert plan["mixed_segments"] == 2
     assert [segment["status"] for segment in plan["segments"]] == ["included", "included"]
+    assert [segment["delay_ms"] for segment in plan["segments"]] == [200, 1450]
 
 
 def test_run_mix_requires_at_least_one_tts_file(monkeypatch, tmp_path):

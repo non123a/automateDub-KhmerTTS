@@ -547,6 +547,9 @@ def print_doctor_checks(checks) -> None:
         print()
         print("Language:")
         print(format_doctor_value(camb_checks.get("camb language")))
+        print()
+        print("TTS Sync Offset:")
+        print(format_doctor_value(camb_checks.get("camb tts sync offset")))
 
 
 def format_doctor_value(check) -> str:

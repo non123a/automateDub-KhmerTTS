@@ -41,6 +41,7 @@ def test_run_doctor_reports_missing_tools_and_model(monkeypatch, tmp_path):
         True,
         False,
         True,
+        True,
     ]
 
 
@@ -74,6 +75,7 @@ def test_run_doctor_reports_available_tools_and_model(monkeypatch, tmp_path):
 
     assert doctor.doctor_succeeded(checks) is True
     assert [check.ok for check in checks] == [
+        True,
         True,
         True,
         True,
