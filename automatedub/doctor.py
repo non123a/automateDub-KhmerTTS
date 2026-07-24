@@ -23,6 +23,7 @@ def run_doctor(tool_config: ToolConfig) -> list[DoctorCheck]:
         check_executable("whisper.cpp", tool_config.whisper_cpp_path),
         check_model(tool_config),
         *check_nbwcode(tool_config),
+        *check_cambai(tool_config),
     ]
     return checks
 
@@ -75,6 +76,27 @@ def check_nbwcode(tool_config: ToolConfig) -> list[DoctorCheck]:
             "nbw connectivity",
             bool(status["connectivity_ok"]),
             "OK" if status["connectivity_ok"] else str(status["error"] or "Failed"),
+        ),
+    ]
+
+
+def check_cambai(tool_config: ToolConfig) -> list[DoctorCheck]:
+    return [
+        DoctorCheck(
+            "camb provider",
+            tool_config.tts_provider == "cambai",
+            "Camb.ai" if tool_config.tts_provider == "cambai" else tool_config.tts_provider,
+        ),
+        DoctorCheck("camb model", bool(tool_config.tts_model), tool_config.tts_model or "Missing"),
+        DoctorCheck(
+            "camb voice id",
+            bool(tool_config.camb_voice_id),
+            tool_config.camb_voice_id or "Missing",
+        ),
+        DoctorCheck(
+            "camb language",
+            bool(tool_config.camb_language),
+            tool_config.camb_language or "Missing",
         ),
     ]
 

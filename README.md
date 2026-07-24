@@ -138,15 +138,19 @@ output/tts/0000.wav
 output/tts/0001.wav
 ```
 
-VS2 localization and VS3 speech generation use NBWCode. Create a local `.env`
-file in the repository root:
+VS2 localization uses NBWCode. VS3 speech generation uses the configured TTS
+provider; Camb.ai is the first production provider. Create a local `.env` file
+in the repository root:
 
 ```bash
 NBW_BASE_URL=https://www.nbwcode.top/v1
 NBW_AUTOMATEDUB_API_KEY=...
 LOCALIZATION_MODEL=gpt-5.5
-TTS_PROVIDER=nbwcode
-TTS_MODEL=gpt-4o-mini-tts
+TTS_PROVIDER=cambai
+CAMB_API_KEY=...
+CAMB_VOICE_ID=170542
+CAMB_LANGUAGE=km-kh
+TTS_MODEL=mars-8.1-flash-beta
 ```
 
 The CLI loads `.env` automatically. Shell environment variables still override

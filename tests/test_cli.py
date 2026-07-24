@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from automatedub import cli
+from automatedub.config import DEFAULT_TTS_MODEL
 from automatedub.doctor import DoctorCheck
 from automatedub.setup import SetupResult
 from automatedub.vertical_slice.tts import TtsVoice
@@ -108,7 +109,7 @@ def test_tts_providers_command_prints_status(monkeypatch, capsys):
         lambda: cli.TtsProviderStatus(
             available_providers=["cambai", "nbwcode"],
             current_provider="cambai",
-            current_model="mars-flash",
+            current_model=DEFAULT_TTS_MODEL,
             current_voice="123",
         ),
     )
@@ -121,7 +122,7 @@ def test_tts_providers_command_prints_status(monkeypatch, capsys):
     assert "- cambai" in output
     assert "- nbwcode" in output
     assert "current provider: cambai" in output
-    assert "current model: mars-flash" in output
+    assert f"current model: {DEFAULT_TTS_MODEL}" in output
     assert "current voice: 123" in output
 
 
@@ -154,7 +155,7 @@ def test_camb_test_command_prints_one_wav_result(monkeypatch, tmp_path, capsys):
     result = cli.CambTestResult(
         output_path=output_dir / "tts" / "test.wav",
         provider="cambai",
-        model="mars-flash",
+        model=DEFAULT_TTS_MODEL,
         voice="123",
         generation_time=1.25,
         characters=7,
@@ -167,7 +168,7 @@ def test_camb_test_command_prints_one_wav_result(monkeypatch, tmp_path, capsys):
     output = capsys.readouterr().out
     assert f"test wav written: {result.output_path}" in output
     assert "provider: cambai" in output
-    assert "model: mars-flash" in output
+    assert f"model: {DEFAULT_TTS_MODEL}" in output
     assert "voice: 123" in output
     assert "generation time: 1.25" in output
     assert "characters: 7" in output
@@ -210,6 +211,10 @@ def test_doctor_command_prints_checks(monkeypatch, capsys):
         DoctorCheck("nbw endpoint", True, "Responses"),
         DoctorCheck("nbw authentication", True, "Valid"),
         DoctorCheck("nbw connectivity", True, "OK"),
+        DoctorCheck("camb provider", True, "Camb.ai"),
+        DoctorCheck("camb model", True, DEFAULT_TTS_MODEL),
+        DoctorCheck("camb voice id", True, "170542"),
+        DoctorCheck("camb language", True, "km-kh"),
     ]
     monkeypatch.setattr(cli, "run_doctor", lambda config: checks)
     monkeypatch.setattr(cli, "doctor_succeeded", lambda doctor_checks: False)
@@ -227,6 +232,11 @@ def test_doctor_command_prints_checks(monkeypatch, capsys):
     assert "Endpoint:\n✓ Responses" in output
     assert "Authentication:\n✓ Valid" in output
     assert "Connectivity:\n✓ OK" in output
+    assert "=== Camb.ai ===" in output
+    assert "Provider:\n✓ Camb.ai" in output
+    assert f"Model:\n✓ {DEFAULT_TTS_MODEL}" in output
+    assert "Voice ID:\n✓ 170542" in output
+    assert "Language:\n✓ km-kh" in output
 
 
 def test_setup_command_prints_result(monkeypatch, tmp_path, capsys):

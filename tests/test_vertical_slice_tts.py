@@ -214,7 +214,7 @@ def test_cambai_provider_uses_sdk_client(monkeypatch):
     provider = tts.CambAIProvider(
         ToolConfig(
             tts_provider="cambai",
-            tts_model="mars-flash",
+            tts_model="test-tts-model",
             camb_api_key="camb-key",
             camb_language="km-kh",
             camb_voice_id="123",
@@ -230,7 +230,7 @@ def test_cambai_provider_uses_sdk_client(monkeypatch):
             "text": "សួស្តី។",
             "voice_id": 123,
             "language": "km-kh",
-            "speech_model": "mars-flash",
+            "speech_model": "test-tts-model",
             "output_configuration": client.text_to_speech.calls[0]["output_configuration"],
         }
     ]

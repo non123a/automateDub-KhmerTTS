@@ -57,7 +57,7 @@ def test_load_tool_config_uses_nbw_defaults(monkeypatch):
     assert tool_config.nbw_base_url == "https://www.nbwcode.top/v1"
     assert tool_config.localization_model == "gpt-5.5"
     assert tool_config.tts_provider == "cambai"
-    assert tool_config.tts_model == "mars-flash"
+    assert tool_config.tts_model == config.DEFAULT_TTS_MODEL
     assert tool_config.camb_language == "km-kh"
 
 

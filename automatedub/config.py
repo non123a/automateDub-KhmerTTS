@@ -8,6 +8,8 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+DEFAULT_TTS_MODEL = "mars-8.1-flash-beta"
+
 
 @dataclass(frozen=True)
 class ToolConfig:
@@ -20,7 +22,7 @@ class ToolConfig:
     nbw_automatedub_api_key: str | None = None
     localization_model: str = "gpt-5.5"
     tts_provider: str = "cambai"
-    tts_model: str = "mars-flash"
+    tts_model: str = DEFAULT_TTS_MODEL
     camb_api_key: str | None = None
     camb_language: str = "km-kh"
     camb_voice_id: str | None = None
@@ -47,7 +49,7 @@ def load_tool_config(env_file: Path | None = Path(".env")) -> ToolConfig:
         nbw_automatedub_api_key=get_config_value("NBW_AUTOMATEDUB_API_KEY"),
         localization_model=get_config_value("LOCALIZATION_MODEL", "gpt-5.5") or "gpt-5.5",
         tts_provider=get_config_value("TTS_PROVIDER", "cambai") or "cambai",
-        tts_model=get_config_value("TTS_MODEL", "mars-flash") or "mars-flash",
+        tts_model=get_config_value("TTS_MODEL", DEFAULT_TTS_MODEL) or DEFAULT_TTS_MODEL,
         camb_api_key=get_config_value("CAMB_API_KEY"),
         camb_language=get_config_value("CAMB_LANGUAGE", "km-kh") or "km-kh",
         camb_voice_id=get_config_value("CAMB_VOICE_ID"),

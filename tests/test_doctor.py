@@ -37,6 +37,10 @@ def test_run_doctor_reports_missing_tools_and_model(monkeypatch, tmp_path):
         False,
         False,
         False,
+        True,
+        True,
+        False,
+        True,
     ]
 
 
@@ -64,11 +68,16 @@ def test_run_doctor_reports_available_tools_and_model(monkeypatch, tmp_path):
             nbw_base_url="https://gateway.example/v1",
             nbw_automatedub_api_key="test-key",
             localization_model="test-model",
+            camb_voice_id="170542",
         )
     )
 
     assert doctor.doctor_succeeded(checks) is True
     assert [check.ok for check in checks] == [
+        True,
+        True,
+        True,
+        True,
         True,
         True,
         True,

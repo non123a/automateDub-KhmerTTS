@@ -331,8 +331,13 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def print_doctor_checks(checks) -> None:
-    general_checks = [check for check in checks if not check.name.startswith("nbw ")]
+    general_checks = [
+        check
+        for check in checks
+        if not check.name.startswith("nbw ") and not check.name.startswith("camb ")
+    ]
     nbw_checks = {check.name: check for check in checks if check.name.startswith("nbw ")}
+    camb_checks = {check.name: check for check in checks if check.name.startswith("camb ")}
 
     for check in general_checks:
         status = "ok" if check.ok else "error"
@@ -359,6 +364,22 @@ def print_doctor_checks(checks) -> None:
         print()
         print("Connectivity:")
         print(format_doctor_value(nbw_checks.get("nbw connectivity")))
+
+    if camb_checks:
+        print()
+        print("=== Camb.ai ===")
+        print()
+        print("Provider:")
+        print(format_doctor_value(camb_checks.get("camb provider")))
+        print()
+        print("Model:")
+        print(format_doctor_value(camb_checks.get("camb model")))
+        print()
+        print("Voice ID:")
+        print(format_doctor_value(camb_checks.get("camb voice id")))
+        print()
+        print("Language:")
+        print(format_doctor_value(camb_checks.get("camb language")))
 
 
 def format_doctor_value(check) -> str:
