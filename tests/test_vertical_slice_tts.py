@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 
 import pytest
 
@@ -142,6 +144,138 @@ def test_nbwcode_tts_continues_after_segment_failure(monkeypatch, tmp_path):
     assert error_log["failures"][0]["error"] == "provider failed"
 
 
-def test_validate_tts_config_requires_nbwcode_provider():
-    with pytest.raises(tts.VS3Error, match="TTS_PROVIDER"):
+class FakeProvider:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def describe(self) -> tts.TtsProviderInfo:
+        return tts.TtsProviderInfo(
+            provider="fake",
+            model="fake-model",
+            voice_id="voice-1",
+            language="km-kh",
+        )
+
+    def generate(self, text: str) -> tts.GeneratedSpeech:
+        self.calls.append(text)
+        return tts.GeneratedSpeech(
+            audio=minimal_wav_bytes(),
+            metadata={"provider_request_id": f"request-{len(self.calls)}"},
+        )
+
+
+def test_provider_synthesizer_writes_usage(tmp_path):
+    output_dir = tmp_path / "output"
+    translation_path = output_dir / "translation.json"
+    translation_path.parent.mkdir()
+    translation_path.write_text(
+        json.dumps(sample_translation_payload(), ensure_ascii=False),
+        encoding="utf-8",
+    )
+    provider = FakeProvider()
+    synthesizer = tts.ProviderTextToSpeechSynthesizer(provider, output_dir=output_dir)
+
+    result = synthesizer.synthesize_segments(translation_path, output_dir / "tts")
+
+    assert provider.calls == ["សួស្តី។", "លាហើយ។"]
+    assert result.usage_path == output_dir / "usage" / "tts_usage.json"
+    usage = json.loads(result.usage_path.read_text(encoding="utf-8"))
+    assert usage["provider"] == "fake"
+    assert usage["model"] == "fake-model"
+    assert usage["voice_id"] == "voice-1"
+    assert usage["segments_processed"] == 2
+    assert usage["characters_processed"] == len("សួស្តី។") + len("លាហើយ។")
+    assert usage["provider_metadata"]["language"] == "km-kh"
+    assert usage["provider_metadata"]["0"]["provider_request_id"] == "request-1"
+
+
+def test_cambai_provider_uses_sdk_client(monkeypatch):
+    class FakeStreamTtsOutputConfiguration:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    fake_types = types.ModuleType("camb.types")
+    fake_types.StreamTtsOutputConfiguration = FakeStreamTtsOutputConfiguration
+    monkeypatch.setitem(sys.modules, "camb.types", fake_types)
+
+    class FakeTextToSpeech:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def tts(self, **kwargs):
+            self.calls.append(kwargs)
+            return [minimal_wav_bytes()]
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.text_to_speech = FakeTextToSpeech()
+
+    client = FakeClient()
+    provider = tts.CambAIProvider(
+        ToolConfig(
+            tts_provider="cambai",
+            tts_model="mars-flash",
+            camb_api_key="camb-key",
+            camb_language="km-kh",
+            camb_voice_id="123",
+        ),
+        client=client,
+    )
+
+    speech = provider.generate("សួស្តី។")
+
+    assert speech.audio == minimal_wav_bytes()
+    assert client.text_to_speech.calls == [
+        {
+            "text": "សួស្តី។",
+            "voice_id": 123,
+            "language": "km-kh",
+            "speech_model": "mars-flash",
+            "output_configuration": client.text_to_speech.calls[0]["output_configuration"],
+        }
+    ]
+    assert client.text_to_speech.calls[0]["output_configuration"].kwargs == {"format": "wav"}
+
+
+def test_list_cambai_voices_normalizes_sdk_response():
+    class FakeVoiceCloning:
+        def list_voices(self):
+            return {
+                "data": [
+                    {
+                        "id": 123,
+                        "name": "Khmer Female",
+                        "gender": "female",
+                        "language": "km-kh",
+                    }
+                ]
+            }
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.voice_cloning = FakeVoiceCloning()
+
+    voices = tts.list_cambai_voices(
+        ToolConfig(camb_api_key="camb-key"),
+        client=FakeClient(),
+    )
+
+    assert voices == [
+        tts.TtsVoice(
+            id="123",
+            name="Khmer Female",
+            gender="female",
+            language="km-kh",
+            metadata={
+                "id": 123,
+                "name": "Khmer Female",
+                "gender": "female",
+                "language": "km-kh",
+            },
+        )
+    ]
+
+
+def test_validate_tts_config_rejects_unsupported_provider():
+    with pytest.raises(tts.VS3Error, match="unsupported TTS provider"):
         tts.validate_tts_config(ToolConfig(tts_provider="other"))

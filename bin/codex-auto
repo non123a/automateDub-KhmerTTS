@@ -20,9 +20,26 @@ from collections import deque
 from dataclasses import dataclass
 
 
+# RETRYABLE_PATTERNS = (
+#     re.compile(r"\b503\b", re.IGNORECASE),
+#     re.compile(r"service unavailable", re.IGNORECASE),
+# )
 RETRYABLE_PATTERNS = (
+    # HTTP status codes
+    re.compile(r"\b429\b", re.IGNORECASE),
+    re.compile(r"\b500\b", re.IGNORECASE),
+    re.compile(r"\b502\b", re.IGNORECASE),
     re.compile(r"\b503\b", re.IGNORECASE),
+    re.compile(r"\b504\b", re.IGNORECASE),
+
+    # Common phrases
+    re.compile(r"too many requests", re.IGNORECASE),
     re.compile(r"service unavailable", re.IGNORECASE),
+    re.compile(r"bad gateway", re.IGNORECASE),
+    re.compile(r"gateway timeout", re.IGNORECASE),
+    re.compile(r"upstream access forbidden", re.IGNORECASE),
+    re.compile(r"connection reset", re.IGNORECASE),
+    re.compile(r"timed out", re.IGNORECASE),
 )
 
 RETRY_LIMIT_PATTERNS = (
@@ -39,13 +56,21 @@ class Options:
     max_resumes: int
     rerun: bool
     codex_args: list[str]
-
+def notify_finish(title: str, message: str) -> None:
+    try:
+        subprocess.Popen([
+            "osascript",
+            "-e",
+            f'display notification "{message}" with title "{title}" sound name "Glass"'
+        ])
+    except Exception:
+        pass
 
 def parse_args(argv: list[str]) -> Options:
     parser = argparse.ArgumentParser(
         prog="codex-auto",
         description=(
-            "Run Codex and, when it exits after a 503 retry-limit failure, "
+            "Run Codex and, when it exits after a retryable failure, "
             "wait and continue the last session."
         ),
     )
@@ -96,7 +121,8 @@ def is_retryable_failure(exit_code: int, transcript: str) -> bool:
 
     has_retryable_status = any(pattern.search(transcript) for pattern in RETRYABLE_PATTERNS)
     has_retry_limit = any(pattern.search(transcript) for pattern in RETRY_LIMIT_PATTERNS)
-    return has_retryable_status and has_retry_limit
+    # return has_retryable_status and has_retry_limit
+    return has_retryable_status or has_retry_limit
 
 
 def write_status(message: str) -> None:
@@ -227,21 +253,38 @@ def main(argv: list[str]) -> int:
         command = command_for_attempt(options, attempt)
         exit_code, transcript = run_interactive(command)
 
+        # if not is_retryable_failure(exit_code, transcript):
+        #     notify_finish("Codex Auto", "Process completed successfully.")
+        #     return exit_code
         if not is_retryable_failure(exit_code, transcript):
+            if exit_code == 0:
+                notify_finish(
+                    "Codex Auto",
+                    "Task completed successfully."
+                )
+            else:
+                notify_finish(
+                    "Codex Auto",
+                    f"Task stopped (exit code {exit_code})."
+                )
             return exit_code
-
         resume_count += 1
         if options.max_resumes and resume_count > options.max_resumes:
             write_status(
                 f"hit retryable Codex failure, but --max-resumes={options.max_resumes} is exhausted"
             )
+            notify_finish("Codex Auto", "Process failed after maximum retries.")
             return exit_code
 
         action = "rerun original command" if options.rerun else "resume last session"
         write_status(
-            f"detected 503 retry-limit failure; will {action} after {options.wait_seconds}s"
+            # f"detected 503 retry-limit failure; will {action} after {options.wait_seconds}s"
+            f"detected retryable Codex/API failure; will {action} after {options.wait_seconds}s"
+
         )
-        sleep_before_resume(options.wait_seconds)
+        wait = min(options.wait_seconds * (2 ** (resume_count - 1)), 300)
+        sleep_before_resume(wait)
+        # sleep_before_resume(options.wait_seconds)
         attempt += 1
 
 

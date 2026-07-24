@@ -23,8 +23,11 @@ def test_load_tool_config_reads_environment(monkeypatch):
     monkeypatch.setenv("NBW_BASE_URL", "https://gateway.example/v1")
     monkeypatch.setenv("NBW_AUTOMATEDUB_API_KEY", "test-key")
     monkeypatch.setenv("LOCALIZATION_MODEL", "test-model")
-    monkeypatch.setenv("TTS_PROVIDER", "nbwcode")
+    monkeypatch.setenv("TTS_PROVIDER", "cambai")
     monkeypatch.setenv("TTS_MODEL", "test-tts-model")
+    monkeypatch.setenv("CAMB_API_KEY", "camb-key")
+    monkeypatch.setenv("CAMB_LANGUAGE", "km-kh")
+    monkeypatch.setenv("CAMB_VOICE_ID", "123")
 
     tool_config = config.load_tool_config(env_file=None)
 
@@ -36,8 +39,11 @@ def test_load_tool_config_reads_environment(monkeypatch):
     assert tool_config.nbw_base_url == "https://gateway.example/v1"
     assert tool_config.nbw_automatedub_api_key == "test-key"
     assert tool_config.localization_model == "test-model"
-    assert tool_config.tts_provider == "nbwcode"
+    assert tool_config.tts_provider == "cambai"
     assert tool_config.tts_model == "test-tts-model"
+    assert tool_config.camb_api_key == "camb-key"
+    assert tool_config.camb_language == "km-kh"
+    assert tool_config.camb_voice_id == "123"
 
 
 def test_load_tool_config_uses_nbw_defaults(monkeypatch):
@@ -50,8 +56,9 @@ def test_load_tool_config_uses_nbw_defaults(monkeypatch):
 
     assert tool_config.nbw_base_url == "https://www.nbwcode.top/v1"
     assert tool_config.localization_model == "gpt-5.5"
-    assert tool_config.tts_provider == "nbwcode"
-    assert tool_config.tts_model == "gpt-4o-mini-tts"
+    assert tool_config.tts_provider == "cambai"
+    assert tool_config.tts_model == "mars-flash"
+    assert tool_config.camb_language == "km-kh"
 
 
 def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
@@ -60,6 +67,9 @@ def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
     monkeypatch.delenv("LOCALIZATION_MODEL", raising=False)
     monkeypatch.delenv("TTS_PROVIDER", raising=False)
     monkeypatch.delenv("TTS_MODEL", raising=False)
+    monkeypatch.delenv("CAMB_API_KEY", raising=False)
+    monkeypatch.delenv("CAMB_LANGUAGE", raising=False)
+    monkeypatch.delenv("CAMB_VOICE_ID", raising=False)
     env_file = tmp_path / ".env"
     env_file.write_text(
         "\n".join(
@@ -68,8 +78,11 @@ def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
                 "NBW_BASE_URL=https://gateway.example/v1",
                 "NBW_AUTOMATEDUB_API_KEY=test-key",
                 'LOCALIZATION_MODEL="test model"',
-                "TTS_PROVIDER=nbwcode",
+                "TTS_PROVIDER=cambai",
                 "TTS_MODEL=test-tts-model",
+                "CAMB_API_KEY=camb-key",
+                "CAMB_LANGUAGE=km-kh",
+                "CAMB_VOICE_ID=123",
             ]
         ),
         encoding="utf-8",
@@ -80,8 +93,11 @@ def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
     assert tool_config.nbw_base_url == "https://gateway.example/v1"
     assert tool_config.nbw_automatedub_api_key == "test-key"
     assert tool_config.localization_model == "test model"
-    assert tool_config.tts_provider == "nbwcode"
+    assert tool_config.tts_provider == "cambai"
     assert tool_config.tts_model == "test-tts-model"
+    assert tool_config.camb_api_key == "camb-key"
+    assert tool_config.camb_language == "km-kh"
+    assert tool_config.camb_voice_id == "123"
 
 
 def test_environment_overrides_dotenv(monkeypatch, tmp_path):

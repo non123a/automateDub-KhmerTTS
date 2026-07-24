@@ -5,6 +5,7 @@ from pathlib import Path
 from automatedub import cli
 from automatedub.doctor import DoctorCheck
 from automatedub.setup import SetupResult
+from automatedub.vertical_slice.tts import TtsVoice
 
 
 def test_dub_command_returns_success_and_prints_artifact_paths(monkeypatch, tmp_path, capsys):
@@ -15,23 +16,31 @@ def test_dub_command_returns_success_and_prints_artifact_paths(monkeypatch, tmp_
     expected_translation = output_dir / "translation.json"
     expected_prompt = output_dir / "translation_prompt.json"
     expected_tts_dir = output_dir / "tts"
+    expected_mixed_audio = output_dir / "mixed_audio.wav"
+    expected_mix_plan = output_dir / "mix_plan.json"
 
     def fake_run_dub(
         input_arg: Path,
         output_arg: Path,
         tool_config=None,
-    ) -> tuple[Path, Path, Path, Path, Path, int, int]:
+    ) -> cli.DubResult:
         assert input_arg == input_path
         assert output_arg == output_dir
         assert tool_config is None
-        return (
-            expected_audio,
-            expected_transcript,
-            expected_translation,
-            expected_prompt,
-            expected_tts_dir,
-            2,
-            1,
+        return cli.DubResult(
+            audio_path=expected_audio,
+            transcript_path=expected_transcript,
+            translation_path=expected_translation,
+            prompt_path=expected_prompt,
+            tts_dir=expected_tts_dir,
+            tts_generated_count=2,
+            tts_failure_count=1,
+            mix_result=cli.MixResult(
+                mixed_audio_path=expected_mixed_audio,
+                mix_plan_path=expected_mix_plan,
+                mixed_segments=2,
+                skipped_segments=1,
+            ),
         )
 
     monkeypatch.setattr(cli, "run_dub", fake_run_dub)
@@ -47,6 +56,10 @@ def test_dub_command_returns_success_and_prints_artifact_paths(monkeypatch, tmp_
     assert f"tts written: {expected_tts_dir}" in output
     assert "tts segments generated: 2" in output
     assert "tts segments failed: 1" in output
+    assert f"mixed audio written: {expected_mixed_audio}" in output
+    assert f"mix plan written: {expected_mix_plan}" in output
+    assert "mix segments included: 2" in output
+    assert "mix segments skipped: 1" in output
 
 
 def test_dub_command_returns_error_for_vs0_failure(monkeypatch, tmp_path, capsys):
@@ -86,6 +99,105 @@ def test_tts_command_returns_success_and_prints_counts(monkeypatch, tmp_path, ca
     assert f"tts written: {expected_tts_dir}" in output
     assert "tts segments generated: 3" in output
     assert "tts segments failed: 1" in output
+
+
+def test_tts_providers_command_prints_status(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli,
+        "get_tts_provider_status",
+        lambda: cli.TtsProviderStatus(
+            available_providers=["cambai", "nbwcode"],
+            current_provider="cambai",
+            current_model="mars-flash",
+            current_voice="123",
+        ),
+    )
+
+    exit_code = cli.main(["tts", "providers"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "available providers:" in output
+    assert "- cambai" in output
+    assert "- nbwcode" in output
+    assert "current provider: cambai" in output
+    assert "current model: mars-flash" in output
+    assert "current voice: 123" in output
+
+
+def test_camb_voices_command_prints_voices(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "load_tool_config", lambda: object())
+    monkeypatch.setattr(
+        cli,
+        "list_cambai_voices",
+        lambda config: [
+            TtsVoice(
+                id="123",
+                name="Khmer Female",
+                gender="female",
+                language="km-kh",
+                metadata={},
+            )
+        ],
+    )
+
+    exit_code = cli.main(["camb", "voices"])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "Voice ID\tVoice Name\tGender\tLanguage" in output
+    assert "123\tKhmer Female\tfemale\tkm-kh * Khmer" in output
+
+
+def test_camb_test_command_prints_one_wav_result(monkeypatch, tmp_path, capsys):
+    output_dir = tmp_path / "output"
+    result = cli.CambTestResult(
+        output_path=output_dir / "tts" / "test.wav",
+        provider="cambai",
+        model="mars-flash",
+        voice="123",
+        generation_time=1.25,
+        characters=7,
+    )
+    monkeypatch.setattr(cli, "run_camb_test", lambda output_arg: result)
+
+    exit_code = cli.main(["camb", "test", str(output_dir)])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert f"test wav written: {result.output_path}" in output
+    assert "provider: cambai" in output
+    assert "model: mars-flash" in output
+    assert "voice: 123" in output
+    assert "generation time: 1.25" in output
+    assert "characters: 7" in output
+
+
+def test_mix_command_returns_success_and_prints_counts(monkeypatch, tmp_path, capsys):
+    output_dir = tmp_path / "output"
+    expected_mixed_audio = output_dir / "mixed_audio.wav"
+    expected_mix_plan = output_dir / "mix_plan.json"
+
+    def fake_run_mix(output_arg: Path, tool_config=None) -> cli.MixResult:
+        assert output_arg == output_dir
+        assert tool_config is None
+        return cli.MixResult(
+            mixed_audio_path=expected_mixed_audio,
+            mix_plan_path=expected_mix_plan,
+            mixed_segments=3,
+            skipped_segments=1,
+        )
+
+    monkeypatch.setattr(cli, "run_mix", fake_run_mix)
+
+    exit_code = cli.main(["mix", str(output_dir)])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert f"mixed audio written: {expected_mixed_audio}" in output
+    assert f"mix plan written: {expected_mix_plan}" in output
+    assert "mix segments included: 3" in output
+    assert "mix segments skipped: 1" in output
 
 
 def test_doctor_command_prints_checks(monkeypatch, capsys):

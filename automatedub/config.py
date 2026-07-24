@@ -19,8 +19,11 @@ class ToolConfig:
     nbw_base_url: str = "https://www.nbwcode.top/v1"
     nbw_automatedub_api_key: str | None = None
     localization_model: str = "gpt-5.5"
-    tts_provider: str = "nbwcode"
-    tts_model: str = "gpt-4o-mini-tts"
+    tts_provider: str = "cambai"
+    tts_model: str = "mars-flash"
+    camb_api_key: str | None = None
+    camb_language: str = "km-kh"
+    camb_voice_id: str | None = None
 
 
 def load_tool_config(env_file: Path | None = Path(".env")) -> ToolConfig:
@@ -43,8 +46,11 @@ def load_tool_config(env_file: Path | None = Path(".env")) -> ToolConfig:
         or "https://www.nbwcode.top/v1",
         nbw_automatedub_api_key=get_config_value("NBW_AUTOMATEDUB_API_KEY"),
         localization_model=get_config_value("LOCALIZATION_MODEL", "gpt-5.5") or "gpt-5.5",
-        tts_provider=get_config_value("TTS_PROVIDER", "nbwcode") or "nbwcode",
-        tts_model=get_config_value("TTS_MODEL", "gpt-4o-mini-tts") or "gpt-4o-mini-tts",
+        tts_provider=get_config_value("TTS_PROVIDER", "cambai") or "cambai",
+        tts_model=get_config_value("TTS_MODEL", "mars-flash") or "mars-flash",
+        camb_api_key=get_config_value("CAMB_API_KEY"),
+        camb_language=get_config_value("CAMB_LANGUAGE", "km-kh") or "km-kh",
+        camb_voice_id=get_config_value("CAMB_VOICE_ID"),
     )
 
 

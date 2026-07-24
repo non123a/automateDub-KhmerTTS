@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Vertical-slice AI localization harness for Khmer media."
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "camb-sdk>=1.5.15",
+]
 
 [project.optional-dependencies]
 dev = [
