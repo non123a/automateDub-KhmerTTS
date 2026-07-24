@@ -279,3 +279,63 @@ def test_list_cambai_voices_normalizes_sdk_response():
 def test_validate_tts_config_rejects_unsupported_provider():
     with pytest.raises(tts.VS3Error, match="unsupported TTS provider"):
         tts.validate_tts_config(ToolConfig(tts_provider="other"))
+
+
+def test_select_sample_segments_covers_requested_minutes_from_start_segment(tmp_path):
+    translation_path = tmp_path / "translation.json"
+    payload = sample_translation_payload()
+    payload["segments"] = [
+        {
+            "id": 0,
+            "start": 0.0,
+            "end": 30.0,
+            "target_text": "មួយ",
+        },
+        {
+            "id": 1,
+            "start": 30.0,
+            "end": 70.0,
+            "target_text": "ពីរ",
+        },
+        {
+            "id": 2,
+            "start": 70.0,
+            "end": 130.0,
+            "target_text": "បី",
+        },
+        {
+            "id": 3,
+            "start": 130.0,
+            "end": 180.0,
+            "target_text": "បួន",
+        },
+    ]
+    translation_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    selected = tts.select_sample_segments(translation_path, start_segment=1, minutes=1)
+
+    assert selected == [
+        tts.SampleSegment(id=1, start=30.0, end=70.0, target_text="ពីរ"),
+        tts.SampleSegment(id=2, start=70.0, end=130.0, target_text="បី"),
+    ]
+
+
+def test_select_sample_segments_rejects_missing_start_segment(tmp_path):
+    translation_path = tmp_path / "translation.json"
+    translation_path.write_text(
+        json.dumps(sample_translation_payload(), ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(tts.VS3Error, match="start segment does not exist"):
+        tts.select_sample_segments(translation_path, start_segment=99, minutes=2)
+
+
+def test_select_sample_segments_requires_timestamps(tmp_path):
+    translation_path = tmp_path / "translation.json"
+    payload = sample_translation_payload()
+    del payload["segments"][0]["start"]
+    translation_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+    with pytest.raises(tts.VS3Error, match="numeric start and end"):
+        tts.select_sample_segments(translation_path, start_segment=0, minutes=2)

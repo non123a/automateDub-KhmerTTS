@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import subprocess
 import sys
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from automatedub.config import ToolConfig, load_tool_config
+from automatedub.config import ToolConfig, load_tool_config, resolve_executable
 from automatedub.doctor import doctor_succeeded, run_doctor
 from automatedub.setup import SetupError, run_setup
 from automatedub.vertical_slice.audio import VS0Error, extract_audio
@@ -27,6 +29,8 @@ from automatedub.vertical_slice.tts import (
     create_tts_provider,
     list_cambai_voices,
     load_translation_segments as load_tts_translation_segments,
+    select_sample_segments,
+    tts_segment_output_path,
     validate_wav_audio,
 )
 
@@ -61,6 +65,15 @@ class CambTestResult:
     characters: int
 
 
+@dataclass(frozen=True)
+class TtsSampleResult:
+    output_dir: Path
+    sample_wav_path: Path
+    sample_text_path: Path
+    generated_count: int
+    characters: int
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="automatedub",
@@ -83,7 +96,30 @@ def build_parser() -> argparse.ArgumentParser:
     tts_parser.add_argument(
         "target",
         nargs="?",
-        help="Output directory containing translation.json, or 'providers'.",
+        help="Output directory containing translation.json, 'providers', or 'sample'.",
+    )
+    tts_parser.add_argument(
+        "sample_source_dir",
+        nargs="?",
+        type=Path,
+        help="Output directory containing translation.json when using 'tts sample'.",
+    )
+    tts_parser.add_argument(
+        "--start-segment",
+        type=int,
+        default=0,
+        help="First translated segment ID to include in a TTS sample.",
+    )
+    tts_parser.add_argument(
+        "--minutes",
+        type=float,
+        default=2.0,
+        help="Approximate translated timestamp duration to include in a TTS sample.",
+    )
+    tts_parser.add_argument(
+        "--output",
+        type=Path,
+        help="Directory for sampled TTS WAV files. Defaults to <output_dir>/sample/.",
     )
 
     camb_parser = subparsers.add_parser(
@@ -175,6 +211,117 @@ def run_tts(
     return tts_result.tts_dir, len(tts_result.generated), len(tts_result.failures)
 
 
+def run_tts_sample(
+    output_dir: Path,
+    start_segment: int = 0,
+    minutes: float = 2.0,
+    sample_output_dir: Path | None = None,
+    tool_config: ToolConfig | None = None,
+) -> TtsSampleResult:
+    config = tool_config or load_tool_config()
+    output_root = output_dir.expanduser()
+    translation_path = translation_output_path(output_root)
+    selected_segments = select_sample_segments(
+        translation_path=translation_path,
+        start_segment=start_segment,
+        minutes=minutes,
+    )
+    sample_dir = (sample_output_dir or (output_root / "sample")).expanduser()
+    sample_dir.mkdir(parents=True, exist_ok=True)
+
+    provider = create_tts_provider(config)
+    generated_count = 0
+    characters = 0
+    wav_paths: list[Path] = []
+    target_texts: list[str] = []
+    for segment in selected_segments:
+        speech = provider.generate(segment.target_text)
+        validate_wav_audio(speech.audio, segment.id)
+        wav_path = tts_segment_output_path(sample_dir, segment.id)
+        wav_path.write_bytes(speech.audio)
+        wav_paths.append(wav_path)
+        target_texts.append(segment.target_text)
+        generated_count += 1
+        characters += len(segment.target_text)
+
+    sample_text_path = sample_dir / "sample.txt"
+    sample_text_path.write_text("\n".join(target_texts) + "\n", encoding="utf-8")
+    sample_wav_path = sample_dir / "sample.wav"
+    concatenate_sample_wavs(
+        ffmpeg=validate_sample_ffmpeg(config),
+        wav_paths=wav_paths,
+        sample_wav_path=sample_wav_path,
+    )
+
+    return TtsSampleResult(
+        output_dir=sample_dir,
+        sample_wav_path=sample_wav_path,
+        sample_text_path=sample_text_path,
+        generated_count=generated_count,
+        characters=characters,
+    )
+
+
+def validate_sample_ffmpeg(tool_config: ToolConfig) -> str:
+    ffmpeg = resolve_executable(tool_config.ffmpeg_path)
+    if ffmpeg is None:
+        raise VS3Error("ffmpeg is not available on PATH")
+    return ffmpeg
+
+
+def concatenate_sample_wavs(
+    ffmpeg: str,
+    wav_paths: list[Path],
+    sample_wav_path: Path,
+) -> None:
+    if not wav_paths:
+        raise VS3Error("no sample WAV files were generated")
+
+    manifest_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=sample_wav_path.parent,
+            prefix=".sample_concat_",
+            suffix=".txt",
+            delete=False,
+        ) as manifest:
+            manifest_path = Path(manifest.name)
+            for wav_path in wav_paths:
+                escaped_path = str(wav_path.resolve()).replace("'", "'\\''")
+                manifest.write(f"file '{escaped_path}'\n")
+
+        command = [
+            ffmpeg,
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(manifest_path),
+            "-c",
+            "copy",
+            str(sample_wav_path),
+        ]
+        try:
+            subprocess.run(command, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as exc:
+            message = (
+                exc.stderr.strip()
+                or exc.stdout.strip()
+                or f"ffmpeg exited with {exc.returncode}"
+            )
+            raise VS3Error(f"sample concatenation failed: {message}") from exc
+    finally:
+        if manifest_path is not None:
+            manifest_path.unlink(missing_ok=True)
+
+
 def get_tts_provider_status(tool_config: ToolConfig | None = None) -> TtsProviderStatus:
     config = tool_config or load_tool_config()
     voice = config.camb_voice_id if config.tts_provider == "cambai" else "alloy"
@@ -251,6 +398,26 @@ def main(argv: list[str] | None = None) -> int:
             print(f"current provider: {status.current_provider}")
             print(f"current model: {status.current_model}")
             print(f"current voice: {status.current_voice or 'not set'}")
+            return 0
+        if args.target == "sample":
+            if args.sample_source_dir is None:
+                print("error: tts sample requires an output directory", file=sys.stderr)
+                return 2
+            try:
+                sample_result = run_tts_sample(
+                    output_dir=args.sample_source_dir,
+                    start_segment=args.start_segment,
+                    minutes=args.minutes,
+                    sample_output_dir=args.output,
+                )
+            except VS3Error as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+            print(f"sample written: {sample_result.output_dir}")
+            print(f"sample wav: {sample_result.sample_wav_path}")
+            print(f"sample text: {sample_result.sample_text_path}")
+            print(f"sample segments generated: {sample_result.generated_count}")
+            print(f"sample characters: {sample_result.characters}")
             return 0
         if args.target is None:
             print("error: tts requires an output directory or 'providers'", file=sys.stderr)

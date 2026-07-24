@@ -28,6 +28,14 @@ class TtsSegment:
 
 
 @dataclass(frozen=True)
+class SampleSegment:
+    id: int
+    start: float
+    end: float
+    target_text: str
+
+
+@dataclass(frozen=True)
 class TtsFailure:
     id: int
     target_text: str
@@ -272,6 +280,75 @@ def load_translation_segments(translation_path: Path) -> list[TtsSegment]:
         if not isinstance(target_text, str) or not target_text.strip():
             raise VS3Error(f"translation segment {segment_id} is missing target_text")
         segments.append(TtsSegment(id=segment_id, target_text=target_text.strip()))
+    return segments
+
+
+def select_sample_segments(
+    translation_path: Path,
+    start_segment: int,
+    minutes: float,
+) -> list[SampleSegment]:
+    if start_segment < 0:
+        raise VS3Error("start segment must be zero or greater")
+    if minutes <= 0:
+        raise VS3Error("minutes must be greater than zero")
+
+    segments = load_timed_translation_segments(translation_path)
+    start_index = next(
+        (index for index, segment in enumerate(segments) if segment.id == start_segment),
+        None,
+    )
+    if start_index is None:
+        raise VS3Error(f"start segment does not exist: {start_segment}")
+
+    selected: list[SampleSegment] = []
+    sample_start = segments[start_index].start
+    sample_end = sample_start + (minutes * 60)
+    for segment in segments[start_index:]:
+        selected.append(segment)
+        if segment.end >= sample_end:
+            break
+    return selected
+
+
+def load_timed_translation_segments(translation_path: Path) -> list[SampleSegment]:
+    if not translation_path.exists():
+        raise VS3Error(f"translation file does not exist: {translation_path}")
+    try:
+        payload = json.loads(translation_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise VS3Error(f"translation file is not valid JSON: {translation_path}") from exc
+
+    if not isinstance(payload, dict):
+        raise VS3Error("translation JSON root must be an object")
+    raw_segments = payload.get("segments")
+    if not isinstance(raw_segments, list):
+        raise VS3Error("translation JSON must contain a segments list")
+
+    segments: list[SampleSegment] = []
+    for raw_segment in raw_segments:
+        if not isinstance(raw_segment, dict):
+            raise VS3Error("each translation segment must be an object")
+        segment_id = raw_segment.get("id")
+        start = raw_segment.get("start")
+        end = raw_segment.get("end")
+        target_text = raw_segment.get("target_text")
+        if not isinstance(segment_id, int):
+            raise VS3Error("each translation segment must contain integer id")
+        if not isinstance(start, int | float) or not isinstance(end, int | float):
+            raise VS3Error("each translation segment must contain numeric start and end")
+        if end < start:
+            raise VS3Error(f"translation segment {segment_id} has end before start")
+        if not isinstance(target_text, str) or not target_text.strip():
+            raise VS3Error(f"translation segment {segment_id} is missing target_text")
+        segments.append(
+            SampleSegment(
+                id=segment_id,
+                start=float(start),
+                end=float(end),
+                target_text=target_text.strip(),
+            )
+        )
     return segments
 
 

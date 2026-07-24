@@ -6,7 +6,7 @@ from automatedub import cli
 from automatedub.config import DEFAULT_TTS_MODEL
 from automatedub.doctor import DoctorCheck
 from automatedub.setup import SetupResult
-from automatedub.vertical_slice.tts import TtsVoice
+from automatedub.vertical_slice.tts import GeneratedSpeech, SampleSegment, TtsVoice
 
 
 def test_dub_command_returns_success_and_prints_artifact_paths(monkeypatch, tmp_path, capsys):
@@ -124,6 +124,148 @@ def test_tts_providers_command_prints_status(monkeypatch, capsys):
     assert "current provider: cambai" in output
     assert f"current model: {DEFAULT_TTS_MODEL}" in output
     assert "current voice: 123" in output
+
+
+def test_tts_sample_command_generates_sample_wavs(monkeypatch, tmp_path, capsys):
+    output_dir = tmp_path / "output"
+    sample_dir = tmp_path / "sample"
+
+    def fake_run_tts_sample(
+        output_dir: Path,
+        start_segment: int = 0,
+        minutes: float = 2.0,
+        sample_output_dir: Path | None = None,
+        tool_config=None,
+    ) -> cli.TtsSampleResult:
+        assert output_dir == tmp_path / "output"
+        assert start_segment == 4
+        assert minutes == 1.5
+        assert sample_output_dir == sample_dir
+        assert tool_config is None
+        return cli.TtsSampleResult(
+            output_dir=sample_dir,
+            sample_wav_path=sample_dir / "sample.wav",
+            sample_text_path=sample_dir / "sample.txt",
+            generated_count=3,
+            characters=42,
+        )
+
+    monkeypatch.setattr(cli, "run_tts_sample", fake_run_tts_sample)
+
+    exit_code = cli.main(
+        [
+            "tts",
+            "sample",
+            str(output_dir),
+            "--start-segment",
+            "4",
+            "--minutes",
+            "1.5",
+            "--output",
+            str(sample_dir),
+        ]
+    )
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert f"sample written: {sample_dir}" in output
+    assert f"sample wav: {sample_dir / 'sample.wav'}" in output
+    assert f"sample text: {sample_dir / 'sample.txt'}" in output
+    assert "sample segments generated: 3" in output
+    assert "sample characters: 42" in output
+
+
+def test_run_tts_sample_writes_selected_segment_wavs_and_text(monkeypatch, tmp_path):
+    output_dir = tmp_path / "output"
+    sample_dir = output_dir / "sample"
+    selected = [
+        SampleSegment(id=0, start=0.0, end=1.0, target_text="មួយ"),
+        SampleSegment(id=2, start=1.0, end=2.0, target_text="ពីរ"),
+    ]
+    calls: list[str] = []
+
+    class FakeProvider:
+        def generate(self, text: str) -> GeneratedSpeech:
+            calls.append(text)
+            return GeneratedSpeech(audio=b"RIFF\x24\x00\x00\x00WAVEfmt ")
+
+    def fake_select_sample_segments(translation_path, start_segment, minutes):
+        assert translation_path == output_dir / "translation.json"
+        assert start_segment == 0
+        assert minutes == 2.0
+        return selected
+
+    concat_calls: list[tuple[str, list[Path], Path]] = []
+
+    monkeypatch.setattr(cli, "select_sample_segments", fake_select_sample_segments)
+    monkeypatch.setattr(cli, "create_tts_provider", lambda config: FakeProvider())
+    monkeypatch.setattr(cli, "validate_sample_ffmpeg", lambda config: "ffmpeg")
+    monkeypatch.setattr(
+        cli,
+        "concatenate_sample_wavs",
+        lambda ffmpeg, wav_paths, sample_wav_path: concat_calls.append(
+            (ffmpeg, wav_paths, sample_wav_path)
+        ),
+    )
+
+    result = cli.run_tts_sample(output_dir, tool_config=object())
+
+    assert result == cli.TtsSampleResult(
+        output_dir=sample_dir,
+        sample_wav_path=sample_dir / "sample.wav",
+        sample_text_path=sample_dir / "sample.txt",
+        generated_count=2,
+        characters=6,
+    )
+    assert calls == ["មួយ", "ពីរ"]
+    assert (sample_dir / "0000.wav").exists()
+    assert (sample_dir / "0002.wav").exists()
+    assert (sample_dir / "sample.txt").read_text(encoding="utf-8") == "មួយ\nពីរ\n"
+    assert concat_calls == [
+        (
+            "ffmpeg",
+            [sample_dir / "0000.wav", sample_dir / "0002.wav"],
+            sample_dir / "sample.wav",
+        )
+    ]
+
+
+def test_concatenate_sample_wavs_builds_ffmpeg_command(monkeypatch, tmp_path):
+    sample_dir = tmp_path / "sample"
+    sample_dir.mkdir()
+    wav_paths = [sample_dir / "0000.wav", sample_dir / "0001.wav"]
+    for wav_path in wav_paths:
+        wav_path.write_bytes(b"RIFF\x24\x00\x00\x00WAVEfmt ")
+    sample_wav_path = sample_dir / "sample.wav"
+    commands: list[list[str]] = []
+
+    def fake_run(command, check, capture_output, text):
+        commands.append(command)
+        sample_wav_path.write_bytes(b"RIFF\x24\x00\x00\x00WAVEfmt ")
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+
+    cli.concatenate_sample_wavs("ffmpeg", wav_paths, sample_wav_path)
+
+    assert commands == [
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            commands[0][10],
+            "-c",
+            "copy",
+            str(sample_wav_path),
+        ]
+    ]
+    assert sample_wav_path.exists()
 
 
 def test_camb_voices_command_prints_voices(monkeypatch, capsys):

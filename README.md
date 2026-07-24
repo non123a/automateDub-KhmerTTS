@@ -168,3 +168,13 @@ extraction, transcription, or localization:
 ```bash
 uv run automatedub tts output/
 ```
+
+To generate a short voice-quality sample from an existing translation:
+
+```bash
+uv run automatedub tts sample output/ --start-segment 0 --minutes 2
+```
+
+This writes selected segment WAVs to `output/sample/`, concatenates them into
+`output/sample/sample.wav`, and writes the sampled Khmer text to
+`output/sample/sample.txt`. It does not mix with the original source audio.
