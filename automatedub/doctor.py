@@ -22,6 +22,8 @@ def run_doctor(tool_config: ToolConfig) -> list[DoctorCheck]:
         check_executable("ffprobe", tool_config.ffprobe_path),
         check_executable("whisper.cpp", tool_config.whisper_cpp_path),
         check_model(tool_config),
+        check_tts_speed(tool_config),
+        check_duck_volume(tool_config),
         *check_nbwcode(tool_config),
         *check_cambai(tool_config),
     ]
@@ -42,6 +44,14 @@ def check_model(tool_config: ToolConfig) -> DoctorCheck:
     if not model_path.is_file():
         return DoctorCheck("whisper model", False, f"not a file: {model_path}")
     return DoctorCheck("whisper model", True, str(model_path))
+
+
+def check_tts_speed(tool_config: ToolConfig) -> DoctorCheck:
+    return DoctorCheck("tts speed", True, str(tool_config.tts_speed))
+
+
+def check_duck_volume(tool_config: ToolConfig) -> DoctorCheck:
+    return DoctorCheck("duck volume", True, str(tool_config.duck_volume))
 
 
 def check_nbwcode(tool_config: ToolConfig) -> list[DoctorCheck]:

@@ -194,8 +194,13 @@ def test_cambai_provider_uses_sdk_client(monkeypatch):
         def __init__(self, **kwargs):
             self.kwargs = kwargs
 
+    class FakeStreamTtsVoiceSettings:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
     fake_types = types.ModuleType("camb.types")
     fake_types.StreamTtsOutputConfiguration = FakeStreamTtsOutputConfiguration
+    fake_types.StreamTtsVoiceSettings = FakeStreamTtsVoiceSettings
     monkeypatch.setitem(sys.modules, "camb.types", fake_types)
 
     class FakeTextToSpeech:
@@ -218,6 +223,7 @@ def test_cambai_provider_uses_sdk_client(monkeypatch):
             camb_api_key="camb-key",
             camb_language="km-kh",
             camb_voice_id="123",
+            tts_speed=1.25,
         ),
         client=client,
     )
@@ -232,9 +238,41 @@ def test_cambai_provider_uses_sdk_client(monkeypatch):
             "language": "km-kh",
             "speech_model": "test-tts-model",
             "output_configuration": client.text_to_speech.calls[0]["output_configuration"],
+            "voice_settings": client.text_to_speech.calls[0]["voice_settings"],
         }
     ]
     assert client.text_to_speech.calls[0]["output_configuration"].kwargs == {"format": "wav"}
+    assert client.text_to_speech.calls[0]["voice_settings"].kwargs == {"speaking_rate": 1.25}
+
+
+def test_nbwcode_provider_describe_reports_configured_speed():
+    provider = tts.NBWCodeProvider(
+        ToolConfig(
+            nbw_base_url="https://gateway.example/v1",
+            nbw_automatedub_api_key="test-key",
+            tts_provider="nbwcode",
+            tts_model="test-tts-model",
+            tts_speed=1.4,
+        )
+    )
+
+    assert provider.describe().speed == 1.4
+
+
+def test_cambai_provider_describe_reports_configured_speed():
+    provider = tts.CambAIProvider(
+        ToolConfig(
+            tts_provider="cambai",
+            tts_model="test-tts-model",
+            camb_api_key="camb-key",
+            camb_language="km-kh",
+            camb_voice_id="123",
+            tts_speed=1.4,
+        ),
+        client=object(),
+    )
+
+    assert provider.describe().speed == 1.4
 
 
 def test_list_cambai_voices_normalizes_sdk_response():

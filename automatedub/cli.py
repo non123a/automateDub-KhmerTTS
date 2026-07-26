@@ -548,14 +548,22 @@ def print_doctor_checks(checks) -> None:
     general_checks = [
         check
         for check in checks
-        if not check.name.startswith("nbw ") and not check.name.startswith("camb ")
+        if not check.name.startswith("nbw ")
+        and not check.name.startswith("camb ")
+        and check.name != "tts speed"
     ]
+    tts_speed_check = next((check for check in checks if check.name == "tts speed"), None)
     nbw_checks = {check.name: check for check in checks if check.name.startswith("nbw ")}
     camb_checks = {check.name: check for check in checks if check.name.startswith("camb ")}
 
     for check in general_checks:
         status = "ok" if check.ok else "error"
         print(f"{status}: {check.name}: {check.detail}")
+
+    if tts_speed_check is not None:
+        print()
+        print("TTS Speed:")
+        print(format_doctor_value(tts_speed_check))
 
     if nbw_checks:
         print()

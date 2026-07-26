@@ -1,0 +1,1885 @@
+{
+  "version": 1,
+  "generated_at": "2026-07-26T08:58:18.980382+00:00",
+  "source_audio": "audio.wav",
+  "translation": "translation.json",
+  "tts_dir": "tts",
+  "tts_combined": "tts_combined.wav",
+  "duration_seconds": 438.207,
+  "sample_rate": 16000,
+  "included_segments": 205,
+  "skipped_segments": 0,
+  "ffmpeg_command": [
+    "/opt/homebrew/bin/ffmpeg",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-y",
+    "-f",
+    "lavfi",
+    "-t",
+    "438.207",
+    "-i",
+    "anullsrc=channel_layout=mono:sample_rate=16000",
+    "-i",
+    "output2/tts/0000.wav",
+    "-i",
+    "output2/tts/0001.wav",
+    "-i",
+    "output2/tts/0002.wav",
+    "-i",
+    "output2/tts/0003.wav",
+    "-i",
+    "output2/tts/0004.wav",
+    "-i",
+    "output2/tts/0005.wav",
+    "-i",
+    "output2/tts/0006.wav",
+    "-i",
+    "output2/tts/0007.wav",
+    "-i",
+    "output2/tts/0008.wav",
+    "-i",
+    "output2/tts/0009.wav",
+    "-i",
+    "output2/tts/0010.wav",
+    "-i",
+    "output2/tts/0011.wav",
+    "-i",
+    "output2/tts/0012.wav",
+    "-i",
+    "output2/tts/0013.wav",
+    "-i",
+    "output2/tts/0014.wav",
+    "-i",
+    "output2/tts/0015.wav",
+    "-i",
+    "output2/tts/0016.wav",
+    "-i",
+    "output2/tts/0017.wav",
+    "-i",
+    "output2/tts/0018.wav",
+    "-i",
+    "output2/tts/0019.wav",
+    "-i",
+    "output2/tts/0020.wav",
+    "-i",
+    "output2/tts/0021.wav",
+    "-i",
+    "output2/tts/0022.wav",
+    "-i",
+    "output2/tts/0023.wav",
+    "-i",
+    "output2/tts/0024.wav",
+    "-i",
+    "output2/tts/0025.wav",
+    "-i",
+    "output2/tts/0026.wav",
+    "-i",
+    "output2/tts/0027.wav",
+    "-i",
+    "output2/tts/0028.wav",
+    "-i",
+    "output2/tts/0029.wav",
+    "-i",
+    "output2/tts/0030.wav",
+    "-i",
+    "output2/tts/0031.wav",
+    "-i",
+    "output2/tts/0032.wav",
+    "-i",
+    "output2/tts/0033.wav",
+    "-i",
+    "output2/tts/0034.wav",
+    "-i",
+    "output2/tts/0035.wav",
+    "-i",
+    "output2/tts/0036.wav",
+    "-i",
+    "output2/tts/0037.wav",
+    "-i",
+    "output2/tts/0038.wav",
+    "-i",
+    "output2/tts/0039.wav",
+    "-i",
+    "output2/tts/0040.wav",
+    "-i",
+    "output2/tts/0041.wav",
+    "-i",
+    "output2/tts/0042.wav",
+    "-i",
+    "output2/tts/0043.wav",
+    "-i",
+    "output2/tts/0044.wav",
+    "-i",
+    "output2/tts/0045.wav",
+    "-i",
+    "output2/tts/0046.wav",
+    "-i",
+    "output2/tts/0047.wav",
+    "-i",
+    "output2/tts/0048.wav",
+    "-i",
+    "output2/tts/0049.wav",
+    "-i",
+    "output2/tts/0050.wav",
+    "-i",
+    "output2/tts/0051.wav",
+    "-i",
+    "output2/tts/0052.wav",
+    "-i",
+    "output2/tts/0053.wav",
+    "-i",
+    "output2/tts/0054.wav",
+    "-i",
+    "output2/tts/0055.wav",
+    "-i",
+    "output2/tts/0056.wav",
+    "-i",
+    "output2/tts/0057.wav",
+    "-i",
+    "output2/tts/0058.wav",
+    "-i",
+    "output2/tts/0059.wav",
+    "-i",
+    "output2/tts/0060.wav",
+    "-i",
+    "output2/tts/0061.wav",
+    "-i",
+    "output2/tts/0062.wav",
+    "-i",
+    "output2/tts/0063.wav",
+    "-i",
+    "output2/tts/0064.wav",
+    "-i",
+    "output2/tts/0065.wav",
+    "-i",
+    "output2/tts/0066.wav",
+    "-i",
+    "output2/tts/0067.wav",
+    "-i",
+    "output2/tts/0068.wav",
+    "-i",
+    "output2/tts/0069.wav",
+    "-i",
+    "output2/tts/0070.wav",
+    "-i",
+    "output2/tts/0071.wav",
+    "-i",
+    "output2/tts/0072.wav",
+    "-i",
+    "output2/tts/0073.wav",
+    "-i",
+    "output2/tts/0074.wav",
+    "-i",
+    "output2/tts/0075.wav",
+    "-i",
+    "output2/tts/0076.wav",
+    "-i",
+    "output2/tts/0077.wav",
+    "-i",
+    "output2/tts/0078.wav",
+    "-i",
+    "output2/tts/0079.wav",
+    "-i",
+    "output2/tts/0080.wav",
+    "-i",
+    "output2/tts/0081.wav",
+    "-i",
+    "output2/tts/0082.wav",
+    "-i",
+    "output2/tts/0083.wav",
+    "-i",
+    "output2/tts/0084.wav",
+    "-i",
+    "output2/tts/0085.wav",
+    "-i",
+    "output2/tts/0086.wav",
+    "-i",
+    "output2/tts/0087.wav",
+    "-i",
+    "output2/tts/0088.wav",
+    "-i",
+    "output2/tts/0089.wav",
+    "-i",
+    "output2/tts/0090.wav",
+    "-i",
+    "output2/tts/0091.wav",
+    "-i",
+    "output2/tts/0092.wav",
+    "-i",
+    "output2/tts/0093.wav",
+    "-i",
+    "output2/tts/0094.wav",
+    "-i",
+    "output2/tts/0095.wav",
+    "-i",
+    "output2/tts/0096.wav",
+    "-i",
+    "output2/tts/0097.wav",
+    "-i",
+    "output2/tts/0098.wav",
+    "-i",
+    "output2/tts/0099.wav",
+    "-i",
+    "output2/tts/0100.wav",
+    "-i",
+    "output2/tts/0101.wav",
+    "-i",
+    "output2/tts/0102.wav",
+    "-i",
+    "output2/tts/0103.wav",
+    "-i",
+    "output2/tts/0104.wav",
+    "-i",
+    "output2/tts/0105.wav",
+    "-i",
+    "output2/tts/0106.wav",
+    "-i",
+    "output2/tts/0107.wav",
+    "-i",
+    "output2/tts/0108.wav",
+    "-i",
+    "output2/tts/0109.wav",
+    "-i",
+    "output2/tts/0110.wav",
+    "-i",
+    "output2/tts/0111.wav",
+    "-i",
+    "output2/tts/0112.wav",
+    "-i",
+    "output2/tts/0113.wav",
+    "-i",
+    "output2/tts/0114.wav",
+    "-i",
+    "output2/tts/0115.wav",
+    "-i",
+    "output2/tts/0116.wav",
+    "-i",
+    "output2/tts/0117.wav",
+    "-i",
+    "output2/tts/0118.wav",
+    "-i",
+    "output2/tts/0119.wav",
+    "-i",
+    "output2/tts/0120.wav",
+    "-i",
+    "output2/tts/0121.wav",
+    "-i",
+    "output2/tts/0122.wav",
+    "-i",
+    "output2/tts/0123.wav",
+    "-i",
+    "output2/tts/0124.wav",
+    "-i",
+    "output2/tts/0125.wav",
+    "-i",
+    "output2/tts/0126.wav",
+    "-i",
+    "output2/tts/0127.wav",
+    "-i",
+    "output2/tts/0128.wav",
+    "-i",
+    "output2/tts/0129.wav",
+    "-i",
+    "output2/tts/0130.wav",
+    "-i",
+    "output2/tts/0131.wav",
+    "-i",
+    "output2/tts/0132.wav",
+    "-i",
+    "output2/tts/0133.wav",
+    "-i",
+    "output2/tts/0134.wav",
+    "-i",
+    "output2/tts/0135.wav",
+    "-i",
+    "output2/tts/0136.wav",
+    "-i",
+    "output2/tts/0137.wav",
+    "-i",
+    "output2/tts/0138.wav",
+    "-i",
+    "output2/tts/0139.wav",
+    "-i",
+    "output2/tts/0140.wav",
+    "-i",
+    "output2/tts/0141.wav",
+    "-i",
+    "output2/tts/0142.wav",
+    "-i",
+    "output2/tts/0143.wav",
+    "-i",
+    "output2/tts/0144.wav",
+    "-i",
+    "output2/tts/0145.wav",
+    "-i",
+    "output2/tts/0146.wav",
+    "-i",
+    "output2/tts/0147.wav",
+    "-i",
+    "output2/tts/0148.wav",
+    "-i",
+    "output2/tts/0149.wav",
+    "-i",
+    "output2/tts/0150.wav",
+    "-i",
+    "output2/tts/0151.wav",
+    "-i",
+    "output2/tts/0152.wav",
+    "-i",
+    "output2/tts/0153.wav",
+    "-i",
+    "output2/tts/0154.wav",
+    "-i",
+    "output2/tts/0155.wav",
+    "-i",
+    "output2/tts/0156.wav",
+    "-i",
+    "output2/tts/0157.wav",
+    "-i",
+    "output2/tts/0158.wav",
+    "-i",
+    "output2/tts/0159.wav",
+    "-i",
+    "output2/tts/0160.wav",
+    "-i",
+    "output2/tts/0161.wav",
+    "-i",
+    "output2/tts/0162.wav",
+    "-i",
+    "output2/tts/0163.wav",
+    "-i",
+    "output2/tts/0164.wav",
+    "-i",
+    "output2/tts/0165.wav",
+    "-i",
+    "output2/tts/0166.wav",
+    "-i",
+    "output2/tts/0167.wav",
+    "-i",
+    "output2/tts/0168.wav",
+    "-i",
+    "output2/tts/0169.wav",
+    "-i",
+    "output2/tts/0170.wav",
+    "-i",
+    "output2/tts/0171.wav",
+    "-i",
+    "output2/tts/0172.wav",
+    "-i",
+    "output2/tts/0173.wav",
+    "-i",
+    "output2/tts/0174.wav",
+    "-i",
+    "output2/tts/0175.wav",
+    "-i",
+    "output2/tts/0176.wav",
+    "-i",
+    "output2/tts/0177.wav",
+    "-i",
+    "output2/tts/0178.wav",
+    "-i",
+    "output2/tts/0179.wav",
+    "-i",
+    "output2/tts/0180.wav",
+    "-i",
+    "output2/tts/0181.wav",
+    "-i",
+    "output2/tts/0182.wav",
+    "-i",
+    "output2/tts/0183.wav",
+    "-i",
+    "output2/tts/0184.wav",
+    "-i",
+    "output2/tts/0185.wav",
+    "-i",
+    "output2/tts/0186.wav",
+    "-i",
+    "output2/tts/0187.wav",
+    "-i",
+    "output2/tts/0188.wav",
+    "-i",
+    "output2/tts/0189.wav",
+    "-i",
+    "output2/tts/0190.wav",
+    "-i",
+    "output2/tts/0191.wav",
+    "-i",
+    "output2/tts/0192.wav",
+    "-i",
+    "output2/tts/0193.wav",
+    "-i",
+    "output2/tts/0194.wav",
+    "-i",
+    "output2/tts/0195.wav",
+    "-i",
+    "output2/tts/0196.wav",
+    "-i",
+    "output2/tts/0197.wav",
+    "-i",
+    "output2/tts/0198.wav",
+    "-i",
+    "output2/tts/0199.wav",
+    "-i",
+    "output2/tts/0200.wav",
+    "-i",
+    "output2/tts/0201.wav",
+    "-i",
+    "output2/tts/0202.wav",
+    "-i",
+    "output2/tts/0203.wav",
+    "-i",
+    "output2/tts/0204.wav",
+    "-filter_complex",
+    "[1:a]aresample=16000,adelay=0:all=1[seg1];[2:a]aresample=16000,adelay=3780:all=1[seg2];[3:a]aresample=16000,adelay=7140:all=1[seg3];[4:a]aresample=16000,adelay=9120:all=1[seg4];[5:a]aresample=16000,adelay=11120:all=1[seg5];[6:a]aresample=16000,adelay=12240:all=1[seg6];[7:a]aresample=16000,adelay=14420:all=1[seg7];[8:a]aresample=16000,adelay=15420:all=1[seg8];[9:a]aresample=16000,adelay=17920:all=1[seg9];[10:a]aresample=16000,adelay=19000:all=1[seg10];[11:a]aresample=16000,adelay=20500:all=1[seg11];[12:a]aresample=16000,adelay=21860:all=1[seg12];[13:a]aresample=16000,adelay=23320:all=1[seg13];[14:a]aresample=16000,adelay=26020:all=1[seg14];[15:a]aresample=16000,adelay=27560:all=1[seg15];[16:a]aresample=16000,adelay=28960:all=1[seg16];[17:a]aresample=16000,adelay=30160:all=1[seg17];[18:a]aresample=16000,adelay=32360:all=1[seg18];[19:a]aresample=16000,adelay=34760:all=1[seg19];[20:a]aresample=16000,adelay=36600:all=1[seg20];[21:a]aresample=16000,adelay=37400:all=1[seg21];[22:a]aresample=16000,adelay=39840:all=1[seg22];[23:a]aresample=16000,adelay=41900:all=1[seg23];[24:a]aresample=16000,adelay=44980:all=1[seg24];[25:a]aresample=16000,adelay=46000:all=1[seg25];[26:a]aresample=16000,adelay=47340:all=1[seg26];[27:a]aresample=16000,adelay=50340:all=1[seg27];[28:a]aresample=16000,adelay=51920:all=1[seg28];[29:a]aresample=16000,adelay=54680:all=1[seg29];[30:a]aresample=16000,adelay=55680:all=1[seg30];[31:a]aresample=16000,adelay=57480:all=1[seg31];[32:a]aresample=16000,adelay=59120:all=1[seg32];[33:a]aresample=16000,adelay=61420:all=1[seg33];[34:a]aresample=16000,adelay=65460:all=1[seg34];[35:a]aresample=16000,adelay=68460:all=1[seg35];[36:a]aresample=16000,adelay=69660:all=1[seg36];[37:a]aresample=16000,adelay=72340:all=1[seg37];[38:a]aresample=16000,adelay=73380:all=1[seg38];[39:a]aresample=16000,adelay=74500:all=1[seg39];[40:a]aresample=16000,adelay=77740:all=1[seg40];[41:a]aresample=16000,adelay=79380:all=1[seg41];[42:a]aresample=16000,adelay=81980:all=1[seg42];[43:a]aresample=16000,adelay=82480:all=1[seg43];[44:a]aresample=16000,adelay=84180:all=1[seg44];[45:a]aresample=16000,adelay=86280:all=1[seg45];[46:a]aresample=16000,adelay=88040:all=1[seg46];[47:a]aresample=16000,adelay=89980:all=1[seg47];[48:a]aresample=16000,adelay=92260:all=1[seg48];[49:a]aresample=16000,adelay=94180:all=1[seg49];[50:a]aresample=16000,adelay=96360:all=1[seg50];[51:a]aresample=16000,adelay=97860:all=1[seg51];[52:a]aresample=16000,adelay=99460:all=1[seg52];[53:a]aresample=16000,adelay=100560:all=1[seg53];[54:a]aresample=16000,adelay=102460:all=1[seg54];[55:a]aresample=16000,adelay=104000:all=1[seg55];[56:a]aresample=16000,adelay=106540:all=1[seg56];[57:a]aresample=16000,adelay=108760:all=1[seg57];[58:a]aresample=16000,adelay=111680:all=1[seg58];[59:a]aresample=16000,adelay=112940:all=1[seg59];[60:a]aresample=16000,adelay=114880:all=1[seg60];[61:a]aresample=16000,adelay=117240:all=1[seg61];[62:a]aresample=16000,adelay=119120:all=1[seg62];[63:a]aresample=16000,adelay=120920:all=1[seg63];[64:a]aresample=16000,adelay=122720:all=1[seg64];[65:a]aresample=16000,adelay=124760:all=1[seg65];[66:a]aresample=16000,adelay=127680:all=1[seg66];[67:a]aresample=16000,adelay=131260:all=1[seg67];[68:a]aresample=16000,adelay=133160:all=1[seg68];[69:a]aresample=16000,adelay=134860:all=1[seg69];[70:a]aresample=16000,adelay=137400:all=1[seg70];[71:a]aresample=16000,adelay=139600:all=1[seg71];[72:a]aresample=16000,adelay=142440:all=1[seg72];[73:a]aresample=16000,adelay=144840:all=1[seg73];[74:a]aresample=16000,adelay=150420:all=1[seg74];[75:a]aresample=16000,adelay=152180:all=1[seg75];[76:a]aresample=16000,adelay=154480:all=1[seg76];[77:a]aresample=16000,adelay=155520:all=1[seg77];[78:a]aresample=16000,adelay=158720:all=1[seg78];[79:a]aresample=16000,adelay=159620:all=1[seg79];[80:a]aresample=16000,adelay=162360:all=1[seg80];[81:a]aresample=16000,adelay=165520:all=1[seg81];[82:a]aresample=16000,adelay=167800:all=1[seg82];[83:a]aresample=16000,adelay=169640:all=1[seg83];[84:a]aresample=16000,adelay=171560:all=1[seg84];[85:a]aresample=16000,adelay=174200:all=1[seg85];[86:a]aresample=16000,adelay=175080:all=1[seg86];[87:a]aresample=16000,adelay=177400:all=1[seg87];[88:a]aresample=16000,adelay=178640:all=1[seg88];[89:a]aresample=16000,adelay=180040:all=1[seg89];[90:a]aresample=16000,adelay=180800:all=1[seg90];[91:a]aresample=16000,adelay=182680:all=1[seg91];[92:a]aresample=16000,adelay=184880:all=1[seg92];[93:a]aresample=16000,adelay=186320:all=1[seg93];[94:a]aresample=16000,adelay=189580:all=1[seg94];[95:a]aresample=16000,adelay=191020:all=1[seg95];[96:a]aresample=16000,adelay=193660:all=1[seg96];[97:a]aresample=16000,adelay=195160:all=1[seg97];[98:a]aresample=16000,adelay=196580:all=1[seg98];[99:a]aresample=16000,adelay=198900:all=1[seg99];[100:a]aresample=16000,adelay=200520:all=1[seg100];[101:a]aresample=16000,adelay=204060:all=1[seg101];[102:a]aresample=16000,adelay=206320:all=1[seg102];[103:a]aresample=16000,adelay=207560:all=1[seg103];[104:a]aresample=16000,adelay=208800:all=1[seg104];[105:a]aresample=16000,adelay=211160:all=1[seg105];[106:a]aresample=16000,adelay=213700:all=1[seg106];[107:a]aresample=16000,adelay=216340:all=1[seg107];[108:a]aresample=16000,adelay=218440:all=1[seg108];[109:a]aresample=16000,adelay=221340:all=1[seg109];[110:a]aresample=16000,adelay=222520:all=1[seg110];[111:a]aresample=16000,adelay=223980:all=1[seg111];[112:a]aresample=16000,adelay=225120:all=1[seg112];[113:a]aresample=16000,adelay=226480:all=1[seg113];[114:a]aresample=16000,adelay=229760:all=1[seg114];[115:a]aresample=16000,adelay=230720:all=1[seg115];[116:a]aresample=16000,adelay=233260:all=1[seg116];[117:a]aresample=16000,adelay=235420:all=1[seg117];[118:a]aresample=16000,adelay=237760:all=1[seg118];[119:a]aresample=16000,adelay=239700:all=1[seg119];[120:a]aresample=16000,adelay=240500:all=1[seg120];[121:a]aresample=16000,adelay=242840:all=1[seg121];[122:a]aresample=16000,adelay=245000:all=1[seg122];[123:a]aresample=16000,adelay=248040:all=1[seg123];[124:a]aresample=16000,adelay=249100:all=1[seg124];[125:a]aresample=16000,adelay=250440:all=1[seg125];[126:a]aresample=16000,adelay=253380:all=1[seg126];[127:a]aresample=16000,adelay=255020:all=1[seg127];[128:a]aresample=16000,adelay=257780:all=1[seg128];[129:a]aresample=16000,adelay=258780:all=1[seg129];[130:a]aresample=16000,adelay=260620:all=1[seg130];[131:a]aresample=16000,adelay=262260:all=1[seg131];[132:a]aresample=16000,adelay=264560:all=1[seg132];[133:a]aresample=16000,adelay=268620:all=1[seg133];[134:a]aresample=16000,adelay=271600:all=1[seg134];[135:a]aresample=16000,adelay=272800:all=1[seg135];[136:a]aresample=16000,adelay=275500:all=1[seg136];[137:a]aresample=16000,adelay=276540:all=1[seg137];[138:a]aresample=16000,adelay=277640:all=1[seg138];[139:a]aresample=16000,adelay=280940:all=1[seg139];[140:a]aresample=16000,adelay=282540:all=1[seg140];[141:a]aresample=16000,adelay=285180:all=1[seg141];[142:a]aresample=16000,adelay=285640:all=1[seg142];[143:a]aresample=16000,adelay=286540:all=1[seg143];[144:a]aresample=16000,adelay=289420:all=1[seg144];[145:a]aresample=16000,adelay=291280:all=1[seg145];[146:a]aresample=16000,adelay=293160:all=1[seg146];[147:a]aresample=16000,adelay=295420:all=1[seg147];[148:a]aresample=16000,adelay=297360:all=1[seg148];[149:a]aresample=16000,adelay=299560:all=1[seg149];[150:a]aresample=16000,adelay=301060:all=1[seg150];[151:a]aresample=16000,adelay=302660:all=1[seg151];[152:a]aresample=16000,adelay=303760:all=1[seg152];[153:a]aresample=16000,adelay=305660:all=1[seg153];[154:a]aresample=16000,adelay=307200:all=1[seg154];[155:a]aresample=16000,adelay=309740:all=1[seg155];[156:a]aresample=16000,adelay=311960:all=1[seg156];[157:a]aresample=16000,adelay=314880:all=1[seg157];[158:a]aresample=16000,adelay=316140:all=1[seg158];[159:a]aresample=16000,adelay=318040:all=1[seg159];[160:a]aresample=16000,adelay=320440:all=1[seg160];[161:a]aresample=16000,adelay=322280:all=1[seg161];[162:a]aresample=16000,adelay=324120:all=1[seg162];[163:a]aresample=16000,adelay=325920:all=1[seg163];[164:a]aresample=16000,adelay=327920:all=1[seg164];[165:a]aresample=16000,adelay=330860:all=1[seg165];[166:a]aresample=16000,adelay=334400:all=1[seg166];[167:a]aresample=16000,adelay=336320:all=1[seg167];[168:a]aresample=16000,adelay=338000:all=1[seg168];[169:a]aresample=16000,adelay=340740:all=1[seg169];[170:a]aresample=16000,adelay=342840:all=1[seg170];[171:a]aresample=16000,adelay=345600:all=1[seg171];[172:a]aresample=16000,adelay=348000:all=1[seg172];[173:a]aresample=16000,adelay=353580:all=1[seg173];[174:a]aresample=16000,adelay=355280:all=1[seg174];[175:a]aresample=16000,adelay=357620:all=1[seg175];[176:a]aresample=16000,adelay=358720:all=1[seg176];[177:a]aresample=16000,adelay=361880:all=1[seg177];[178:a]aresample=16000,adelay=365520:all=1[seg178];[179:a]aresample=16000,adelay=368600:all=1[seg179];[180:a]aresample=16000,adelay=370960:all=1[seg180];[181:a]aresample=16000,adelay=372760:all=1[seg181];[182:a]aresample=16000,adelay=374700:all=1[seg182];[183:a]aresample=16000,adelay=377340:all=1[seg183];[184:a]aresample=16000,adelay=378240:all=1[seg184];[185:a]aresample=16000,adelay=380500:all=1[seg185];[186:a]aresample=16000,adelay=381800:all=1[seg186];[187:a]aresample=16000,adelay=383180:all=1[seg187];[188:a]aresample=16000,adelay=383940:all=1[seg188];[189:a]aresample=16000,adelay=385840:all=1[seg189];[190:a]aresample=16000,adelay=388040:all=1[seg190];[191:a]aresample=16000,adelay=389480:all=1[seg191];[192:a]aresample=16000,adelay=392720:all=1[seg192];[193:a]aresample=16000,adelay=394180:all=1[seg193];[194:a]aresample=16000,adelay=396820:all=1[seg194];[195:a]aresample=16000,adelay=398320:all=1[seg195];[196:a]aresample=16000,adelay=399760:all=1[seg196];[197:a]aresample=16000,adelay=402060:all=1[seg197];[198:a]aresample=16000,adelay=403600:all=1[seg198];[199:a]aresample=16000,adelay=407220:all=1[seg199];[200:a]aresample=16000,adelay=409400:all=1[seg200];[201:a]aresample=16000,adelay=410660:all=1[seg201];[202:a]aresample=16000,adelay=411940:all=1[seg202];[203:a]aresample=16000,adelay=416800:all=1[seg203];[204:a]aresample=16000,adelay=419480:all=1[seg204];[205:a]aresample=16000,adelay=433600:all=1[seg205];[0:a][seg1][seg2][seg3][seg4][seg5][seg6][seg7][seg8][seg9][seg10][seg11][seg12][seg13][seg14][seg15][seg16][seg17][seg18][seg19][seg20][seg21][seg22][seg23][seg24][seg25][seg26][seg27][seg28][seg29][seg30][seg31][seg32][seg33][seg34][seg35][seg36][seg37][seg38][seg39][seg40][seg41][seg42][seg43][seg44][seg45][seg46][seg47][seg48][seg49][seg50][seg51][seg52][seg53][seg54][seg55][seg56][seg57][seg58][seg59][seg60][seg61][seg62][seg63][seg64][seg65][seg66][seg67][seg68][seg69][seg70][seg71][seg72][seg73][seg74][seg75][seg76][seg77][seg78][seg79][seg80][seg81][seg82][seg83][seg84][seg85][seg86][seg87][seg88][seg89][seg90][seg91][seg92][seg93][seg94][seg95][seg96][seg97][seg98][seg99][seg100][seg101][seg102][seg103][seg104][seg105][seg106][seg107][seg108][seg109][seg110][seg111][seg112][seg113][seg114][seg115][seg116][seg117][seg118][seg119][seg120][seg121][seg122][seg123][seg124][seg125][seg126][seg127][seg128][seg129][seg130][seg131][seg132][seg133][seg134][seg135][seg136][seg137][seg138][seg139][seg140][seg141][seg142][seg143][seg144][seg145][seg146][seg147][seg148][seg149][seg150][seg151][seg152][seg153][seg154][seg155][seg156][seg157][seg158][seg159][seg160][seg161][seg162][seg163][seg164][seg165][seg166][seg167][seg168][seg169][seg170][seg171][seg172][seg173][seg174][seg175][seg176][seg177][seg178][seg179][seg180][seg181][seg182][seg183][seg184][seg185][seg186][seg187][seg188][seg189][seg190][seg191][seg192][seg193][seg194][seg195][seg196][seg197][seg198][seg199][seg200][seg201][seg202][seg203][seg204][seg205]amix=inputs=206:duration=first:dropout_transition=0:normalize=0[combined]",
+    "-map",
+    "[combined]",
+    "-t",
+    "438.207",
+    "-ac",
+    "1",
+    "-ar",
+    "16000",
+    "-c:a",
+    "pcm_s16le",
+    "output2/tts_combined.wav"
+  ],
+  "segments": [
+    {
+      "id": 0,
+      "start": 0.0,
+      "delay_ms": 0,
+      "tts_path": "tts/0000.wav",
+      "status": "included"
+    },
+    {
+      "id": 1,
+      "start": 3.78,
+      "delay_ms": 3780,
+      "tts_path": "tts/0001.wav",
+      "status": "included"
+    },
+    {
+      "id": 2,
+      "start": 7.14,
+      "delay_ms": 7140,
+      "tts_path": "tts/0002.wav",
+      "status": "included"
+    },
+    {
+      "id": 3,
+      "start": 9.12,
+      "delay_ms": 9120,
+      "tts_path": "tts/0003.wav",
+      "status": "included"
+    },
+    {
+      "id": 4,
+      "start": 11.12,
+      "delay_ms": 11120,
+      "tts_path": "tts/0004.wav",
+      "status": "included"
+    },
+    {
+      "id": 5,
+      "start": 12.24,
+      "delay_ms": 12240,
+      "tts_path": "tts/0005.wav",
+      "status": "included"
+    },
+    {
+      "id": 6,
+      "start": 14.42,
+      "delay_ms": 14420,
+      "tts_path": "tts/0006.wav",
+      "status": "included"
+    },
+    {
+      "id": 7,
+      "start": 15.42,
+      "delay_ms": 15420,
+      "tts_path": "tts/0007.wav",
+      "status": "included"
+    },
+    {
+      "id": 8,
+      "start": 17.92,
+      "delay_ms": 17920,
+      "tts_path": "tts/0008.wav",
+      "status": "included"
+    },
+    {
+      "id": 9,
+      "start": 19.0,
+      "delay_ms": 19000,
+      "tts_path": "tts/0009.wav",
+      "status": "included"
+    },
+    {
+      "id": 10,
+      "start": 20.5,
+      "delay_ms": 20500,
+      "tts_path": "tts/0010.wav",
+      "status": "included"
+    },
+    {
+      "id": 11,
+      "start": 21.86,
+      "delay_ms": 21860,
+      "tts_path": "tts/0011.wav",
+      "status": "included"
+    },
+    {
+      "id": 12,
+      "start": 23.32,
+      "delay_ms": 23320,
+      "tts_path": "tts/0012.wav",
+      "status": "included"
+    },
+    {
+      "id": 13,
+      "start": 26.02,
+      "delay_ms": 26020,
+      "tts_path": "tts/0013.wav",
+      "status": "included"
+    },
+    {
+      "id": 14,
+      "start": 27.56,
+      "delay_ms": 27560,
+      "tts_path": "tts/0014.wav",
+      "status": "included"
+    },
+    {
+      "id": 15,
+      "start": 28.96,
+      "delay_ms": 28960,
+      "tts_path": "tts/0015.wav",
+      "status": "included"
+    },
+    {
+      "id": 16,
+      "start": 30.16,
+      "delay_ms": 30160,
+      "tts_path": "tts/0016.wav",
+      "status": "included"
+    },
+    {
+      "id": 17,
+      "start": 32.36,
+      "delay_ms": 32360,
+      "tts_path": "tts/0017.wav",
+      "status": "included"
+    },
+    {
+      "id": 18,
+      "start": 34.76,
+      "delay_ms": 34760,
+      "tts_path": "tts/0018.wav",
+      "status": "included"
+    },
+    {
+      "id": 19,
+      "start": 36.6,
+      "delay_ms": 36600,
+      "tts_path": "tts/0019.wav",
+      "status": "included"
+    },
+    {
+      "id": 20,
+      "start": 37.4,
+      "delay_ms": 37400,
+      "tts_path": "tts/0020.wav",
+      "status": "included"
+    },
+    {
+      "id": 21,
+      "start": 39.84,
+      "delay_ms": 39840,
+      "tts_path": "tts/0021.wav",
+      "status": "included"
+    },
+    {
+      "id": 22,
+      "start": 41.9,
+      "delay_ms": 41900,
+      "tts_path": "tts/0022.wav",
+      "status": "included"
+    },
+    {
+      "id": 23,
+      "start": 44.98,
+      "delay_ms": 44980,
+      "tts_path": "tts/0023.wav",
+      "status": "included"
+    },
+    {
+      "id": 24,
+      "start": 46.0,
+      "delay_ms": 46000,
+      "tts_path": "tts/0024.wav",
+      "status": "included"
+    },
+    {
+      "id": 25,
+      "start": 47.34,
+      "delay_ms": 47340,
+      "tts_path": "tts/0025.wav",
+      "status": "included"
+    },
+    {
+      "id": 26,
+      "start": 50.34,
+      "delay_ms": 50340,
+      "tts_path": "tts/0026.wav",
+      "status": "included"
+    },
+    {
+      "id": 27,
+      "start": 51.92,
+      "delay_ms": 51920,
+      "tts_path": "tts/0027.wav",
+      "status": "included"
+    },
+    {
+      "id": 28,
+      "start": 54.68,
+      "delay_ms": 54680,
+      "tts_path": "tts/0028.wav",
+      "status": "included"
+    },
+    {
+      "id": 29,
+      "start": 55.68,
+      "delay_ms": 55680,
+      "tts_path": "tts/0029.wav",
+      "status": "included"
+    },
+    {
+      "id": 30,
+      "start": 57.48,
+      "delay_ms": 57480,
+      "tts_path": "tts/0030.wav",
+      "status": "included"
+    },
+    {
+      "id": 31,
+      "start": 59.12,
+      "delay_ms": 59120,
+      "tts_path": "tts/0031.wav",
+      "status": "included"
+    },
+    {
+      "id": 32,
+      "start": 61.42,
+      "delay_ms": 61420,
+      "tts_path": "tts/0032.wav",
+      "status": "included"
+    },
+    {
+      "id": 33,
+      "start": 65.46,
+      "delay_ms": 65460,
+      "tts_path": "tts/0033.wav",
+      "status": "included"
+    },
+    {
+      "id": 34,
+      "start": 68.46,
+      "delay_ms": 68460,
+      "tts_path": "tts/0034.wav",
+      "status": "included"
+    },
+    {
+      "id": 35,
+      "start": 69.66,
+      "delay_ms": 69660,
+      "tts_path": "tts/0035.wav",
+      "status": "included"
+    },
+    {
+      "id": 36,
+      "start": 72.34,
+      "delay_ms": 72340,
+      "tts_path": "tts/0036.wav",
+      "status": "included"
+    },
+    {
+      "id": 37,
+      "start": 73.38,
+      "delay_ms": 73380,
+      "tts_path": "tts/0037.wav",
+      "status": "included"
+    },
+    {
+      "id": 38,
+      "start": 74.5,
+      "delay_ms": 74500,
+      "tts_path": "tts/0038.wav",
+      "status": "included"
+    },
+    {
+      "id": 39,
+      "start": 77.74,
+      "delay_ms": 77740,
+      "tts_path": "tts/0039.wav",
+      "status": "included"
+    },
+    {
+      "id": 40,
+      "start": 79.38,
+      "delay_ms": 79380,
+      "tts_path": "tts/0040.wav",
+      "status": "included"
+    },
+    {
+      "id": 41,
+      "start": 81.98,
+      "delay_ms": 81980,
+      "tts_path": "tts/0041.wav",
+      "status": "included"
+    },
+    {
+      "id": 42,
+      "start": 82.48,
+      "delay_ms": 82480,
+      "tts_path": "tts/0042.wav",
+      "status": "included"
+    },
+    {
+      "id": 43,
+      "start": 84.18,
+      "delay_ms": 84180,
+      "tts_path": "tts/0043.wav",
+      "status": "included"
+    },
+    {
+      "id": 44,
+      "start": 86.28,
+      "delay_ms": 86280,
+      "tts_path": "tts/0044.wav",
+      "status": "included"
+    },
+    {
+      "id": 45,
+      "start": 88.04,
+      "delay_ms": 88040,
+      "tts_path": "tts/0045.wav",
+      "status": "included"
+    },
+    {
+      "id": 46,
+      "start": 89.98,
+      "delay_ms": 89980,
+      "tts_path": "tts/0046.wav",
+      "status": "included"
+    },
+    {
+      "id": 47,
+      "start": 92.26,
+      "delay_ms": 92260,
+      "tts_path": "tts/0047.wav",
+      "status": "included"
+    },
+    {
+      "id": 48,
+      "start": 94.18,
+      "delay_ms": 94180,
+      "tts_path": "tts/0048.wav",
+      "status": "included"
+    },
+    {
+      "id": 49,
+      "start": 96.36,
+      "delay_ms": 96360,
+      "tts_path": "tts/0049.wav",
+      "status": "included"
+    },
+    {
+      "id": 50,
+      "start": 97.86,
+      "delay_ms": 97860,
+      "tts_path": "tts/0050.wav",
+      "status": "included"
+    },
+    {
+      "id": 51,
+      "start": 99.46,
+      "delay_ms": 99460,
+      "tts_path": "tts/0051.wav",
+      "status": "included"
+    },
+    {
+      "id": 52,
+      "start": 100.56,
+      "delay_ms": 100560,
+      "tts_path": "tts/0052.wav",
+      "status": "included"
+    },
+    {
+      "id": 53,
+      "start": 102.46,
+      "delay_ms": 102460,
+      "tts_path": "tts/0053.wav",
+      "status": "included"
+    },
+    {
+      "id": 54,
+      "start": 104.0,
+      "delay_ms": 104000,
+      "tts_path": "tts/0054.wav",
+      "status": "included"
+    },
+    {
+      "id": 55,
+      "start": 106.54,
+      "delay_ms": 106540,
+      "tts_path": "tts/0055.wav",
+      "status": "included"
+    },
+    {
+      "id": 56,
+      "start": 108.76,
+      "delay_ms": 108760,
+      "tts_path": "tts/0056.wav",
+      "status": "included"
+    },
+    {
+      "id": 57,
+      "start": 111.68,
+      "delay_ms": 111680,
+      "tts_path": "tts/0057.wav",
+      "status": "included"
+    },
+    {
+      "id": 58,
+      "start": 112.94,
+      "delay_ms": 112940,
+      "tts_path": "tts/0058.wav",
+      "status": "included"
+    },
+    {
+      "id": 59,
+      "start": 114.88,
+      "delay_ms": 114880,
+      "tts_path": "tts/0059.wav",
+      "status": "included"
+    },
+    {
+      "id": 60,
+      "start": 117.24,
+      "delay_ms": 117240,
+      "tts_path": "tts/0060.wav",
+      "status": "included"
+    },
+    {
+      "id": 61,
+      "start": 119.12,
+      "delay_ms": 119120,
+      "tts_path": "tts/0061.wav",
+      "status": "included"
+    },
+    {
+      "id": 62,
+      "start": 120.92,
+      "delay_ms": 120920,
+      "tts_path": "tts/0062.wav",
+      "status": "included"
+    },
+    {
+      "id": 63,
+      "start": 122.72,
+      "delay_ms": 122720,
+      "tts_path": "tts/0063.wav",
+      "status": "included"
+    },
+    {
+      "id": 64,
+      "start": 124.76,
+      "delay_ms": 124760,
+      "tts_path": "tts/0064.wav",
+      "status": "included"
+    },
+    {
+      "id": 65,
+      "start": 127.68,
+      "delay_ms": 127680,
+      "tts_path": "tts/0065.wav",
+      "status": "included"
+    },
+    {
+      "id": 66,
+      "start": 131.26,
+      "delay_ms": 131260,
+      "tts_path": "tts/0066.wav",
+      "status": "included"
+    },
+    {
+      "id": 67,
+      "start": 133.16,
+      "delay_ms": 133160,
+      "tts_path": "tts/0067.wav",
+      "status": "included"
+    },
+    {
+      "id": 68,
+      "start": 134.86,
+      "delay_ms": 134860,
+      "tts_path": "tts/0068.wav",
+      "status": "included"
+    },
+    {
+      "id": 69,
+      "start": 137.4,
+      "delay_ms": 137400,
+      "tts_path": "tts/0069.wav",
+      "status": "included"
+    },
+    {
+      "id": 70,
+      "start": 139.6,
+      "delay_ms": 139600,
+      "tts_path": "tts/0070.wav",
+      "status": "included"
+    },
+    {
+      "id": 71,
+      "start": 142.44,
+      "delay_ms": 142440,
+      "tts_path": "tts/0071.wav",
+      "status": "included"
+    },
+    {
+      "id": 72,
+      "start": 144.84,
+      "delay_ms": 144840,
+      "tts_path": "tts/0072.wav",
+      "status": "included"
+    },
+    {
+      "id": 73,
+      "start": 150.42,
+      "delay_ms": 150420,
+      "tts_path": "tts/0073.wav",
+      "status": "included"
+    },
+    {
+      "id": 74,
+      "start": 152.18,
+      "delay_ms": 152180,
+      "tts_path": "tts/0074.wav",
+      "status": "included"
+    },
+    {
+      "id": 75,
+      "start": 154.48,
+      "delay_ms": 154480,
+      "tts_path": "tts/0075.wav",
+      "status": "included"
+    },
+    {
+      "id": 76,
+      "start": 155.52,
+      "delay_ms": 155520,
+      "tts_path": "tts/0076.wav",
+      "status": "included"
+    },
+    {
+      "id": 77,
+      "start": 158.72,
+      "delay_ms": 158720,
+      "tts_path": "tts/0077.wav",
+      "status": "included"
+    },
+    {
+      "id": 78,
+      "start": 159.62,
+      "delay_ms": 159620,
+      "tts_path": "tts/0078.wav",
+      "status": "included"
+    },
+    {
+      "id": 79,
+      "start": 162.36,
+      "delay_ms": 162360,
+      "tts_path": "tts/0079.wav",
+      "status": "included"
+    },
+    {
+      "id": 80,
+      "start": 165.52,
+      "delay_ms": 165520,
+      "tts_path": "tts/0080.wav",
+      "status": "included"
+    },
+    {
+      "id": 81,
+      "start": 167.8,
+      "delay_ms": 167800,
+      "tts_path": "tts/0081.wav",
+      "status": "included"
+    },
+    {
+      "id": 82,
+      "start": 169.64,
+      "delay_ms": 169640,
+      "tts_path": "tts/0082.wav",
+      "status": "included"
+    },
+    {
+      "id": 83,
+      "start": 171.56,
+      "delay_ms": 171560,
+      "tts_path": "tts/0083.wav",
+      "status": "included"
+    },
+    {
+      "id": 84,
+      "start": 174.2,
+      "delay_ms": 174200,
+      "tts_path": "tts/0084.wav",
+      "status": "included"
+    },
+    {
+      "id": 85,
+      "start": 175.08,
+      "delay_ms": 175080,
+      "tts_path": "tts/0085.wav",
+      "status": "included"
+    },
+    {
+      "id": 86,
+      "start": 177.4,
+      "delay_ms": 177400,
+      "tts_path": "tts/0086.wav",
+      "status": "included"
+    },
+    {
+      "id": 87,
+      "start": 178.64,
+      "delay_ms": 178640,
+      "tts_path": "tts/0087.wav",
+      "status": "included"
+    },
+    {
+      "id": 88,
+      "start": 180.04,
+      "delay_ms": 180040,
+      "tts_path": "tts/0088.wav",
+      "status": "included"
+    },
+    {
+      "id": 89,
+      "start": 180.8,
+      "delay_ms": 180800,
+      "tts_path": "tts/0089.wav",
+      "status": "included"
+    },
+    {
+      "id": 90,
+      "start": 182.68,
+      "delay_ms": 182680,
+      "tts_path": "tts/0090.wav",
+      "status": "included"
+    },
+    {
+      "id": 91,
+      "start": 184.88,
+      "delay_ms": 184880,
+      "tts_path": "tts/0091.wav",
+      "status": "included"
+    },
+    {
+      "id": 92,
+      "start": 186.32,
+      "delay_ms": 186320,
+      "tts_path": "tts/0092.wav",
+      "status": "included"
+    },
+    {
+      "id": 93,
+      "start": 189.58,
+      "delay_ms": 189580,
+      "tts_path": "tts/0093.wav",
+      "status": "included"
+    },
+    {
+      "id": 94,
+      "start": 191.02,
+      "delay_ms": 191020,
+      "tts_path": "tts/0094.wav",
+      "status": "included"
+    },
+    {
+      "id": 95,
+      "start": 193.66,
+      "delay_ms": 193660,
+      "tts_path": "tts/0095.wav",
+      "status": "included"
+    },
+    {
+      "id": 96,
+      "start": 195.16,
+      "delay_ms": 195160,
+      "tts_path": "tts/0096.wav",
+      "status": "included"
+    },
+    {
+      "id": 97,
+      "start": 196.58,
+      "delay_ms": 196580,
+      "tts_path": "tts/0097.wav",
+      "status": "included"
+    },
+    {
+      "id": 98,
+      "start": 198.9,
+      "delay_ms": 198900,
+      "tts_path": "tts/0098.wav",
+      "status": "included"
+    },
+    {
+      "id": 99,
+      "start": 200.52,
+      "delay_ms": 200520,
+      "tts_path": "tts/0099.wav",
+      "status": "included"
+    },
+    {
+      "id": 100,
+      "start": 204.06,
+      "delay_ms": 204060,
+      "tts_path": "tts/0100.wav",
+      "status": "included"
+    },
+    {
+      "id": 101,
+      "start": 206.32,
+      "delay_ms": 206320,
+      "tts_path": "tts/0101.wav",
+      "status": "included"
+    },
+    {
+      "id": 102,
+      "start": 207.56,
+      "delay_ms": 207560,
+      "tts_path": "tts/0102.wav",
+      "status": "included"
+    },
+    {
+      "id": 103,
+      "start": 208.8,
+      "delay_ms": 208800,
+      "tts_path": "tts/0103.wav",
+      "status": "included"
+    },
+    {
+      "id": 104,
+      "start": 211.16,
+      "delay_ms": 211160,
+      "tts_path": "tts/0104.wav",
+      "status": "included"
+    },
+    {
+      "id": 105,
+      "start": 213.7,
+      "delay_ms": 213700,
+      "tts_path": "tts/0105.wav",
+      "status": "included"
+    },
+    {
+      "id": 106,
+      "start": 216.34,
+      "delay_ms": 216340,
+      "tts_path": "tts/0106.wav",
+      "status": "included"
+    },
+    {
+      "id": 107,
+      "start": 218.44,
+      "delay_ms": 218440,
+      "tts_path": "tts/0107.wav",
+      "status": "included"
+    },
+    {
+      "id": 108,
+      "start": 221.34,
+      "delay_ms": 221340,
+      "tts_path": "tts/0108.wav",
+      "status": "included"
+    },
+    {
+      "id": 109,
+      "start": 222.52,
+      "delay_ms": 222520,
+      "tts_path": "tts/0109.wav",
+      "status": "included"
+    },
+    {
+      "id": 110,
+      "start": 223.98,
+      "delay_ms": 223980,
+      "tts_path": "tts/0110.wav",
+      "status": "included"
+    },
+    {
+      "id": 111,
+      "start": 225.12,
+      "delay_ms": 225120,
+      "tts_path": "tts/0111.wav",
+      "status": "included"
+    },
+    {
+      "id": 112,
+      "start": 226.48,
+      "delay_ms": 226480,
+      "tts_path": "tts/0112.wav",
+      "status": "included"
+    },
+    {
+      "id": 113,
+      "start": 229.76,
+      "delay_ms": 229760,
+      "tts_path": "tts/0113.wav",
+      "status": "included"
+    },
+    {
+      "id": 114,
+      "start": 230.72,
+      "delay_ms": 230720,
+      "tts_path": "tts/0114.wav",
+      "status": "included"
+    },
+    {
+      "id": 115,
+      "start": 233.26,
+      "delay_ms": 233260,
+      "tts_path": "tts/0115.wav",
+      "status": "included"
+    },
+    {
+      "id": 116,
+      "start": 235.42,
+      "delay_ms": 235420,
+      "tts_path": "tts/0116.wav",
+      "status": "included"
+    },
+    {
+      "id": 117,
+      "start": 237.76,
+      "delay_ms": 237760,
+      "tts_path": "tts/0117.wav",
+      "status": "included"
+    },
+    {
+      "id": 118,
+      "start": 239.7,
+      "delay_ms": 239700,
+      "tts_path": "tts/0118.wav",
+      "status": "included"
+    },
+    {
+      "id": 119,
+      "start": 240.5,
+      "delay_ms": 240500,
+      "tts_path": "tts/0119.wav",
+      "status": "included"
+    },
+    {
+      "id": 120,
+      "start": 242.84,
+      "delay_ms": 242840,
+      "tts_path": "tts/0120.wav",
+      "status": "included"
+    },
+    {
+      "id": 121,
+      "start": 245.0,
+      "delay_ms": 245000,
+      "tts_path": "tts/0121.wav",
+      "status": "included"
+    },
+    {
+      "id": 122,
+      "start": 248.04,
+      "delay_ms": 248040,
+      "tts_path": "tts/0122.wav",
+      "status": "included"
+    },
+    {
+      "id": 123,
+      "start": 249.1,
+      "delay_ms": 249100,
+      "tts_path": "tts/0123.wav",
+      "status": "included"
+    },
+    {
+      "id": 124,
+      "start": 250.44,
+      "delay_ms": 250440,
+      "tts_path": "tts/0124.wav",
+      "status": "included"
+    },
+    {
+      "id": 125,
+      "start": 253.38,
+      "delay_ms": 253380,
+      "tts_path": "tts/0125.wav",
+      "status": "included"
+    },
+    {
+      "id": 126,
+      "start": 255.02,
+      "delay_ms": 255020,
+      "tts_path": "tts/0126.wav",
+      "status": "included"
+    },
+    {
+      "id": 127,
+      "start": 257.78,
+      "delay_ms": 257780,
+      "tts_path": "tts/0127.wav",
+      "status": "included"
+    },
+    {
+      "id": 128,
+      "start": 258.78,
+      "delay_ms": 258780,
+      "tts_path": "tts/0128.wav",
+      "status": "included"
+    },
+    {
+      "id": 129,
+      "start": 260.62,
+      "delay_ms": 260620,
+      "tts_path": "tts/0129.wav",
+      "status": "included"
+    },
+    {
+      "id": 130,
+      "start": 262.26,
+      "delay_ms": 262260,
+      "tts_path": "tts/0130.wav",
+      "status": "included"
+    },
+    {
+      "id": 131,
+      "start": 264.56,
+      "delay_ms": 264560,
+      "tts_path": "tts/0131.wav",
+      "status": "included"
+    },
+    {
+      "id": 132,
+      "start": 268.62,
+      "delay_ms": 268620,
+      "tts_path": "tts/0132.wav",
+      "status": "included"
+    },
+    {
+      "id": 133,
+      "start": 271.6,
+      "delay_ms": 271600,
+      "tts_path": "tts/0133.wav",
+      "status": "included"
+    },
+    {
+      "id": 134,
+      "start": 272.8,
+      "delay_ms": 272800,
+      "tts_path": "tts/0134.wav",
+      "status": "included"
+    },
+    {
+      "id": 135,
+      "start": 275.5,
+      "delay_ms": 275500,
+      "tts_path": "tts/0135.wav",
+      "status": "included"
+    },
+    {
+      "id": 136,
+      "start": 276.54,
+      "delay_ms": 276540,
+      "tts_path": "tts/0136.wav",
+      "status": "included"
+    },
+    {
+      "id": 137,
+      "start": 277.64,
+      "delay_ms": 277640,
+      "tts_path": "tts/0137.wav",
+      "status": "included"
+    },
+    {
+      "id": 138,
+      "start": 280.94,
+      "delay_ms": 280940,
+      "tts_path": "tts/0138.wav",
+      "status": "included"
+    },
+    {
+      "id": 139,
+      "start": 282.54,
+      "delay_ms": 282540,
+      "tts_path": "tts/0139.wav",
+      "status": "included"
+    },
+    {
+      "id": 140,
+      "start": 285.18,
+      "delay_ms": 285180,
+      "tts_path": "tts/0140.wav",
+      "status": "included"
+    },
+    {
+      "id": 141,
+      "start": 285.64,
+      "delay_ms": 285640,
+      "tts_path": "tts/0141.wav",
+      "status": "included"
+    },
+    {
+      "id": 142,
+      "start": 286.54,
+      "delay_ms": 286540,
+      "tts_path": "tts/0142.wav",
+      "status": "included"
+    },
+    {
+      "id": 143,
+      "start": 289.42,
+      "delay_ms": 289420,
+      "tts_path": "tts/0143.wav",
+      "status": "included"
+    },
+    {
+      "id": 144,
+      "start": 291.28,
+      "delay_ms": 291280,
+      "tts_path": "tts/0144.wav",
+      "status": "included"
+    },
+    {
+      "id": 145,
+      "start": 293.16,
+      "delay_ms": 293160,
+      "tts_path": "tts/0145.wav",
+      "status": "included"
+    },
+    {
+      "id": 146,
+      "start": 295.42,
+      "delay_ms": 295420,
+      "tts_path": "tts/0146.wav",
+      "status": "included"
+    },
+    {
+      "id": 147,
+      "start": 297.36,
+      "delay_ms": 297360,
+      "tts_path": "tts/0147.wav",
+      "status": "included"
+    },
+    {
+      "id": 148,
+      "start": 299.56,
+      "delay_ms": 299560,
+      "tts_path": "tts/0148.wav",
+      "status": "included"
+    },
+    {
+      "id": 149,
+      "start": 301.06,
+      "delay_ms": 301060,
+      "tts_path": "tts/0149.wav",
+      "status": "included"
+    },
+    {
+      "id": 150,
+      "start": 302.66,
+      "delay_ms": 302660,
+      "tts_path": "tts/0150.wav",
+      "status": "included"
+    },
+    {
+      "id": 151,
+      "start": 303.76,
+      "delay_ms": 303760,
+      "tts_path": "tts/0151.wav",
+      "status": "included"
+    },
+    {
+      "id": 152,
+      "start": 305.66,
+      "delay_ms": 305660,
+      "tts_path": "tts/0152.wav",
+      "status": "included"
+    },
+    {
+      "id": 153,
+      "start": 307.2,
+      "delay_ms": 307200,
+      "tts_path": "tts/0153.wav",
+      "status": "included"
+    },
+    {
+      "id": 154,
+      "start": 309.74,
+      "delay_ms": 309740,
+      "tts_path": "tts/0154.wav",
+      "status": "included"
+    },
+    {
+      "id": 155,
+      "start": 311.96,
+      "delay_ms": 311960,
+      "tts_path": "tts/0155.wav",
+      "status": "included"
+    },
+    {
+      "id": 156,
+      "start": 314.88,
+      "delay_ms": 314880,
+      "tts_path": "tts/0156.wav",
+      "status": "included"
+    },
+    {
+      "id": 157,
+      "start": 316.14,
+      "delay_ms": 316140,
+      "tts_path": "tts/0157.wav",
+      "status": "included"
+    },
+    {
+      "id": 158,
+      "start": 318.04,
+      "delay_ms": 318040,
+      "tts_path": "tts/0158.wav",
+      "status": "included"
+    },
+    {
+      "id": 159,
+      "start": 320.44,
+      "delay_ms": 320440,
+      "tts_path": "tts/0159.wav",
+      "status": "included"
+    },
+    {
+      "id": 160,
+      "start": 322.28,
+      "delay_ms": 322280,
+      "tts_path": "tts/0160.wav",
+      "status": "included"
+    },
+    {
+      "id": 161,
+      "start": 324.12,
+      "delay_ms": 324120,
+      "tts_path": "tts/0161.wav",
+      "status": "included"
+    },
+    {
+      "id": 162,
+      "start": 325.92,
+      "delay_ms": 325920,
+      "tts_path": "tts/0162.wav",
+      "status": "included"
+    },
+    {
+      "id": 163,
+      "start": 327.92,
+      "delay_ms": 327920,
+      "tts_path": "tts/0163.wav",
+      "status": "included"
+    },
+    {
+      "id": 164,
+      "start": 330.86,
+      "delay_ms": 330860,
+      "tts_path": "tts/0164.wav",
+      "status": "included"
+    },
+    {
+      "id": 165,
+      "start": 334.4,
+      "delay_ms": 334400,
+      "tts_path": "tts/0165.wav",
+      "status": "included"
+    },
+    {
+      "id": 166,
+      "start": 336.32,
+      "delay_ms": 336320,
+      "tts_path": "tts/0166.wav",
+      "status": "included"
+    },
+    {
+      "id": 167,
+      "start": 338.0,
+      "delay_ms": 338000,
+      "tts_path": "tts/0167.wav",
+      "status": "included"
+    },
+    {
+      "id": 168,
+      "start": 340.74,
+      "delay_ms": 340740,
+      "tts_path": "tts/0168.wav",
+      "status": "included"
+    },
+    {
+      "id": 169,
+      "start": 342.84,
+      "delay_ms": 342840,
+      "tts_path": "tts/0169.wav",
+      "status": "included"
+    },
+    {
+      "id": 170,
+      "start": 345.6,
+      "delay_ms": 345600,
+      "tts_path": "tts/0170.wav",
+      "status": "included"
+    },
+    {
+      "id": 171,
+      "start": 348.0,
+      "delay_ms": 348000,
+      "tts_path": "tts/0171.wav",
+      "status": "included"
+    },
+    {
+      "id": 172,
+      "start": 353.58,
+      "delay_ms": 353580,
+      "tts_path": "tts/0172.wav",
+      "status": "included"
+    },
+    {
+      "id": 173,
+      "start": 355.28,
+      "delay_ms": 355280,
+      "tts_path": "tts/0173.wav",
+      "status": "included"
+    },
+    {
+      "id": 174,
+      "start": 357.62,
+      "delay_ms": 357620,
+      "tts_path": "tts/0174.wav",
+      "status": "included"
+    },
+    {
+      "id": 175,
+      "start": 358.72,
+      "delay_ms": 358720,
+      "tts_path": "tts/0175.wav",
+      "status": "included"
+    },
+    {
+      "id": 176,
+      "start": 361.88,
+      "delay_ms": 361880,
+      "tts_path": "tts/0176.wav",
+      "status": "included"
+    },
+    {
+      "id": 177,
+      "start": 365.52,
+      "delay_ms": 365520,
+      "tts_path": "tts/0177.wav",
+      "status": "included"
+    },
+    {
+      "id": 178,
+      "start": 368.6,
+      "delay_ms": 368600,
+      "tts_path": "tts/0178.wav",
+      "status": "included"
+    },
+    {
+      "id": 179,
+      "start": 370.96,
+      "delay_ms": 370960,
+      "tts_path": "tts/0179.wav",
+      "status": "included"
+    },
+    {
+      "id": 180,
+      "start": 372.76,
+      "delay_ms": 372760,
+      "tts_path": "tts/0180.wav",
+      "status": "included"
+    },
+    {
+      "id": 181,
+      "start": 374.7,
+      "delay_ms": 374700,
+      "tts_path": "tts/0181.wav",
+      "status": "included"
+    },
+    {
+      "id": 182,
+      "start": 377.34,
+      "delay_ms": 377340,
+      "tts_path": "tts/0182.wav",
+      "status": "included"
+    },
+    {
+      "id": 183,
+      "start": 378.24,
+      "delay_ms": 378240,
+      "tts_path": "tts/0183.wav",
+      "status": "included"
+    },
+    {
+      "id": 184,
+      "start": 380.5,
+      "delay_ms": 380500,
+      "tts_path": "tts/0184.wav",
+      "status": "included"
+    },
+    {
+      "id": 185,
+      "start": 381.8,
+      "delay_ms": 381800,
+      "tts_path": "tts/0185.wav",
+      "status": "included"
+    },
+    {
+      "id": 186,
+      "start": 383.18,
+      "delay_ms": 383180,
+      "tts_path": "tts/0186.wav",
+      "status": "included"
+    },
+    {
+      "id": 187,
+      "start": 383.94,
+      "delay_ms": 383940,
+      "tts_path": "tts/0187.wav",
+      "status": "included"
+    },
+    {
+      "id": 188,
+      "start": 385.84,
+      "delay_ms": 385840,
+      "tts_path": "tts/0188.wav",
+      "status": "included"
+    },
+    {
+      "id": 189,
+      "start": 388.04,
+      "delay_ms": 388040,
+      "tts_path": "tts/0189.wav",
+      "status": "included"
+    },
+    {
+      "id": 190,
+      "start": 389.48,
+      "delay_ms": 389480,
+      "tts_path": "tts/0190.wav",
+      "status": "included"
+    },
+    {
+      "id": 191,
+      "start": 392.72,
+      "delay_ms": 392720,
+      "tts_path": "tts/0191.wav",
+      "status": "included"
+    },
+    {
+      "id": 192,
+      "start": 394.18,
+      "delay_ms": 394180,
+      "tts_path": "tts/0192.wav",
+      "status": "included"
+    },
+    {
+      "id": 193,
+      "start": 396.82,
+      "delay_ms": 396820,
+      "tts_path": "tts/0193.wav",
+      "status": "included"
+    },
+    {
+      "id": 194,
+      "start": 398.32,
+      "delay_ms": 398320,
+      "tts_path": "tts/0194.wav",
+      "status": "included"
+    },
+    {
+      "id": 195,
+      "start": 399.76,
+      "delay_ms": 399760,
+      "tts_path": "tts/0195.wav",
+      "status": "included"
+    },
+    {
+      "id": 196,
+      "start": 402.06,
+      "delay_ms": 402060,
+      "tts_path": "tts/0196.wav",
+      "status": "included"
+    },
+    {
+      "id": 197,
+      "start": 403.6,
+      "delay_ms": 403600,
+      "tts_path": "tts/0197.wav",
+      "status": "included"
+    },
+    {
+      "id": 198,
+      "start": 407.22,
+      "delay_ms": 407220,
+      "tts_path": "tts/0198.wav",
+      "status": "included"
+    },
+    {
+      "id": 199,
+      "start": 409.4,
+      "delay_ms": 409400,
+      "tts_path": "tts/0199.wav",
+      "status": "included"
+    },
+    {
+      "id": 200,
+      "start": 410.66,
+      "delay_ms": 410660,
+      "tts_path": "tts/0200.wav",
+      "status": "included"
+    },
+    {
+      "id": 201,
+      "start": 411.94,
+      "delay_ms": 411940,
+      "tts_path": "tts/0201.wav",
+      "status": "included"
+    },
+    {
+      "id": 202,
+      "start": 416.8,
+      "delay_ms": 416800,
+      "tts_path": "tts/0202.wav",
+      "status": "included"
+    },
+    {
+      "id": 203,
+      "start": 419.48,
+      "delay_ms": 419480,
+      "tts_path": "tts/0203.wav",
+      "status": "included"
+    },
+    {
+      "id": 204,
+      "start": 433.6,
+      "delay_ms": 433600,
+      "tts_path": "tts/0204.wav",
+      "status": "included"
+    }
+  ]
+}

@@ -22,7 +22,6 @@ from automatedub.vertical_slice.paths import (
 from automatedub.vertical_slice.tts import tts_segment_output_path
 
 MIX_VERSION = 1
-SOURCE_AUDIO_DUCK_VOLUME = 0.35
 MIX_SAMPLE_RATE = 16000
 MIN_TTS_ATEMPO = 0.85
 MAX_TTS_ATEMPO = 1.15
@@ -41,12 +40,26 @@ class MixTranslationSegment:
 
 
 @dataclass(frozen=True)
+class DuckWindow:
+    """A time range during which the original/background track should duck.
+
+    Derived from one generated speech track's actual playback start/end, so
+    this stays valid regardless of what audio is being ducked -- today a
+    single mixed source track, later a separated music/SFX stem.
+    """
+
+    start: float
+    end: float
+
+
+@dataclass(frozen=True)
 class MixSpeechTrack:
     id: int
     start: float
     end: float
     delay_ms: int
     atempo: float
+    generated_duration: float
     tts_path: Path
 
 
@@ -77,6 +90,7 @@ def run_mix(
 
     segments = load_translation_segments(translation_path)
     speech_tracks = build_speech_tracks(segments, tts_dir, config)
+    duck_windows = build_duck_windows(speech_tracks)
     write_mix_plan(
         mix_plan_path=mix_plan_path,
         source_audio_path=source_audio_path,
@@ -85,6 +99,8 @@ def run_mix(
         mixed_audio_path=mixed_audio_path,
         source_duration=source_duration,
         tts_sync_offset_ms=config.tts_sync_offset_ms,
+        duck_volume=config.duck_volume,
+        duck_windows=duck_windows,
         segments=segments,
         speech_tracks=speech_tracks,
     )
@@ -97,6 +113,8 @@ def run_mix(
         ffmpeg=ffmpeg,
         source_audio_path=source_audio_path,
         speech_tracks=speech_tracks,
+        duck_windows=duck_windows,
+        duck_volume=config.duck_volume,
         mixed_audio_path=mixed_audio_path,
     )
     try:
@@ -230,10 +248,30 @@ def build_speech_tracks(
                     int(round(segment.start * 1000)) + tool_config.tts_sync_offset_ms,
                 ),
                 atempo=compute_atempo(generated_duration, segment.end - segment.start),
+                generated_duration=generated_duration,
                 tts_path=tts_path,
             )
         )
     return tracks
+
+
+def build_duck_windows(speech_tracks: list[MixSpeechTrack]) -> list[DuckWindow]:
+    """Build one duck window per generated speech track -- never merged.
+
+    Each window covers only that track's actual playback span: where the
+    clip is actually scheduled to start (`delay_ms`) through where it
+    actually finishes playing once `atempo` is applied, not the (often much
+    wider, and frequently near-continuous across a whole movie) Whisper
+    segment window. A track with no generated speech contributes no window,
+    so the background plays at full volume wherever nothing is actually
+    speaking.
+    """
+    windows: list[DuckWindow] = []
+    for track in speech_tracks:
+        start = track.delay_ms / 1000.0
+        playback_duration = track.generated_duration / track.atempo if track.atempo else track.generated_duration
+        windows.append(DuckWindow(start=round(start, 3), end=round(start + playback_duration, 3)))
+    return windows
 
 
 def compute_atempo(generated_duration: float, window_duration: float) -> float:
@@ -254,6 +292,8 @@ def build_mix_command(
     ffmpeg: str,
     source_audio_path: Path,
     speech_tracks: list[MixSpeechTrack],
+    duck_windows: list[DuckWindow],
+    duck_volume: float,
     mixed_audio_path: Path,
 ) -> list[str]:
     command = [
@@ -270,7 +310,7 @@ def build_mix_command(
     command.extend(
         [
             "-filter_complex",
-            build_mix_filter_complex(speech_tracks),
+            build_mix_filter_complex(speech_tracks, duck_windows, duck_volume),
             "-map",
             "[mixed]",
             "-ac",
@@ -285,8 +325,40 @@ def build_mix_command(
     return command
 
 
-def build_mix_filter_complex(speech_tracks: list[MixSpeechTrack]) -> str:
-    filters = [f"[0:a]volume={SOURCE_AUDIO_DUCK_VOLUME:.2f}[base]"]
+def build_duck_filters(
+    input_label: str,
+    output_label: str,
+    duck_windows: list[DuckWindow],
+    duck_volume: float,
+) -> list[str]:
+    """Build a chain of timeline-enabled `volume` filters for one audio input.
+
+    Only dialogue timing and a target input/output label are required, so the
+    same chain applies whether `input_label` is the current single mixed
+    source track or, after a future source-separation upgrade, a dedicated
+    music/SFX stem -- callers just point it at whichever track should duck.
+    """
+    if not duck_windows:
+        return [f"[{input_label}]anull[{output_label}]"]
+    filters: list[str] = []
+    current_label = input_label
+    last_index = len(duck_windows) - 1
+    for index, window in enumerate(duck_windows):
+        next_label = output_label if index == last_index else f"duck{index}"
+        filters.append(
+            f"[{current_label}]volume=volume={duck_volume:.2f}:"
+            f"enable='between(t,{window.start:.3f},{window.end:.3f})'[{next_label}]"
+        )
+        current_label = next_label
+    return filters
+
+
+def build_mix_filter_complex(
+    speech_tracks: list[MixSpeechTrack],
+    duck_windows: list[DuckWindow],
+    duck_volume: float,
+) -> str:
+    filters = build_duck_filters("0:a", "base", duck_windows, duck_volume)
     mix_inputs = ["[base]"]
     for input_index, track in enumerate(speech_tracks, start=1):
         label = f"[seg{input_index}]"
@@ -311,6 +383,8 @@ def write_mix_plan(
     mixed_audio_path: Path,
     source_duration: float,
     tts_sync_offset_ms: int,
+    duck_volume: float,
+    duck_windows: list[DuckWindow],
     segments: list[MixTranslationSegment],
     speech_tracks: list[MixSpeechTrack],
 ) -> None:
@@ -323,7 +397,10 @@ def write_mix_plan(
         "tts_dir": tts_dir.name,
         "mixed_audio": mixed_audio_path.name,
         "source_duration_seconds": source_duration,
-        "source_volume": SOURCE_AUDIO_DUCK_VOLUME,
+        "duck_volume": duck_volume,
+        "duck_windows": [
+            {"start": window.start, "end": window.end} for window in duck_windows
+        ],
         "sample_rate": MIX_SAMPLE_RATE,
         "tts_sync_offset_ms": tts_sync_offset_ms,
         "mixed_segments": len(speech_tracks),

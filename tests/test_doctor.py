@@ -32,6 +32,8 @@ def test_run_doctor_reports_missing_tools_and_model(monkeypatch, tmp_path):
         False,
         False,
         True,
+        True,
+        True,
         False,
         True,
         False,
@@ -91,6 +93,8 @@ def test_run_doctor_reports_available_tools_and_model(monkeypatch, tmp_path):
         True,
         True,
         True,
+        True,
+        True,
     ]
 
 
@@ -99,3 +103,17 @@ def test_check_model_rejects_directory(tmp_path):
 
     assert check.ok is False
     assert "not a file" in check.detail
+
+
+def test_check_tts_speed_reports_configured_value():
+    check = doctor.check_tts_speed(ToolConfig(tts_speed=1.3))
+
+    assert check.name == "tts speed"
+    assert check.ok is True
+    assert check.detail == "1.3"
+
+
+def test_check_tts_speed_reports_default_value():
+    check = doctor.check_tts_speed(ToolConfig())
+
+    assert check.detail == "1.0"

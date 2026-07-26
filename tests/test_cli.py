@@ -436,6 +436,7 @@ def test_doctor_command_prints_checks(monkeypatch, capsys):
     checks = [
         DoctorCheck("ffmpeg", True, "/usr/bin/ffmpeg"),
         DoctorCheck("whisper model", False, "not found"),
+        DoctorCheck("tts speed", True, "1.0"),
         DoctorCheck("nbw base url", True, "https://www.nbwcode.top/v1"),
         DoctorCheck("nbw api key", True, "Present"),
         DoctorCheck("nbw model", True, "gpt-5.5"),
@@ -457,6 +458,7 @@ def test_doctor_command_prints_checks(monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "ok: ffmpeg: /usr/bin/ffmpeg" in output
     assert "error: whisper model: not found" in output
+    assert "TTS Speed:\n✓ 1.0" in output
     assert "=== NBWCode ===" in output
     assert "Base URL:\n✓ https://www.nbwcode.top/v1" in output
     assert "API Key:\n✓ Present" in output

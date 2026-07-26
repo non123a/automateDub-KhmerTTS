@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "failures": [
+    {
+      "id": 71,
+      "target_text": "ចំណូលចិត្តរបស់ខ្ញុំគឺអូសទូរស័ព្ទលេង។",
+      "error": "peer closed connection without sending complete message body (incomplete chunked read)"
+    },
+    {
+      "id": 131,
+      "target_text": "អញ្ចឹង ក្នុងប្រទេសចិន អ្នកចូលចិត្តទីក្រុងណាជាងគេ?",
+      "error": "peer closed connection without sending complete message body (incomplete chunked read)"
+    },
+    {
+      "id": 202,
+      "target_text": "បើកទូរស័ព្ទ មើលទូរស័ព្ទ",
+      "error": "peer closed connection without sending complete message body (incomplete chunked read)"
+    }
+  ]
+}

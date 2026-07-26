@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "provider": "cambai",
+  "model": "mars-8.1-flash-beta",
+  "voice_id": "170542",
+  "segments_processed": 61,
+  "characters_processed": 1673,
+  "generation_time": 70.319,
+  "provider_metadata": {
+    "voice_name": null,
+    "language": "km-kh"
+  }
+}

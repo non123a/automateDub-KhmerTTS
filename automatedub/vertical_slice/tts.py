@@ -57,6 +57,7 @@ class TtsProviderInfo:
     voice_id: str | None
     voice_name: str | None = None
     language: str | None = None
+    speed: float | None = None
     metadata: dict[str, object] | None = None
 
 
@@ -159,6 +160,7 @@ class NBWCodeProvider:
             provider="nbwcode",
             model=self.tool_config.tts_model,
             voice_id=DEFAULT_TTS_VOICE,
+            speed=self.tool_config.tts_speed,
         )
 
     def generate(self, text: str) -> GeneratedSpeech:
@@ -195,12 +197,13 @@ class CambAIProvider:
             model=self.tool_config.tts_model,
             voice_id=self.tool_config.camb_voice_id,
             language=self.tool_config.camb_language,
+            speed=self.tool_config.tts_speed,
         )
 
     def generate(self, text: str) -> GeneratedSpeech:
         voice_id = parse_camb_voice_id(self.tool_config.camb_voice_id)
         try:
-            from camb.types import StreamTtsOutputConfiguration
+            from camb.types import StreamTtsOutputConfiguration, StreamTtsVoiceSettings
         except ImportError as exc:
             raise VS3Error(
                 "Camb.ai SDK is not installed. Install the camb-sdk package."
@@ -211,6 +214,7 @@ class CambAIProvider:
             language=self.tool_config.camb_language,
             speech_model=self.tool_config.tts_model,
             output_configuration=StreamTtsOutputConfiguration(format="wav"),
+            voice_settings=StreamTtsVoiceSettings(speaking_rate=self.tool_config.tts_speed),
         )
         return GeneratedSpeech(audio=read_audio_stream(stream))
 

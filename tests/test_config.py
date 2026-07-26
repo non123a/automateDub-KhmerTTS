@@ -29,6 +29,8 @@ def test_load_tool_config_reads_environment(monkeypatch):
     monkeypatch.setenv("CAMB_LANGUAGE", "km-kh")
     monkeypatch.setenv("CAMB_VOICE_ID", "123")
     monkeypatch.setenv("TTS_SYNC_OFFSET_MS", "275")
+    monkeypatch.setenv("TTS_SPEED", "1.2")
+    monkeypatch.setenv("DUCK_VOLUME", "0.25")
 
     tool_config = config.load_tool_config(env_file=None)
 
@@ -46,6 +48,8 @@ def test_load_tool_config_reads_environment(monkeypatch):
     assert tool_config.camb_language == "km-kh"
     assert tool_config.camb_voice_id == "123"
     assert tool_config.tts_sync_offset_ms == 275
+    assert tool_config.tts_speed == 1.2
+    assert tool_config.duck_volume == 0.25
 
 
 def test_load_tool_config_uses_nbw_defaults(monkeypatch):
@@ -54,6 +58,8 @@ def test_load_tool_config_uses_nbw_defaults(monkeypatch):
     monkeypatch.delenv("TTS_PROVIDER", raising=False)
     monkeypatch.delenv("TTS_MODEL", raising=False)
     monkeypatch.delenv("TTS_SYNC_OFFSET_MS", raising=False)
+    monkeypatch.delenv("TTS_SPEED", raising=False)
+    monkeypatch.delenv("DUCK_VOLUME", raising=False)
 
     tool_config = config.load_tool_config(env_file=None)
 
@@ -63,6 +69,16 @@ def test_load_tool_config_uses_nbw_defaults(monkeypatch):
     assert tool_config.tts_model == config.DEFAULT_TTS_MODEL
     assert tool_config.camb_language == "km-kh"
     assert tool_config.tts_sync_offset_ms == 200
+    assert tool_config.tts_speed == 1.0
+    assert tool_config.duck_volume == 0.0
+
+
+def test_default_tool_config_uses_normal_tts_speed():
+    assert config.ToolConfig().tts_speed == 1.0
+
+
+def test_default_tool_config_fully_mutes_dialogue_windows():
+    assert config.ToolConfig().duck_volume == 0.0
 
 
 def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
@@ -75,6 +91,8 @@ def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
     monkeypatch.delenv("CAMB_LANGUAGE", raising=False)
     monkeypatch.delenv("CAMB_VOICE_ID", raising=False)
     monkeypatch.delenv("TTS_SYNC_OFFSET_MS", raising=False)
+    monkeypatch.delenv("TTS_SPEED", raising=False)
+    monkeypatch.delenv("DUCK_VOLUME", raising=False)
     env_file = tmp_path / ".env"
     env_file.write_text(
         "\n".join(
@@ -89,6 +107,8 @@ def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
                 "CAMB_LANGUAGE=km-kh",
                 "CAMB_VOICE_ID=123",
                 "TTS_SYNC_OFFSET_MS=325",
+                "TTS_SPEED=0.9",
+                "DUCK_VOLUME=0.2",
             ]
         ),
         encoding="utf-8",
@@ -105,6 +125,8 @@ def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
     assert tool_config.camb_language == "km-kh"
     assert tool_config.camb_voice_id == "123"
     assert tool_config.tts_sync_offset_ms == 325
+    assert tool_config.tts_speed == 0.9
+    assert tool_config.duck_volume == 0.2
 
 
 def test_environment_overrides_dotenv(monkeypatch, tmp_path):
