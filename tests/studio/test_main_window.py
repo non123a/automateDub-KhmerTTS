@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from conftest import make_valid_project
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QMenu
 
+from automatedub_studio.ui import main_window as main_window_module
 from automatedub_studio.ui.main_window import WINDOW_TITLE, MainWindow
 
 
@@ -36,7 +38,7 @@ def test_file_menu_has_open_project_and_exit(qapp):
     file_menu = next(m for m in window.menuBar().findChildren(QMenu) if m.title() == "&File")
 
     assert _action_texts(file_menu) == ["Open Project...", "Exit"]
-    assert window.open_project_action.isEnabled() is False
+    assert window.open_project_action.isEnabled() is True
 
 
 def test_help_menu_has_about(qapp):
@@ -75,3 +77,77 @@ def test_geometry_persists_across_instances(qapp, tmp_path):
 
     assert abs(window2.size().width() - 800) <= 5
     assert abs(window2.size().height() - 600) <= 5
+
+
+def test_open_project_path_updates_window_title(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, segment_count=7)
+    window = MainWindow(settings=_memory_settings())
+
+    window.open_project_path(project_dir)
+
+    assert window.windowTitle() == f"{WINDOW_TITLE} - output"
+
+
+def test_open_project_path_updates_status_bar(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, segment_count=7)
+    window = MainWindow(settings=_memory_settings())
+
+    window.open_project_path(project_dir)
+
+    message = window.statusBar().currentMessage()
+    assert "Project Loaded" in message
+    assert "Segments: 7" in message
+    assert "TTS Files: 7" in message
+    assert "Audio: ✓" in message
+    assert "Video: Missing" in message
+
+
+def test_open_project_path_reports_video_found(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, with_video=True)
+    window = MainWindow(settings=_memory_settings())
+
+    window.open_project_path(project_dir)
+
+    assert "Video: Found" in window.statusBar().currentMessage()
+
+
+def test_open_project_path_populates_info_panel(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, segment_count=4)
+    window = MainWindow(settings=_memory_settings())
+
+    window.open_project_path(project_dir)
+
+    assert window.info_panel.project_path_label.text() == str(project_dir)
+    assert window.info_panel.segment_count_label.text() == "4"
+    assert window.info_panel.tts_count_label.text() == "4"
+    assert window.info_panel.video_label.text() == "Missing"
+
+
+def test_open_project_path_stores_project(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, segment_count=2)
+    window = MainWindow(settings=_memory_settings())
+
+    window.open_project_path(project_dir)
+
+    assert window.project is not None
+    assert window.project.project_path == project_dir
+    assert window.project.segment_count == 2
+
+
+def test_open_project_path_invalid_project_shows_message_and_does_not_crash(
+    qapp, tmp_path, monkeypatch
+):
+    shown_messages = []
+    monkeypatch.setattr(
+        main_window_module.QMessageBox,
+        "critical",
+        staticmethod(lambda *args, **kwargs: shown_messages.append(args)),
+    )
+    window = MainWindow(settings=_memory_settings())
+
+    window.open_project_path(tmp_path / "not-a-project")
+
+    assert len(shown_messages) == 1
+    assert window.project is None
+    assert window.statusBar().currentMessage() == "Ready"
+    assert window.windowTitle() == WINDOW_TITLE
