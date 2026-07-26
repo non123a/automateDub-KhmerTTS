@@ -14,6 +14,11 @@ from automatedub.config import ToolConfig, load_tool_config, resolve_executable
 from automatedub.doctor import doctor_succeeded, run_doctor
 from automatedub.setup import SetupError, run_setup
 from automatedub.vertical_slice.audio import VS0Error, extract_audio
+from automatedub.vertical_slice.duration_report import (
+    DurationReportError,
+    DurationReportResult,
+    run_duration_report,
+)
 from automatedub.vertical_slice.localization import NBWCodeDialogueLocalizer, VS2Error
 from automatedub.vertical_slice.mix import MixResult, VS4Error, run_mix
 from automatedub.vertical_slice.paths import (
@@ -148,6 +153,16 @@ def build_parser() -> argparse.ArgumentParser:
         "output_dir",
         type=Path,
         help="Directory containing audio.wav, translation.json, and tts/*.wav.",
+    )
+
+    duration_report_parser = subparsers.add_parser(
+        "duration-report",
+        help="Compare translation segment timing windows to generated TTS WAV durations.",
+    )
+    duration_report_parser.add_argument(
+        "output_dir",
+        type=Path,
+        help="Directory containing translation.json and tts/*.wav.",
     )
 
     dub_parser = subparsers.add_parser(
@@ -471,6 +486,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"mix plan written: {mix_result.mix_plan_path}")
         print(f"mix segments included: {mix_result.mixed_segments}")
         print(f"mix segments skipped: {mix_result.skipped_segments}")
+        return 0
+
+    if args.command == "duration-report":
+        try:
+            report_result = run_duration_report(args.output_dir)
+        except DurationReportError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        print(f"duration report written: {report_result.report_path}")
+        print(f"segments measured: {report_result.generated_wav_count}")
+        print(f"average ratio: {report_result.average_ratio}")
+        print(f"minimum ratio: {report_result.minimum_ratio}")
+        print(f"maximum ratio: {report_result.maximum_ratio}")
         return 0
 
     if args.command == "dub":

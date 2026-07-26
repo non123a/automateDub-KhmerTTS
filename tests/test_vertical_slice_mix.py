@@ -2,12 +2,22 @@ from __future__ import annotations
 
 import json
 import subprocess
+import wave
 from pathlib import Path
 
 import pytest
 
 from automatedub.config import ToolConfig
 from automatedub.vertical_slice import mix
+
+
+def write_silent_wav(path: Path, seconds: float, frame_rate: int = 16000) -> None:
+    frame_count = int(round(seconds * frame_rate))
+    with wave.open(str(path), "wb") as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(frame_rate)
+        wav_file.writeframes(b"\x00\x00" * frame_count)
 
 
 def minimal_translation_payload() -> dict[str, object]:
@@ -59,7 +69,7 @@ def test_load_translation_segments_preserves_timing(tmp_path):
 def test_build_speech_tracks_skips_missing_tts_files(tmp_path):
     tts_dir = tmp_path / "tts"
     tts_dir.mkdir()
-    (tts_dir / "0012.wav").write_bytes(b"RIFF fake WAVE")
+    write_silent_wav(tts_dir / "0012.wav", seconds=0.75)
     segments = [
         mix.MixTranslationSegment(id=0, start=0.0, end=1.0, target_text="សួស្តី។"),
         mix.MixTranslationSegment(id=12, start=1.25, end=2.0, target_text="លាហើយ។"),
@@ -73,6 +83,7 @@ def test_build_speech_tracks_skips_missing_tts_files(tmp_path):
             start=1.25,
             end=2.0,
             delay_ms=1450,
+            atempo=1.0,
             tts_path=tts_dir / "0012.wav",
         )
     ]
@@ -81,7 +92,7 @@ def test_build_speech_tracks_skips_missing_tts_files(tmp_path):
 def test_build_speech_tracks_applies_custom_sync_offset(tmp_path):
     tts_dir = tmp_path / "tts"
     tts_dir.mkdir()
-    (tts_dir / "0000.wav").write_bytes(b"RIFF fake WAVE")
+    write_silent_wav(tts_dir / "0000.wav", seconds=0.75)
     segments = [
         mix.MixTranslationSegment(id=0, start=1.25, end=2.0, target_text="សួស្តី។"),
     ]
@@ -98,9 +109,41 @@ def test_build_speech_tracks_applies_custom_sync_offset(tmp_path):
             start=1.25,
             end=2.0,
             delay_ms=1575,
+            atempo=1.0,
             tts_path=tts_dir / "0000.wav",
         )
     ]
+
+
+def test_build_speech_tracks_clamps_atempo_to_safe_bounds(tmp_path):
+    tts_dir = tmp_path / "tts"
+    tts_dir.mkdir()
+    write_silent_wav(tts_dir / "0000.wav", seconds=1.0)
+    write_silent_wav(tts_dir / "0001.wav", seconds=2.2)
+    segments = [
+        mix.MixTranslationSegment(id=0, start=0.0, end=10.0, target_text="ឆ្ងាញ់ទេ?"),
+        mix.MixTranslationSegment(id=1, start=10.0, end=12.0, target_text="សួស្តី។"),
+    ]
+
+    tracks = mix.build_speech_tracks(segments, tts_dir, ToolConfig())
+
+    assert tracks[0].atempo == mix.MIN_TTS_ATEMPO
+    assert tracks[1].atempo == 1.1
+
+
+@pytest.mark.parametrize(
+    ("generated_duration", "window_duration", "expected_atempo"),
+    [
+        (1.1, 1.0, 1.1),
+        (0.2, 2.0, mix.MIN_TTS_ATEMPO),
+        (2.3, 1.0, mix.MAX_TTS_ATEMPO),
+        (1.0, 1.0, 1.0),
+        (1.0, 0.0, 1.0),
+        (0.0, 1.0, 1.0),
+    ],
+)
+def test_compute_atempo(generated_duration, window_duration, expected_atempo):
+    assert mix.compute_atempo(generated_duration, window_duration) == expected_atempo
 
 
 def test_build_mix_command_delays_generated_speech(tmp_path):
@@ -112,6 +155,7 @@ def test_build_mix_command_delays_generated_speech(tmp_path):
             start=0.0,
             end=1.0,
             delay_ms=0,
+            atempo=1.0,
             tts_path=tmp_path / "tts" / "0000.wav",
         ),
         mix.MixSpeechTrack(
@@ -119,6 +163,7 @@ def test_build_mix_command_delays_generated_speech(tmp_path):
             start=1.25,
             end=2.0,
             delay_ms=1250,
+            atempo=0.85,
             tts_path=tmp_path / "tts" / "0012.wav",
         ),
     ]
@@ -137,8 +182,8 @@ def test_build_mix_command_delays_generated_speech(tmp_path):
     assert "-filter_complex" in command
     filter_complex = command[command.index("-filter_complex") + 1]
     assert "[0:a]volume=0.35[base]" in filter_complex
-    assert "adelay=0:all=1[seg1]" in filter_complex
-    assert "adelay=1250:all=1[seg2]" in filter_complex
+    assert "atempo=1.0000,adelay=0:all=1[seg1]" in filter_complex
+    assert "atempo=0.8500,adelay=1250:all=1[seg2]" in filter_complex
     assert "amix=inputs=3:duration=longest:dropout_transition=0:normalize=0[mixed]" in filter_complex
     assert command[-1] == str(output_audio)
 
@@ -153,8 +198,8 @@ def test_run_mix_writes_plan_and_mixed_audio(monkeypatch, tmp_path):
     )
     tts_dir = output_dir / "tts"
     tts_dir.mkdir()
-    (tts_dir / "0000.wav").write_bytes(b"RIFF first WAVE")
-    (tts_dir / "0012.wav").write_bytes(b"RIFF second WAVE")
+    write_silent_wav(tts_dir / "0000.wav", seconds=1.0)
+    write_silent_wav(tts_dir / "0012.wav", seconds=0.3)
 
     monkeypatch.setattr(
         mix,
@@ -186,6 +231,7 @@ def test_run_mix_writes_plan_and_mixed_audio(monkeypatch, tmp_path):
     assert plan["mixed_segments"] == 2
     assert [segment["status"] for segment in plan["segments"]] == ["included", "included"]
     assert [segment["delay_ms"] for segment in plan["segments"]] == [200, 1450]
+    assert [segment["atempo"] for segment in plan["segments"]] == [1.0, mix.MIN_TTS_ATEMPO]
 
 
 def test_run_mix_requires_at_least_one_tts_file(monkeypatch, tmp_path):

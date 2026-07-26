@@ -8,6 +8,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from automatedub.config import ToolConfig, load_tool_config, resolve_executable
+from automatedub.vertical_slice.duration_report import (
+    DurationReportError,
+    probe_wav_duration_seconds,
+)
 from automatedub.vertical_slice.paths import (
     audio_output_path,
     mix_plan_output_path,
@@ -20,6 +24,8 @@ from automatedub.vertical_slice.tts import tts_segment_output_path
 MIX_VERSION = 1
 SOURCE_AUDIO_DUCK_VOLUME = 0.35
 MIX_SAMPLE_RATE = 16000
+MIN_TTS_ATEMPO = 0.85
+MAX_TTS_ATEMPO = 1.15
 
 
 class VS4Error(RuntimeError):
@@ -40,6 +46,7 @@ class MixSpeechTrack:
     start: float
     end: float
     delay_ms: int
+    atempo: float
     tts_path: Path
 
 
@@ -209,6 +216,10 @@ def build_speech_tracks(
         tts_path = tts_segment_output_path(tts_dir, segment.id)
         if not tts_path.exists():
             continue
+        try:
+            generated_duration = probe_wav_duration_seconds(tts_path)
+        except DurationReportError as exc:
+            raise VS4Error(f"segment {segment.id}: {exc}") from exc
         tracks.append(
             MixSpeechTrack(
                 id=segment.id,
@@ -218,10 +229,25 @@ def build_speech_tracks(
                     0,
                     int(round(segment.start * 1000)) + tool_config.tts_sync_offset_ms,
                 ),
+                atempo=compute_atempo(generated_duration, segment.end - segment.start),
                 tts_path=tts_path,
             )
         )
     return tracks
+
+
+def compute_atempo(generated_duration: float, window_duration: float) -> float:
+    """Mildly correct TTS pacing toward the source segment window duration.
+
+    Whisper segment windows often include trailing silence beyond the actual
+    utterance, so we never stretch a clip to fully fill its window (that would
+    sound unnaturally slow for short lines in long windows). Instead we nudge
+    playback speed within a narrow, always-natural-sounding bound.
+    """
+    if generated_duration <= 0 or window_duration <= 0:
+        return 1.0
+    raw_tempo = generated_duration / window_duration
+    return round(min(MAX_TTS_ATEMPO, max(MIN_TTS_ATEMPO, raw_tempo)), 4)
 
 
 def build_mix_command(
@@ -266,6 +292,7 @@ def build_mix_filter_complex(speech_tracks: list[MixSpeechTrack]) -> str:
         label = f"[seg{input_index}]"
         filters.append(
             f"[{input_index}:a]aresample={MIX_SAMPLE_RATE},"
+            f"atempo={track.atempo:.4f},"
             f"adelay={track.delay_ms}:all=1{label}"
         )
         mix_inputs.append(label)
@@ -287,7 +314,8 @@ def write_mix_plan(
     segments: list[MixTranslationSegment],
     speech_tracks: list[MixSpeechTrack],
 ) -> None:
-    included_ids = {track.id for track in speech_tracks}
+    tracks_by_id = {track.id: track for track in speech_tracks}
+    included_ids = set(tracks_by_id)
     payload = {
         "version": MIX_VERSION,
         "source_audio": source_audio_path.name,
@@ -309,6 +337,7 @@ def write_mix_plan(
                     0,
                     int(round(segment.start * 1000)) + tts_sync_offset_ms,
                 ),
+                "atempo": tracks_by_id[segment.id].atempo if segment.id in included_ids else None,
                 "tts_path": str(Path(tts_dir.name) / f"{segment.id:04d}.wav"),
                 "status": "included" if segment.id in included_ids else "missing_tts",
             }

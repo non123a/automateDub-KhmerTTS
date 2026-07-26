@@ -343,6 +343,48 @@ def test_mix_command_returns_success_and_prints_counts(monkeypatch, tmp_path, ca
     assert "mix segments skipped: 1" in output
 
 
+def test_duration_report_command_returns_success_and_prints_ratios(monkeypatch, tmp_path, capsys):
+    output_dir = tmp_path / "output"
+    expected_report_path = output_dir / "duration_report.json"
+
+    def fake_run_duration_report(output_arg: Path) -> cli.DurationReportResult:
+        assert output_arg == output_dir
+        return cli.DurationReportResult(
+            report_path=expected_report_path,
+            generated_wav_count=3,
+            average_ratio=0.77,
+            minimum_ratio=0.1,
+            maximum_ratio=1.2,
+        )
+
+    monkeypatch.setattr(cli, "run_duration_report", fake_run_duration_report)
+
+    exit_code = cli.main(["duration-report", str(output_dir)])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert f"duration report written: {expected_report_path}" in output
+    assert "segments measured: 3" in output
+    assert "average ratio: 0.77" in output
+    assert "minimum ratio: 0.1" in output
+    assert "maximum ratio: 1.2" in output
+
+
+def test_duration_report_command_reports_error(monkeypatch, tmp_path, capsys):
+    output_dir = tmp_path / "output"
+
+    def fake_run_duration_report(output_arg: Path) -> cli.DurationReportResult:
+        raise cli.DurationReportError("no synthesized speech WAV files were found")
+
+    monkeypatch.setattr(cli, "run_duration_report", fake_run_duration_report)
+
+    exit_code = cli.main(["duration-report", str(output_dir)])
+
+    assert exit_code == 2
+    error_output = capsys.readouterr().err
+    assert "no synthesized speech WAV files were found" in error_output
+
+
 def test_doctor_command_prints_checks(monkeypatch, capsys):
     checks = [
         DoctorCheck("ffmpeg", True, "/usr/bin/ffmpeg"),
