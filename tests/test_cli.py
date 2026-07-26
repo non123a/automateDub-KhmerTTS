@@ -175,6 +175,53 @@ def test_tts_sample_command_generates_sample_wavs(monkeypatch, tmp_path, capsys)
     assert "sample characters: 42" in output
 
 
+def test_tts_combine_command_returns_success_and_prints_paths(monkeypatch, tmp_path, capsys):
+    output_dir = tmp_path / "output"
+    expected_combined_path = output_dir / "tts_combined.wav"
+    expected_plan_path = output_dir / "tts_combined_plan.json"
+
+    def fake_run_tts_combine(output_arg: Path) -> cli.TtsCombineResult:
+        assert output_arg == output_dir
+        return cli.TtsCombineResult(
+            tts_combined_path=expected_combined_path,
+            tts_combined_plan_path=expected_plan_path,
+            included_segments=2,
+            skipped_segments=1,
+        )
+
+    monkeypatch.setattr(cli, "run_tts_combine", fake_run_tts_combine)
+
+    exit_code = cli.main(["tts", "combine", str(output_dir)])
+
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert f"tts combined audio written: {expected_combined_path}" in output
+    assert f"tts combined plan written: {expected_plan_path}" in output
+    assert "tts combine segments included: 2" in output
+    assert "tts combine segments skipped: 1" in output
+
+
+def test_tts_combine_command_reports_error(monkeypatch, tmp_path, capsys):
+    output_dir = tmp_path / "output"
+
+    def fake_run_tts_combine(output_arg: Path) -> cli.TtsCombineResult:
+        raise cli.TtsCombineError("no synthesized speech WAV files were found")
+
+    monkeypatch.setattr(cli, "run_tts_combine", fake_run_tts_combine)
+
+    exit_code = cli.main(["tts", "combine", str(output_dir)])
+
+    assert exit_code == 2
+    assert "no synthesized speech WAV files were found" in capsys.readouterr().err
+
+
+def test_tts_combine_command_requires_output_directory(capsys):
+    exit_code = cli.main(["tts", "combine"])
+
+    assert exit_code == 2
+    assert "tts combine requires an output directory" in capsys.readouterr().err
+
+
 def test_run_tts_sample_writes_selected_segment_wavs_and_text(monkeypatch, tmp_path):
     output_dir = tmp_path / "output"
     sample_dir = output_dir / "sample"

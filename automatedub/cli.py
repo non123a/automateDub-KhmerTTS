@@ -29,6 +29,11 @@ from automatedub.vertical_slice.paths import (
 )
 from automatedub.vertical_slice.transcription import VS1Error, WhisperCppTranscriber
 from automatedub.vertical_slice.tts import VS3Error
+from automatedub.vertical_slice.tts_combine import (
+    TtsCombineError,
+    TtsCombineResult,
+    run_tts_combine,
+)
 from automatedub.vertical_slice.tts import (
     ProviderTextToSpeechSynthesizer,
     create_tts_provider,
@@ -101,13 +106,13 @@ def build_parser() -> argparse.ArgumentParser:
     tts_parser.add_argument(
         "target",
         nargs="?",
-        help="Output directory containing translation.json, 'providers', or 'sample'.",
+        help="Output directory containing translation.json, 'providers', 'sample', or 'combine'.",
     )
     tts_parser.add_argument(
         "sample_source_dir",
         nargs="?",
         type=Path,
-        help="Output directory containing translation.json when using 'tts sample'.",
+        help="Output directory containing translation.json when using 'tts sample' or 'tts combine'.",
     )
     tts_parser.add_argument(
         "--start-segment",
@@ -433,6 +438,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"sample text: {sample_result.sample_text_path}")
             print(f"sample segments generated: {sample_result.generated_count}")
             print(f"sample characters: {sample_result.characters}")
+            return 0
+        if args.target == "combine":
+            if args.sample_source_dir is None:
+                print("error: tts combine requires an output directory", file=sys.stderr)
+                return 2
+            try:
+                combine_result = run_tts_combine(args.sample_source_dir)
+            except TtsCombineError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+            print(f"tts combined audio written: {combine_result.tts_combined_path}")
+            print(f"tts combined plan written: {combine_result.tts_combined_plan_path}")
+            print(f"tts combine segments included: {combine_result.included_segments}")
+            print(f"tts combine segments skipped: {combine_result.skipped_segments}")
             return 0
         if args.target is None:
             print("error: tts requires an output directory or 'providers'", file=sys.stderr)

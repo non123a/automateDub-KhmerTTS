@@ -11,6 +11,8 @@ TRANSLATION_PROMPT_FILENAME = "translation_prompt.json"
 MIXED_AUDIO_FILENAME = "mixed_audio.wav"
 MIX_PLAN_FILENAME = "mix_plan.json"
 DURATION_REPORT_FILENAME = "duration_report.json"
+TTS_COMBINED_FILENAME = "tts_combined.wav"
+TTS_COMBINED_PLAN_FILENAME = "tts_combined_plan.json"
 TTS_DIRECTORY_NAME = "tts"
 TTS_ERROR_LOG_FILENAME = "errors.json"
 USAGE_DIRECTORY_NAME = "usage"
@@ -43,6 +45,14 @@ def mix_plan_output_path(output_dir: Path) -> Path:
 
 def duration_report_output_path(output_dir: Path) -> Path:
     return output_dir / DURATION_REPORT_FILENAME
+
+
+def tts_combined_output_path(output_dir: Path) -> Path:
+    return output_dir / TTS_COMBINED_FILENAME
+
+
+def tts_combined_plan_output_path(output_dir: Path) -> Path:
+    return output_dir / TTS_COMBINED_PLAN_FILENAME
 
 
 def tts_output_dir_path(output_dir: Path) -> Path:
