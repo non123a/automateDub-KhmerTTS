@@ -25,7 +25,9 @@ def test_load_project_succeeds_for_valid_project(tmp_path):
     assert project.segment_count == 5
     assert project.tts_file_count == 5
     assert all(isinstance(segment, Segment) for segment in project.segments)
-    assert project.segments[0] == Segment(id=0, start=0.0, end=1.0, target_text="target 0")
+    assert project.segments[0] == Segment(
+        id=0, start=0.0, end=1.0, source_text="source 0", target_text="target 0"
+    )
 
 
 def test_load_project_detects_video(tmp_path):

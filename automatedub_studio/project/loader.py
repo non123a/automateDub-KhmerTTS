@@ -9,6 +9,7 @@ does) rather than re-implementing JSON validation here.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from automatedub.vertical_slice import mix
@@ -58,11 +59,24 @@ def load_segments(translation_path: Path) -> list[Segment]:
     except mix.VS4Error as exc:
         raise ProjectLoadError(str(exc)) from exc
 
+    # load_translation_segments only captures target_text; read the raw JSON
+    # once more to also capture source_text for the timeline tooltip.
+    try:
+        raw = json.loads(translation_path.read_text(encoding="utf-8"))
+        source_map: dict[int, str] = {
+            seg["id"]: seg.get("source_text", "")
+            for seg in raw.get("segments", [])
+            if isinstance(seg, dict) and isinstance(seg.get("id"), int)
+        }
+    except Exception:  # noqa: BLE001
+        source_map = {}
+
     return [
         Segment(
             id=segment.id,
             start=segment.start,
             end=segment.end,
+            source_text=source_map.get(segment.id, ""),
             target_text=segment.target_text,
         )
         for segment in mix_segments

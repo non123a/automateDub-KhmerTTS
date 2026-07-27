@@ -166,8 +166,12 @@ def test_main_window_has_video_player(qapp):
 
 
 def test_main_window_video_player_is_central_widget(qapp):
+    from PySide6.QtWidgets import QSplitter
+
     window = MainWindow(settings=_memory_settings())
-    assert window.centralWidget() is window.video_player
+    central = window.centralWidget()
+    assert isinstance(central, QSplitter)
+    assert window.video_player in [central.widget(i) for i in range(central.count())]
 
 
 def test_open_project_no_video_disables_player_controls(qapp, tmp_path):

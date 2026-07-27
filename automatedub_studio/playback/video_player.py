@@ -50,6 +50,7 @@ class VideoPlayerWidget(QWidget):
     """
 
     playbackStatusChanged = Signal(str)
+    videoPositionChanged = Signal(int)  # milliseconds, forwarded from QMediaPlayer
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -105,6 +106,7 @@ class VideoPlayerWidget(QWidget):
         self._seek_slider.sliderMoved.connect(self._on_slider_moved)
 
         self._media_player.positionChanged.connect(self._on_position_changed)
+        self._media_player.positionChanged.connect(self.videoPositionChanged.emit)
         self._media_player.durationChanged.connect(self._on_duration_changed)
         self._media_player.playbackStateChanged.connect(self._on_playback_state_changed)
         self._media_player.errorOccurred.connect(self._on_error_occurred)

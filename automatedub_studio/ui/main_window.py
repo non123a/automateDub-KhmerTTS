@@ -6,11 +6,12 @@ from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction, QCloseEvent
-from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMessageBox
+from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMessageBox, QSplitter
 
 from automatedub_studio.playback.video_player import VideoPlayerWidget
 from automatedub_studio.project.loader import ProjectLoadError, load_project
 from automatedub_studio.project.models import Project
+from automatedub_studio.timeline.timeline_widget import TimelineWidget
 from automatedub_studio.ui.about_dialog import AboutDialog
 from automatedub_studio.ui.project_info_panel import ProjectInfoPanel
 
@@ -58,7 +59,18 @@ class MainWindow(QMainWindow):
     def _build_central_widget(self) -> None:
         self.video_player = VideoPlayerWidget()
         self.video_player.playbackStatusChanged.connect(self.statusBar().showMessage)
-        self.setCentralWidget(self.video_player)
+
+        self.timeline = TimelineWidget()
+
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.addWidget(self.video_player)
+        splitter.addWidget(self.timeline)
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 1)
+
+        self.video_player.videoPositionChanged.connect(self.timeline.set_playhead_position)
+
+        self.setCentralWidget(splitter)
 
     def _build_info_dock(self) -> None:
         self.info_panel = ProjectInfoPanel()
@@ -95,6 +107,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{WINDOW_TITLE} - {project.project_path.name}")
         self.info_panel.set_project(project)
         self.video_player.load_video(project.video_path)
+        self.timeline.load_segments(project.segments)
         self.statusBar().showMessage(self._status_message(project))
 
     @staticmethod

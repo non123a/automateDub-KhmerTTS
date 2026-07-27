@@ -17,6 +17,7 @@ class Segment:
     id: int
     start: float
     end: float
+    source_text: str
     target_text: str
 
 
