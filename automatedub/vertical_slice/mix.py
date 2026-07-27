@@ -61,6 +61,9 @@ class MixSpeechTrack:
     atempo: float
     generated_duration: float
     tts_path: Path
+    volume: float = 1.0
+    fade_in_ms: int = 0
+    fade_out_ms: int = 0
 
 
 @dataclass(frozen=True)
@@ -364,11 +367,29 @@ def build_mix_filter_complex(
     mix_inputs = ["[base]"]
     for input_index, track in enumerate(speech_tracks, start=1):
         label = f"[seg{input_index}]"
-        filters.append(
+        chain = (
             f"[{input_index}:a]aresample={MIX_SAMPLE_RATE},"
             f"atempo={track.atempo:.4f},"
-            f"adelay={track.delay_ms}:all=1{label}"
+            f"adelay={track.delay_ms}:all=1"
         )
+        if track.volume != 1.0:
+            chain += f",volume={track.volume:.4f}"
+        if track.fade_in_ms > 0:
+            fade_in_s = track.fade_in_ms / 1000.0
+            delay_s = track.delay_ms / 1000.0
+            chain += f",afade=t=in:st={delay_s:.4f}:d={fade_in_s:.4f}"
+        if track.fade_out_ms > 0:
+            fade_out_s = track.fade_out_ms / 1000.0
+            delay_s = track.delay_ms / 1000.0
+            playback_dur = (
+                track.generated_duration / track.atempo
+                if track.atempo > 0
+                else track.generated_duration
+            )
+            fade_out_start = delay_s + max(0.0, playback_dur - fade_out_s)
+            chain += f",afade=t=out:st={fade_out_start:.4f}:d={fade_out_s:.4f}"
+        chain += label
+        filters.append(chain)
         mix_inputs.append(label)
     filters.append(
         f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:"

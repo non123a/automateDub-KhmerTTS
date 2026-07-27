@@ -18,6 +18,8 @@ from PySide6.QtWidgets import (
 )
 
 from automatedub.config import ToolConfig, load_tool_config
+from automatedub_studio.backend.export_service import ExportOptions
+from automatedub_studio.backend.export_worker import ExportJob, ExportRunner
 from automatedub_studio.backend.jobs import JobRunner, RegenerationJob
 from automatedub_studio.backend.regeneration_service import (
     RegenerationOutcome,
@@ -40,6 +42,7 @@ from automatedub_studio.timeline.clip_item import (
 )
 from automatedub_studio.timeline.timeline_widget import TimelineWidget
 from automatedub_studio.ui.about_dialog import AboutDialog
+from automatedub_studio.ui.export_dialog import ExportProgressDialog
 from automatedub_studio.ui.project_info_panel import ProjectInfoPanel
 
 WINDOW_TITLE = "AutomateDub Studio"
@@ -60,6 +63,8 @@ class MainWindow(QMainWindow):
         self._undo_stack = QUndoStack(self)
         self._tool_config = tool_config if tool_config is not None else load_tool_config()
         self._job_runner = JobRunner()
+        self._export_runner = ExportRunner()
+        self._export_dialog: ExportProgressDialog | None = None
         self._progress_dialog: QProgressDialog | None = None
         self._regen_completed = 0
         self._regen_total = 0
@@ -88,6 +93,13 @@ class MainWindow(QMainWindow):
         self.save_project_action.setEnabled(False)
         self.save_project_action.triggered.connect(self._save_project)
         file_menu.addAction(self.save_project_action)
+
+        file_menu.addSeparator()
+
+        self.export_video_action = QAction("Export Video...", self)
+        self.export_video_action.setEnabled(False)
+        self.export_video_action.triggered.connect(self._export_video)
+        file_menu.addAction(self.export_video_action)
 
         file_menu.addSeparator()
 
@@ -430,6 +442,7 @@ class MainWindow(QMainWindow):
         apply_edits(project.segments, project.project_path, self._editables)
         self._undo_stack.clear()
         self.save_project_action.setEnabled(True)
+        self.export_video_action.setEnabled(True)
         self.setWindowTitle(f"{WINDOW_TITLE} - {project.project_path.name}")
         self.info_panel.set_project(project)
         self.video_player.load_video(project.video_path)
@@ -450,6 +463,44 @@ class MainWindow(QMainWindow):
             return
         save_edits(self.project.segments, self.project.project_path, self._editables)
         self.statusBar().showMessage("Project saved.")
+
+    def _export_video(self) -> None:
+        if self.project is None:
+            return
+        default_name = f"{self.project.project_path.name}_dubbed.mp4"
+        output_path_str, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Video",
+            str(self.project.project_path / default_name),
+            "MP4 Video (*.mp4)",
+        )
+        if not output_path_str:
+            return
+        output_path = Path(output_path_str)
+
+        self._export_dialog = ExportProgressDialog(self)
+        job = ExportJob(
+            project=self.project,
+            editables=self._editables,
+            tool_config=self._tool_config,
+            options=ExportOptions(output_path=output_path),
+        )
+        job.signals.stageChanged.connect(self._export_dialog.on_stage_changed)
+        job.signals.finished.connect(self._on_export_finished)
+        job.signals.errorOccurred.connect(self._on_export_error)
+        self._export_runner.submit(job)
+
+        self._export_dialog.exec()
+
+    def _on_export_finished(self, result) -> None:
+        if self._export_dialog is not None:
+            self._export_dialog.on_finished(result)
+        self.statusBar().showMessage(f"Export complete: {result.output_path.name}")
+
+    def _on_export_error(self, message: str) -> None:
+        if self._export_dialog is not None:
+            self._export_dialog.on_error(message)
+        self.statusBar().showMessage(f"Export failed: {message}")
 
     @staticmethod
     def _status_message(project: Project) -> str:
