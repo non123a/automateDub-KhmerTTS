@@ -17,7 +17,8 @@ from PySide6.QtWidgets import (
 from automatedub_studio.project.models import Segment
 
 _PLACEHOLDER = "—"
-_STATUS_DEFAULT = "Generated"
+_STATUS_GENERATED = "Generated"
+_STATUS_EDITED = "Edited"
 _NO_SELECTION_TEXT = "No segment selected."
 
 
@@ -106,16 +107,29 @@ class SegmentInspectorWidget(QWidget):
             return
 
         self._id_label.setText(str(segment.id))
-        self._status_label.setText(_STATUS_DEFAULT)
+        self._status_label.setText(_STATUS_EDITED if segment.offset_ms != 0 else _STATUS_GENERATED)
         self._original_text_label.setText(segment.source_text or _PLACEHOLDER)
         self._khmer_text_label.setText(segment.target_text)
         self._start_label.setText(f"{segment.start:.3f} s")
         self._end_label.setText(f"{segment.end:.3f} s")
         duration = segment.end - segment.start
         self._duration_label.setText(f"{duration:.3f} s")
-        self._offset_label.setText("0 ms")
+        self._offset_label.setText(self._format_offset(segment.offset_ms))
         self._speed_label.setText("1.00")
         self._volume_label.setText("100%")
         self._voice_label.setText("Default Voice")
 
         self._stack.setCurrentWidget(self._detail_widget)
+
+    def refresh_offset(self, offset_ms: int) -> None:
+        """Update only the offset and status displays (for live drag updates)."""
+        if self._stack.currentWidget() == self._detail_widget:
+            self._offset_label.setText(self._format_offset(offset_ms))
+            self._status_label.setText(_STATUS_EDITED if offset_ms != 0 else _STATUS_GENERATED)
+
+    @staticmethod
+    def _format_offset(offset_ms: int) -> str:
+        if offset_ms == 0:
+            return "0 ms"
+        sign = "+" if offset_ms > 0 else ""
+        return f"{sign}{offset_ms} ms"

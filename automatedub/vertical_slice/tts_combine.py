@@ -20,9 +20,9 @@ from automatedub.vertical_slice.mix import (
 )
 from automatedub.vertical_slice.paths import (
     audio_output_path,
+    translation_output_path,
     tts_combined_output_path,
     tts_combined_plan_output_path,
-    translation_output_path,
     tts_output_dir_path,
 )
 from automatedub.vertical_slice.tts import tts_segment_output_path

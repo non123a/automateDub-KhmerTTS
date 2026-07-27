@@ -104,6 +104,9 @@ def load_project(project_dir: Path) -> Project:
     tts_directory = tts_output_dir_path(project_dir)
 
     segments = load_segments(translation_path)
+    from automatedub_studio.project.edits import apply_edits
+
+    apply_edits(segments, project_dir)
     tts_file_count = count_tts_files(tts_directory)
     video_path = find_video_path(project_dir)
 

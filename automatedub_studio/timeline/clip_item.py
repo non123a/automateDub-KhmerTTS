@@ -38,8 +38,10 @@ class ClipItem(QGraphicsRectItem):
     ):
         super().__init__(x, y, width, height)
         self.segment = segment
+        self.lane = lane
 
-        self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable)
+        if lane == 1:
+            self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable)
         self.setBrush(QBrush(LANE_COLORS.get(lane, QColor("#888888"))))
         self.setPen(QPen(QColor("#333333"), NORMAL_PEN_WIDTH))
 

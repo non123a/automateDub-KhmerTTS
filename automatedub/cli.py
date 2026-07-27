@@ -16,7 +16,7 @@ from automatedub.setup import SetupError, run_setup
 from automatedub.vertical_slice.audio import VS0Error, extract_audio
 from automatedub.vertical_slice.duration_report import (
     DurationReportError,
-    DurationReportResult,
+    DurationReportResult,  # noqa: F401  re-exported for test access via cli.DurationReportResult
     run_duration_report,
 )
 from automatedub.vertical_slice.localization import NBWCodeDialogueLocalizer, VS2Error
@@ -28,20 +28,22 @@ from automatedub.vertical_slice.paths import (
     tts_output_dir_path,
 )
 from automatedub.vertical_slice.transcription import VS1Error, WhisperCppTranscriber
-from automatedub.vertical_slice.tts import VS3Error
-from automatedub.vertical_slice.tts_combine import (
-    TtsCombineError,
-    TtsCombineResult,
-    run_tts_combine,
-)
 from automatedub.vertical_slice.tts import (
     ProviderTextToSpeechSynthesizer,
+    VS3Error,
     create_tts_provider,
     list_cambai_voices,
-    load_translation_segments as load_tts_translation_segments,
     select_sample_segments,
     tts_segment_output_path,
     validate_wav_audio,
+)
+from automatedub.vertical_slice.tts import (
+    load_translation_segments as load_tts_translation_segments,
+)
+from automatedub.vertical_slice.tts_combine import (
+    TtsCombineError,
+    TtsCombineResult,  # noqa: F401  re-exported for test access via cli.TtsCombineResult
+    run_tts_combine,
 )
 
 
@@ -112,7 +114,9 @@ def build_parser() -> argparse.ArgumentParser:
         "sample_source_dir",
         nargs="?",
         type=Path,
-        help="Output directory containing translation.json when using 'tts sample' or 'tts combine'.",
+        help=(
+            "Output directory containing translation.json when using 'tts sample' or 'tts combine'."
+        ),
     )
     tts_parser.add_argument(
         "--start-segment",

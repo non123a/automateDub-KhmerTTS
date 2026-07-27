@@ -37,7 +37,7 @@ def test_file_menu_has_open_project_and_exit(qapp):
     window = MainWindow(settings=_memory_settings())
     file_menu = next(m for m in window.menuBar().findChildren(QMenu) if m.title() == "&File")
 
-    assert _action_texts(file_menu) == ["Open Project...", "Exit"]
+    assert _action_texts(file_menu) == ["Open Project...", "Save Project", "Exit"]
     assert window.open_project_action.isEnabled() is True
 
 

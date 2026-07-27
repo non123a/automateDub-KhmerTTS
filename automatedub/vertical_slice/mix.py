@@ -269,7 +269,9 @@ def build_duck_windows(speech_tracks: list[MixSpeechTrack]) -> list[DuckWindow]:
     windows: list[DuckWindow] = []
     for track in speech_tracks:
         start = track.delay_ms / 1000.0
-        playback_duration = track.generated_duration / track.atempo if track.atempo else track.generated_duration
+        playback_duration = (
+            track.generated_duration / track.atempo if track.atempo else track.generated_duration
+        )
         windows.append(DuckWindow(start=round(start, 3), end=round(start + playback_duration, 3)))
     return windows
 

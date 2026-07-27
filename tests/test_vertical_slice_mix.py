@@ -192,7 +192,9 @@ def test_build_mix_command_delays_generated_speech(tmp_path):
     assert "[duck0]volume=volume=0.00:enable='between(t,1.250,2.000)'[base]" in filter_complex
     assert "atempo=1.0000,adelay=0:all=1[seg1]" in filter_complex
     assert "atempo=0.8500,adelay=1250:all=1[seg2]" in filter_complex
-    assert "amix=inputs=3:duration=longest:dropout_transition=0:normalize=0[mixed]" in filter_complex
+    assert (
+        "amix=inputs=3:duration=longest:dropout_transition=0:normalize=0[mixed]" in filter_complex
+    )
     assert command[-1] == str(output_audio)
 
 
@@ -214,8 +216,10 @@ def test_build_duck_windows_never_merges_back_to_back_whisper_segments():
     # audio is short, so the duck windows must stay short and separate.
     tracks = [
         _speech_track(0, start=0.0, end=140.0, delay_ms=0, atempo=1.0, generated_duration=1.0),
-        _speech_track(1, start=140.0, end=280.0, delay_ms=140_000, atempo=1.0, generated_duration=1.0),
-        _speech_track(2, start=279.5, end=421.54, delay_ms=279_500, atempo=1.0, generated_duration=1.0),
+        _speech_track(1, start=140.0, end=280.0, delay_ms=140_000, atempo=1.0,
+                      generated_duration=1.0),
+        _speech_track(2, start=279.5, end=421.54, delay_ms=279_500, atempo=1.0,
+                      generated_duration=1.0),
     ]
 
     windows = mix.build_duck_windows(tracks)
@@ -248,7 +252,8 @@ def test_build_duck_windows_derives_bounds_from_actual_playback_timing():
     # not the (wider) Whisper segment start/end.
     tracks = [
         _speech_track(0, start=0.0, end=1.0, delay_ms=200, atempo=1.0, generated_duration=1.0),
-        _speech_track(12, start=1.25, end=2.0, delay_ms=1450, atempo=mix.MIN_TTS_ATEMPO, generated_duration=0.3),
+        _speech_track(12, start=1.25, end=2.0, delay_ms=1450,
+                      atempo=mix.MIN_TTS_ATEMPO, generated_duration=0.3),
     ]
 
     windows = mix.build_duck_windows(tracks)
@@ -373,7 +378,9 @@ def test_run_mix_uses_configured_duck_volume(monkeypatch, tmp_path):
 
     plan = json.loads(result.mix_plan_path.read_text(encoding="utf-8"))
     assert plan["duck_volume"] == 0.35
-    ffmpeg_command = next(command for command in captured_commands if command[0] == "/usr/bin/ffmpeg")
+    ffmpeg_command = next(
+        command for command in captured_commands if command[0] == "/usr/bin/ffmpeg"
+    )
     filter_complex = ffmpeg_command[ffmpeg_command.index("-filter_complex") + 1]
     assert "volume=volume=0.35:enable='between(t,0.200,1.200)'" in filter_complex
     assert "volume=volume=0.35:enable='between(t,1.450,1.803)'" in filter_complex

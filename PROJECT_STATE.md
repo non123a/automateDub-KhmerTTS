@@ -60,8 +60,9 @@ AutomateDub Studio (PySide6 desktop GUI):
 - Studio Milestone 2 — Loader cleanup and smoke-test against real `output/` directories.
 - Studio Milestone 3 — VideoPlayerWidget (Play/Pause/Stop, seek slider, QStackedWidget for no-video vs video surface).
 - Studio Milestone 4 — TimelineWidget (two-lane QGraphicsScene/QGraphicsView, ClipItem selection, Ctrl+Wheel zoom, playhead tracking).
-- Studio Milestone 5 — SegmentInspectorWidget dock (empty state, full segment details, placeholder controls). Complete. 228 tests passing.
-- Next Studio milestone: Milestone 6 (TBD).
+- Studio Milestone 5 — SegmentInspectorWidget dock (empty state, full segment details, placeholder controls). Complete.
+- Studio Milestone 6 — Editable clip timing. `Segment.offset_ms` mutable field; horizontal drag in `_TimelineView`; both lanes reposition together via `apply_offset`; live inspector offset display (`+250 ms` / `-120 ms`); `File → Save Project` writes `translation.edited.json` (modified segments only); `apply_edits` auto-loads offsets on project open; `QUndoStack` with `OffsetChangeCommand` for Ctrl+Z/Ctrl+Y. Complete. 250 tests passing.
+- Next Studio milestone: Milestone 7 (TBD).
 
 Test findings:
 

@@ -9,11 +9,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from automatedub_studio.inspector.segment_inspector import (
     _NO_SELECTION_TEXT,
     _PLACEHOLDER,
-    _STATUS_DEFAULT,
+    _STATUS_GENERATED,
     SegmentInspectorWidget,
 )
 from automatedub_studio.project.models import Segment
-
 
 # ---------------------------------------------------------------------------
 # Construction / empty state
@@ -79,7 +78,7 @@ def test_set_segment_displays_status(qapp):
 
     inspector.set_segment(seg)
 
-    assert inspector._status_label.text() == _STATUS_DEFAULT
+    assert inspector._status_label.text() == _STATUS_GENERATED
 
 
 def test_set_segment_displays_original_text(qapp):

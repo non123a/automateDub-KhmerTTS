@@ -115,7 +115,9 @@ def test_build_combine_command_generates_silent_base_and_delayed_segments(tmp_pa
     assert "adelay=1250:all=1[seg2]" in filter_complex
     assert "atempo" not in filter_complex
     assert "volume" not in filter_complex
-    assert "amix=inputs=3:duration=first:dropout_transition=0:normalize=0[combined]" in filter_complex
+    assert (
+        "amix=inputs=3:duration=first:dropout_transition=0:normalize=0[combined]" in filter_complex
+    )
     assert command[-1] == str(output_path)
 
 
@@ -130,7 +132,9 @@ def test_build_combine_command_with_no_speech_tracks(tmp_path):
     )
 
     filter_complex = command[command.index("-filter_complex") + 1]
-    assert "amix=inputs=1:duration=first:dropout_transition=0:normalize=0[combined]" in filter_complex
+    assert (
+        "amix=inputs=1:duration=first:dropout_transition=0:normalize=0[combined]" in filter_complex
+    )
 
 
 def test_run_tts_combine_writes_plan_and_combined_audio(monkeypatch, tmp_path):

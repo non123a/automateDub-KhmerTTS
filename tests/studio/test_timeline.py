@@ -165,7 +165,7 @@ def test_selecting_clip_sets_selected_segment(qapp):
     segments = _make_segments(3)
     widget.load_segments(segments)
 
-    clip = widget._clips[0]
+    clip = widget._clips[1]  # lane 1 (Khmer TTS) — selectable
     clip.setSelected(True)
 
     assert widget.selected_segment is clip.segment
@@ -175,7 +175,7 @@ def test_deselecting_clears_selected_segment(qapp):
     widget = TimelineWidget()
     widget.load_segments(_make_segments(2))
 
-    widget._clips[0].setSelected(True)
+    widget._clips[1].setSelected(True)  # lane 1 — selectable
     widget._scene.clearSelection()
 
     assert widget.selected_segment is None
@@ -188,10 +188,10 @@ def test_selection_signal_emitted(qapp):
     received: list = []
     widget.segmentSelected.connect(received.append)
 
-    widget._clips[0].setSelected(True)
+    widget._clips[1].setSelected(True)  # lane 1 — selectable
 
     assert len(received) >= 1
-    assert received[-1] is widget._clips[0].segment
+    assert received[-1] is widget._clips[1].segment
 
 
 # ---------------------------------------------------------------------------
