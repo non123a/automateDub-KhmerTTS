@@ -82,7 +82,7 @@ def test_load_edits_returns_offset_map():
         path = Path(tmp)
         (path / "translation.edited.json").write_text(json.dumps(payload))
         result = load_edits(path)
-    assert result == {5: -100}
+    assert result == {5: {"offset_ms": -100}}
 
 
 def test_load_edits_ignores_malformed_entries():
@@ -94,7 +94,7 @@ def test_load_edits_ignores_malformed_entries():
         path = Path(tmp)
         (path / "translation.edited.json").write_text(json.dumps(payload))
         result = load_edits(path)
-    assert result == {1: 50}
+    assert result == {1: {"offset_ms": 50}}
 
 
 def test_apply_edits_updates_segment_offset_ms():
@@ -125,7 +125,7 @@ def test_save_then_load_roundtrip():
         path = Path(tmp)
         save_edits(segs, path)
         result = load_edits(path)
-    assert result == {10: 200, 11: -50}
+    assert result == {10: {"offset_ms": 200}, 11: {"offset_ms": -50}}
 
 
 # ===========================================================================

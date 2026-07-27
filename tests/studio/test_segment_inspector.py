@@ -134,7 +134,7 @@ def test_set_segment_displays_default_speed(qapp):
 
     inspector.set_segment(seg)
 
-    assert inspector._speed_label.text() == "1.00"
+    assert inspector._speed_spin.value() == 1.00
 
 
 def test_set_segment_displays_default_volume(qapp):
@@ -143,16 +143,16 @@ def test_set_segment_displays_default_volume(qapp):
 
     inspector.set_segment(seg)
 
-    assert inspector._volume_label.text() == "100%"
+    assert inspector._volume_slider.value() == 100
+    assert inspector._volume_display.text() == "100%"
 
 
 def test_set_segment_displays_default_voice(qapp):
+    # Voice editing is out of scope (Phase C). Inspector has no voice control.
     inspector = SegmentInspectorWidget()
     seg = Segment(id=1, start=0.0, end=1.0, source_text="s", target_text="t")
-
     inspector.set_segment(seg)
-
-    assert inspector._voice_label.text() == "Default Voice"
+    assert inspector._stack.currentWidget() is inspector._detail_widget
 
 
 # ---------------------------------------------------------------------------

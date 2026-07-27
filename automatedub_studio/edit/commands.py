@@ -1,12 +1,38 @@
-"""QUndoCommand subclasses for offset editing."""
+"""QUndoCommand subclasses for segment property editing."""
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any
 
 from PySide6.QtGui import QUndoCommand
 
 from automatedub_studio.project.models import Segment
+
+
+class PropertyChangeCommand(QUndoCommand):
+    """Record a change to any named EditableSegment property."""
+
+    def __init__(
+        self,
+        segment_id: int,
+        field: str,
+        old_value: Any,
+        new_value: Any,
+        apply_cb: Callable[[int, str, Any], None],
+    ):
+        super().__init__(f"Change {field} for segment {segment_id}")
+        self._segment_id = segment_id
+        self._field = field
+        self._old = old_value
+        self._new = new_value
+        self._apply_cb = apply_cb
+
+    def undo(self) -> None:
+        self._apply_cb(self._segment_id, self._field, self._old)
+
+    def redo(self) -> None:
+        self._apply_cb(self._segment_id, self._field, self._new)
 
 
 class OffsetChangeCommand(QUndoCommand):

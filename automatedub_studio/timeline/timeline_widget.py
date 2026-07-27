@@ -89,7 +89,12 @@ class _TimelineView(QGraphicsView):
             return
         scene_pos = self.mapToScene(event.position().toPoint())
         item = self.scene().itemAt(scene_pos, self.transform())
-        if isinstance(item, ClipItem) and item.isSelected() and item.lane == 1:
+        if (
+            isinstance(item, ClipItem)
+            and item.isSelected()
+            and item.lane == 1
+            and not item.locked
+        ):
             self._drag_clip = item
             self._drag_press_scene_x = scene_pos.x()
             self._drag_start_offset_ms = item.segment.offset_ms
@@ -230,6 +235,11 @@ class TimelineWidget(QWidget):
         for clip in clips:
             # rect().x() is the fixed scene-x set at construction; pos() is the delta
             clip.setX(new_x - clip.rect().x())
+
+    def apply_locked(self, segment_id: int, locked: bool) -> None:
+        """Update locked state on all clips for a segment."""
+        for clip in self._clips_by_segment.get(segment_id, []):
+            clip.set_locked(locked)
 
     # ------------------------------------------------------------------
     # Private helpers

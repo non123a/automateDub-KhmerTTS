@@ -1,19 +1,24 @@
-"""Segment Inspector: read-only panel showing details for the selected segment."""
+"""Segment Inspector: property editor for the selected segment."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
+    QDoubleSpinBox,
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSlider,
+    QSpinBox,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
+from automatedub_studio.project.editable_project import EditableSegment
 from automatedub_studio.project.models import Segment
 
 _PLACEHOLDER = "—"
@@ -23,30 +28,36 @@ _NO_SELECTION_TEXT = "No segment selected."
 
 
 class SegmentInspectorWidget(QWidget):
-    """Inspector panel for the currently selected segment.
+    """Inspector panel that shows and edits properties of the selected segment."""
 
-    Displays segment ID, status, texts, timing, and placeholder values for
-    offset/speed/volume/voice. Three disabled buttons (Play Original, Play
-    Khmer, Compare) are shown but not yet functional.
-    """
+    speedChanged = Signal(float, float)    # (old, new)
+    volumeChanged = Signal(float, float)   # (old, new)  value is 0.0–2.0
+    fadeInChanged = Signal(int, int)       # (old_ms, new_ms)
+    fadeOutChanged = Signal(int, int)      # (old_ms, new_ms)
+    lockedChanged = Signal(bool, bool)     # (old, new)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
+        self._segment: Segment | None = None
+        self._editable: EditableSegment | None = None
+        self._live_offset_ms: int = 0
 
         self._stack = QStackedWidget()
-
         self._empty_label = QLabel(_NO_SELECTION_TEXT)
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._empty_label.setWordWrap(True)
 
         self._detail_widget = self._build_detail_widget()
-
         self._stack.addWidget(self._empty_label)
         self._stack.addWidget(self._detail_widget)
         self._stack.setCurrentWidget(self._empty_label)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._stack)
+
+    # ------------------------------------------------------------------
+    # Build UI
+    # ------------------------------------------------------------------
 
     def _build_detail_widget(self) -> QWidget:
         widget = QWidget()
@@ -62,52 +73,150 @@ class SegmentInspectorWidget(QWidget):
         self._end_label = QLabel()
         self._duration_label = QLabel()
         self._offset_label = QLabel()
-        self._speed_label = QLabel()
-        self._volume_label = QLabel()
-        self._voice_label = QLabel()
+
+        # Speed
+        self._speed_spin = QDoubleSpinBox()
+        self._speed_spin.setRange(0.50, 2.00)
+        self._speed_spin.setSingleStep(0.05)
+        self._speed_spin.setDecimals(2)
+        self._speed_spin.setValue(1.00)
+
+        # Volume
+        self._volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self._volume_slider.setRange(0, 200)
+        self._volume_slider.setValue(100)
+        self._volume_display = QLabel("100%")
+        vol_row = QWidget()
+        vol_row_layout = QHBoxLayout(vol_row)
+        vol_row_layout.setContentsMargins(0, 0, 0, 0)
+        vol_row_layout.addWidget(self._volume_slider)
+        vol_row_layout.addWidget(self._volume_display)
+
+        # Fade In / Fade Out
+        self._fade_in_spin = QSpinBox()
+        self._fade_in_spin.setRange(0, 5000)
+        self._fade_in_spin.setSuffix(" ms")
+
+        self._fade_out_spin = QSpinBox()
+        self._fade_out_spin.setRange(0, 5000)
+        self._fade_out_spin.setSuffix(" ms")
+
+        # Locked
+        self._locked_check = QCheckBox()
 
         form = QFormLayout()
         form.addRow("Segment:", self._id_label)
         form.addRow("Status:", self._status_label)
-        form.addRow("Original Text:", self._original_text_label)
-        form.addRow("Khmer Text:", self._khmer_text_label)
+        form.addRow("Original:", self._original_text_label)
+        form.addRow("Khmer:", self._khmer_text_label)
         form.addRow("Start:", self._start_label)
         form.addRow("End:", self._end_label)
         form.addRow("Duration:", self._duration_label)
         form.addRow("Offset:", self._offset_label)
-        form.addRow("Speed:", self._speed_label)
-        form.addRow("Volume:", self._volume_label)
-        form.addRow("Voice:", self._voice_label)
+        form.addRow("Speed:", self._speed_spin)
+        form.addRow("Volume:", vol_row)
+        form.addRow("Fade In:", self._fade_in_spin)
+        form.addRow("Fade Out:", self._fade_out_spin)
+        form.addRow("Locked:", self._locked_check)
 
         layout.addLayout(form)
         layout.addStretch()
 
         button_group = QGroupBox("Playback")
         button_layout = QHBoxLayout(button_group)
-
         self._play_original_button = QPushButton("Play Original")
         self._play_original_button.setEnabled(False)
         self._play_khmer_button = QPushButton("Play Khmer")
         self._play_khmer_button.setEnabled(False)
         self._compare_button = QPushButton("Compare")
         self._compare_button.setEnabled(False)
-
         button_layout.addWidget(self._play_original_button)
         button_layout.addWidget(self._play_khmer_button)
         button_layout.addWidget(self._compare_button)
-
         layout.addWidget(button_group)
 
+        self._connect_controls()
         return widget
 
-    def set_segment(self, segment: Segment | None) -> None:
-        """Update the inspector to show the given segment (or clear if None)."""
+    def _connect_controls(self) -> None:
+        self._speed_spin.valueChanged.connect(self._on_speed_changed)
+        self._volume_slider.valueChanged.connect(self._on_volume_changed)
+        self._fade_in_spin.valueChanged.connect(self._on_fade_in_changed)
+        self._fade_out_spin.valueChanged.connect(self._on_fade_out_changed)
+        self._locked_check.toggled.connect(self._on_locked_changed)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def set_segment(
+        self, segment: Segment | None, editable: EditableSegment | None = None
+    ) -> None:
         if segment is None:
+            self._segment = None
+            self._editable = None
             self._stack.setCurrentWidget(self._empty_label)
             return
 
+        self._segment = segment
+        self._editable = editable
+
+        self._load_into_controls(segment, editable)
+        self._stack.setCurrentWidget(self._detail_widget)
+
+    def refresh_offset(self, offset_ms: int) -> None:
+        if self._stack.currentWidget() != self._detail_widget:
+            return
+        self._live_offset_ms = offset_ms
+        self._offset_label.setText(self._format_offset(offset_ms))
+        self._update_status()
+
+    def refresh_property(self, field: str, value: object) -> None:
+        """Apply an external property update (undo/redo) without emitting signals."""
+        if self._stack.currentWidget() != self._detail_widget:
+            return
+        if field == "speed" and isinstance(value, float):
+            self._speed_spin.blockSignals(True)
+            self._speed_spin.setValue(value)
+            self._speed_spin.blockSignals(False)
+        elif field == "volume" and isinstance(value, float):
+            self._volume_slider.blockSignals(True)
+            self._volume_slider.setValue(round(value * 100))
+            self._volume_slider.blockSignals(False)
+            self._volume_display.setText(f"{round(value * 100)}%")
+        elif field == "fade_in_ms" and isinstance(value, int):
+            self._fade_in_spin.blockSignals(True)
+            self._fade_in_spin.setValue(value)
+            self._fade_in_spin.blockSignals(False)
+        elif field == "fade_out_ms" and isinstance(value, int):
+            self._fade_out_spin.blockSignals(True)
+            self._fade_out_spin.setValue(value)
+            self._fade_out_spin.blockSignals(False)
+        elif field == "locked" and isinstance(value, bool):
+            self._locked_check.blockSignals(True)
+            self._locked_check.setChecked(value)
+            self._locked_check.blockSignals(False)
+        self._update_status()
+
+    # ------------------------------------------------------------------
+    # Private helpers
+    # ------------------------------------------------------------------
+
+    def _load_into_controls(
+        self, segment: Segment, editable: EditableSegment | None
+    ) -> None:
+        es = editable
+        for ctrl in (
+            self._speed_spin,
+            self._volume_slider,
+            self._fade_in_spin,
+            self._fade_out_spin,
+            self._locked_check,
+        ):
+            ctrl.blockSignals(True)
+
         self._id_label.setText(str(segment.id))
-        self._status_label.setText(_STATUS_EDITED if segment.offset_ms != 0 else _STATUS_GENERATED)
+        self._live_offset_ms = segment.offset_ms
         self._original_text_label.setText(segment.source_text or _PLACEHOLDER)
         self._khmer_text_label.setText(segment.target_text)
         self._start_label.setText(f"{segment.start:.3f} s")
@@ -115,17 +224,85 @@ class SegmentInspectorWidget(QWidget):
         duration = segment.end - segment.start
         self._duration_label.setText(f"{duration:.3f} s")
         self._offset_label.setText(self._format_offset(segment.offset_ms))
-        self._speed_label.setText("1.00")
-        self._volume_label.setText("100%")
-        self._voice_label.setText("Default Voice")
 
-        self._stack.setCurrentWidget(self._detail_widget)
+        speed = es.speed if es else 1.0
+        volume = es.volume if es else 1.0
+        fade_in = es.fade_in_ms if es else 0
+        fade_out = es.fade_out_ms if es else 0
+        locked = es.locked if es else False
 
-    def refresh_offset(self, offset_ms: int) -> None:
-        """Update only the offset and status displays (for live drag updates)."""
-        if self._stack.currentWidget() == self._detail_widget:
-            self._offset_label.setText(self._format_offset(offset_ms))
-            self._status_label.setText(_STATUS_EDITED if offset_ms != 0 else _STATUS_GENERATED)
+        self._speed_spin.setValue(speed)
+        vol_int = round(volume * 100)
+        self._volume_slider.setValue(vol_int)
+        self._volume_display.setText(f"{vol_int}%")
+        self._fade_in_spin.setValue(fade_in)
+        self._fade_out_spin.setValue(fade_out)
+        self._locked_check.setChecked(locked)
+
+        for ctrl in (
+            self._speed_spin,
+            self._volume_slider,
+            self._fade_in_spin,
+            self._fade_out_spin,
+            self._locked_check,
+        ):
+            ctrl.blockSignals(False)
+
+        self._update_status()
+
+    def _update_status(self) -> None:
+        offset_mod = self._live_offset_ms != 0
+        editable_mod = self._editable is not None and self._editable.is_modified
+        controls_mod = (
+            self._speed_spin.value() != 1.0
+            or self._volume_slider.value() != 100
+            or self._fade_in_spin.value() != 0
+            or self._fade_out_spin.value() != 0
+            or self._locked_check.isChecked()
+        )
+        is_edited = offset_mod or editable_mod or controls_mod
+        self._status_label.setText(_STATUS_EDITED if is_edited else _STATUS_GENERATED)
+
+    # ------------------------------------------------------------------
+    # Control signal handlers
+    # ------------------------------------------------------------------
+
+    def _on_speed_changed(self, new_val: float) -> None:
+        old_val = self._editable.speed if self._editable else 1.0
+        if abs(new_val - old_val) < 1e-9:
+            return
+        self.speedChanged.emit(old_val, new_val)
+        self._update_status()
+
+    def _on_volume_changed(self, slider_val: int) -> None:
+        self._volume_display.setText(f"{slider_val}%")
+        new_vol = slider_val / 100.0
+        old_vol = self._editable.volume if self._editable else 1.0
+        if abs(new_vol - old_vol) < 1e-9:
+            return
+        self.volumeChanged.emit(old_vol, new_vol)
+        self._update_status()
+
+    def _on_fade_in_changed(self, new_val: int) -> None:
+        old_val = self._editable.fade_in_ms if self._editable else 0
+        if new_val == old_val:
+            return
+        self.fadeInChanged.emit(old_val, new_val)
+        self._update_status()
+
+    def _on_fade_out_changed(self, new_val: int) -> None:
+        old_val = self._editable.fade_out_ms if self._editable else 0
+        if new_val == old_val:
+            return
+        self.fadeOutChanged.emit(old_val, new_val)
+        self._update_status()
+
+    def _on_locked_changed(self, new_val: bool) -> None:
+        old_val = self._editable.locked if self._editable else False
+        if new_val == old_val:
+            return
+        self.lockedChanged.emit(old_val, new_val)
+        self._update_status()
 
     @staticmethod
     def _format_offset(offset_ms: int) -> str:

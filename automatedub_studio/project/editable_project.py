@@ -24,4 +24,11 @@ class EditableSegment:
 
     @property
     def is_modified(self) -> bool:
-        return self.offset_ms != 0
+        return (
+            self.offset_ms != 0
+            or self.speed != 1.0
+            or self.volume != 1.0
+            or self.fade_in_ms != 0
+            or self.fade_out_ms != 0
+            or self.locked
+        )

@@ -62,7 +62,8 @@ AutomateDub Studio (PySide6 desktop GUI):
 - Studio Milestone 4 — TimelineWidget (two-lane QGraphicsScene/QGraphicsView, ClipItem selection, Ctrl+Wheel zoom, playhead tracking).
 - Studio Milestone 5 — SegmentInspectorWidget dock (empty state, full segment details, placeholder controls). Complete.
 - Studio Milestone 6 — Editable clip timing. `Segment.offset_ms` mutable field; horizontal drag in `_TimelineView`; both lanes reposition together via `apply_offset`; live inspector offset display (`+250 ms` / `-120 ms`); `File → Save Project` writes `translation.edited.json` (modified segments only); `apply_edits` auto-loads offsets on project open; `QUndoStack` with `OffsetChangeCommand` for Ctrl+Z/Ctrl+Y. Complete. 250 tests passing.
-- Next Studio milestone: Milestone 7 (TBD).
+- Studio Milestone 7 — Inspector property editor. `EditableSegment` gains `speed`, `volume`, `fade_in_ms`, `fade_out_ms`, `locked` fields with `is_modified` covering all of them. `SegmentInspectorWidget` exposes editable Speed (`QDoubleSpinBox` 0.50-2.00), Volume (`QSlider` 0-200 with "%" display), Fade In/Out (`QSpinBox` 0-5000ms), and Locked (`QCheckBox`), each emitting an (old, new) signal; `refresh_property` applies external updates (undo/redo) without re-emitting. `edits.py` save/load/apply extended to persist only non-default fields per segment (metadata-only, no AI/regeneration). `PropertyChangeCommand` is a generic `QUndoCommand` for all new fields, pushed onto the same `QUndoStack` as offset edits. `ClipItem.set_locked` swaps clip color to `LOCKED_COLOR` and shows a lock icon; `TimelineWidget.apply_locked` drives it per segment; locked clips are excluded from the drag-start condition in `mousePressEvent`. Complete. 305 tests passing, ruff clean.
+- Next Studio milestone: Milestone 8 (TBD).
 
 Test findings:
 
