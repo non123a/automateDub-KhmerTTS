@@ -18,7 +18,9 @@ from automatedub.vertical_slice.paths import (
     TRANSLATION_FILENAME,
     TTS_DIRECTORY_NAME,
     audio_output_path,
+    mixed_audio_output_path,
     translation_output_path,
+    tts_combined_output_path,
     tts_output_dir_path,
 )
 from automatedub_studio.project.models import Project, Segment
@@ -110,12 +112,21 @@ def load_project(project_dir: Path) -> Project:
     tts_file_count = count_tts_files(tts_directory)
     video_path = find_video_path(project_dir)
 
+    mixed_audio_path = mixed_audio_output_path(project_dir)
+    if not mixed_audio_path.is_file():
+        mixed_audio_path = None
+    tts_combined_path = tts_combined_output_path(project_dir)
+    if not tts_combined_path.is_file():
+        tts_combined_path = None
+
     return Project(
         project_path=project_dir,
         audio_path=audio_path,
         translation_path=translation_path,
         tts_directory=tts_directory,
         video_path=video_path,
+        mixed_audio_path=mixed_audio_path,
+        tts_combined_path=tts_combined_path,
         segments=segments,
         tts_file_count=tts_file_count,
     )

@@ -52,6 +52,14 @@ class VideoPlayerWidget(QWidget):
     playbackStatusChanged = Signal(str)
     videoPositionChanged = Signal(int)  # milliseconds, forwarded from QMediaPlayer
 
+    # Emitted (in addition to the widget's own play/pause/stop/seek handling)
+    # whenever a transport control is used, so a PlaybackController can keep
+    # a companion audio source in sync regardless of who triggered playback.
+    playRequested = Signal()
+    pauseRequested = Signal()
+    stopRequested = Signal()
+    seekRequested = Signal(int)  # milliseconds
+
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
 
@@ -135,14 +143,40 @@ class VideoPlayerWidget(QWidget):
     def play(self) -> None:
         if self._has_video:
             self._media_player.play()
+        self.playRequested.emit()
 
     def pause(self) -> None:
         if self._has_video:
             self._media_player.pause()
+        self.pauseRequested.emit()
 
     def stop(self) -> None:
         if self._has_video:
             self._media_player.stop()
+        self.stopRequested.emit()
+
+    def seek(self, position_ms: int) -> None:
+        """Move the master clock. A companion `PlaybackController` reacts to
+        `seekRequested` to keep audio in sync."""
+        if self._has_video:
+            self._media_player.setPosition(position_ms)
+        self.seekRequested.emit(position_ms)
+
+    def set_audio_muted(self, muted: bool) -> None:
+        """Mute/unmute the video's own embedded audio track.
+
+        Used by `PlaybackController` to silence the embedded audio whenever
+        a separate audio source (Mixed/Khmer/Timeline Preview) is active.
+        """
+        self._audio_output.setMuted(muted)
+
+    @property
+    def is_playing(self) -> bool:
+        return self._media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+
+    @property
+    def position_ms(self) -> int:
+        return self._media_player.position()
 
     def _show_message(self, message: str) -> None:
         self._message_label.setText(message)
@@ -160,9 +194,11 @@ class VideoPlayerWidget(QWidget):
     def _on_slider_released(self) -> None:
         self._slider_pressed = False
         self._media_player.setPosition(self._seek_slider.value())
+        self.seekRequested.emit(self._seek_slider.value())
 
     def _on_slider_moved(self, position: int) -> None:
         self._media_player.setPosition(position)
+        self.seekRequested.emit(position)
         self._update_time_label(position, self._media_player.duration())
 
     def _on_position_changed(self, position: int) -> None:

@@ -8,17 +8,27 @@ from typing import Any
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QUndoStack
 from PySide6.QtWidgets import (
+    QComboBox,
     QDockWidget,
     QFileDialog,
+    QHBoxLayout,
+    QLabel,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
     QSplitter,
     QToolBar,
+    QVBoxLayout,
+    QWidget,
 )
 
 from automatedub.config import ToolConfig, load_tool_config
-from automatedub_studio.backend.export_service import ExportOptions
+from automatedub.vertical_slice.tts import tts_segment_output_path
+from automatedub_studio.backend.export_service import (
+    ExportError,
+    ExportOptions,
+    build_export_speech_tracks,
+)
 from automatedub_studio.backend.export_worker import ExportJob, ExportRunner
 from automatedub_studio.backend.jobs import JobRunner, RegenerationJob
 from automatedub_studio.backend.regeneration_service import (
@@ -30,6 +40,7 @@ from automatedub_studio.backend.regeneration_service import (
 )
 from automatedub_studio.edit.commands import OffsetChangeCommand, PropertyChangeCommand
 from automatedub_studio.inspector.segment_inspector import SegmentInspectorWidget
+from automatedub_studio.playback.playback_controller import PlaybackController, PlaybackMode
 from automatedub_studio.playback.video_player import VideoPlayerWidget
 from automatedub_studio.project.editable_project import EditableSegment
 from automatedub_studio.project.edits import apply_edits, save_edits
@@ -148,10 +159,34 @@ class MainWindow(QMainWindow):
     def _build_central_widget(self) -> None:
         self.video_player = VideoPlayerWidget()
         self.video_player.playbackStatusChanged.connect(self.statusBar().showMessage)
+        self.playback_controller = PlaybackController(self.video_player, self)
+
+        self.mode_selector = QComboBox()
+        for mode, label in (
+            (PlaybackMode.ORIGINAL, "Original"),
+            (PlaybackMode.MIXED, "Mixed"),
+            (PlaybackMode.KHMER_TTS, "Khmer TTS"),
+            (PlaybackMode.TIMELINE_PREVIEW, "Timeline Preview"),
+        ):
+            self.mode_selector.addItem(label, mode)
+        self.mode_selector.currentIndexChanged.connect(self._on_mode_selector_changed)
+
+        mode_bar = QWidget()
+        mode_bar_layout = QHBoxLayout(mode_bar)
+        mode_bar_layout.setContentsMargins(4, 4, 4, 4)
+        mode_bar_layout.addWidget(QLabel("Audio:"))
+        mode_bar_layout.addWidget(self.mode_selector)
+        mode_bar_layout.addStretch(1)
 
         self.timeline = TimelineWidget()
+        video_container = QWidget()
+        video_layout = QVBoxLayout(video_container)
+        video_layout.setContentsMargins(0, 0, 0, 0)
+        video_layout.addWidget(mode_bar)
+        video_layout.addWidget(self.video_player, 1)
+
         splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.addWidget(self.video_player)
+        splitter.addWidget(video_container)
         splitter.addWidget(self.timeline)
         splitter.setStretchFactor(0, 2)
         splitter.setStretchFactor(1, 1)
@@ -160,6 +195,7 @@ class MainWindow(QMainWindow):
         self.timeline.segmentSelected.connect(self._on_segment_selected)
         self.timeline.segmentOffsetChanged.connect(self._on_offset_live)
         self.timeline.segmentOffsetCommitted.connect(self._on_offset_committed)
+        self.timeline.clipPlayRequested.connect(self._on_clip_play_requested)
 
         self.setCentralWidget(splitter)
 
@@ -193,6 +229,19 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Signal handlers — timeline
     # ------------------------------------------------------------------
+
+    def _on_mode_selector_changed(self, index: int) -> None:
+        mode = self.mode_selector.itemData(index)
+        if mode is not None:
+            self.playback_controller.set_mode(mode)
+
+    def _on_clip_play_requested(self, segment_id: int) -> None:
+        """Timeline double-click: audition a single TTS clip in isolation."""
+        if self.project is None:
+            return
+        clip_path = tts_segment_output_path(self.project.tts_directory, segment_id)
+        if clip_path.exists():
+            self.playback_controller.play_clip(clip_path)
 
     def _on_segment_selected(self, segment) -> None:
         editable = self._editables.get(segment.id) if segment else None
@@ -250,6 +299,7 @@ class MainWindow(QMainWindow):
         seg = self.timeline.selected_segment
         if seg is not None and seg.id == segment_id:
             self.inspector.refresh_offset(offset_ms)
+        self._refresh_playback_sources()
 
     def _apply_property(self, segment_id: int, field: str, value: Any) -> None:
         es = self._editables.setdefault(segment_id, EditableSegment(id=segment_id))
@@ -260,6 +310,7 @@ class MainWindow(QMainWindow):
         seg = self.timeline.selected_segment
         if seg is not None and seg.id == segment_id:
             self.inspector.refresh_property(field, value)
+        self._refresh_playback_sources()
 
     # ------------------------------------------------------------------
     # Project operations
@@ -417,6 +468,7 @@ class MainWindow(QMainWindow):
             )
 
         self._update_regenerate_actions()
+        self._refresh_playback_sources()
 
     def _show_about_dialog(self) -> None:
         dialog = AboutDialog(self)
@@ -457,6 +509,30 @@ class MainWindow(QMainWindow):
         self.inspector.set_segment(None)
         self.statusBar().showMessage(self._status_message(project))
         self._update_regenerate_actions()
+        self._refresh_playback_sources()
+
+    def _refresh_playback_sources(self) -> None:
+        """Recompute Timeline Preview tracks and mixed/Khmer sources.
+
+        Called after loading a project and after any edit (offset/speed/
+        volume/fade/regeneration) so Timeline Preview always reflects the
+        current `EditableSegment` state without ever re-mixing or exporting.
+        """
+        if self.project is None:
+            self.playback_controller.set_sources(None, None, [])
+            return
+        try:
+            timeline_tracks = build_export_speech_tracks(
+                self.project.segments,
+                self._editables,
+                self.project.tts_directory,
+                self._tool_config,
+            )
+        except ExportError:
+            timeline_tracks = []
+        self.playback_controller.set_sources(
+            self.project.mixed_audio_path, self.project.tts_combined_path, timeline_tracks
+        )
 
     def _save_project(self) -> None:
         if self.project is None:

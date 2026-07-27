@@ -66,6 +66,7 @@ class _TimelineView(QGraphicsView):
     zoomRequested = Signal(float)
     clipDragMoved = Signal(int, int)      # (segment_id, live_offset_ms)
     clipDragEnded = Signal(int, int, int) # (segment_id, old_offset_ms, new_offset_ms)
+    clipPlayRequested = Signal(int)       # segment_id, from double-clicking a clip
 
     def __init__(self):
         super().__init__()
@@ -99,6 +100,15 @@ class _TimelineView(QGraphicsView):
             self._drag_press_scene_x = scene_pos.x()
             self._drag_start_offset_ms = item.segment.offset_ms
             self._dragging = False
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        super().mouseDoubleClickEvent(event)
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        scene_pos = self.mapToScene(event.position().toPoint())
+        item = self.scene().itemAt(scene_pos, self.transform())
+        if isinstance(item, ClipItem) and item.lane == 1:
+            self.clipPlayRequested.emit(item.segment.id)
 
     def mouseMoveEvent(self, event) -> None:
         if self._drag_clip is not None and event.buttons() & Qt.MouseButton.LeftButton:
@@ -167,6 +177,7 @@ class TimelineWidget(QWidget):
     segmentSelected = Signal(object)  # emits Segment | None
     segmentOffsetChanged = Signal(int, int)   # (segment_id, offset_ms) live during drag
     segmentOffsetCommitted = Signal(int, int, int)  # (segment_id, old_ms, new_ms) on drag end
+    clipPlayRequested = Signal(int)  # segment_id, from double-clicking a clip
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -185,6 +196,7 @@ class TimelineWidget(QWidget):
         self._view.zoomRequested.connect(self._apply_zoom)
         self._view.clipDragMoved.connect(self._on_clip_drag_moved)
         self._view.clipDragEnded.connect(self._on_clip_drag_ended)
+        self._view.clipPlayRequested.connect(self.clipPlayRequested.emit)
         self._view.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
         layout = QHBoxLayout(self)

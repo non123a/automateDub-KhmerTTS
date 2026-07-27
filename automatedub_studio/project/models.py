@@ -29,6 +29,8 @@ class Project:
     translation_path: Path
     tts_directory: Path
     video_path: Path | None = None
+    mixed_audio_path: Path | None = None
+    tts_combined_path: Path | None = None
     segments: list[Segment] = field(default_factory=list)
     tts_file_count: int = 0
 

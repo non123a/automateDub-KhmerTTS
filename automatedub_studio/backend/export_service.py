@@ -67,7 +67,10 @@ def build_export_speech_tracks(
             raise ExportError(f"segment {segment.id}: {exc}") from exc
 
         es = editables.get(segment.id)
-        offset_extra = es.offset_ms if es is not None else 0
+        # offset_ms is tracked on both Segment (timeline drag/undo flow) and
+        # EditableSegment (regeneration/property-edit flow) — sum both since
+        # each writer only ever touches its own field.
+        offset_extra = segment.offset_ms + (es.offset_ms if es is not None else 0)
         speed = es.speed if es is not None else 1.0
         volume = es.volume if es is not None else 1.0
         fade_in_ms = es.fade_in_ms if es is not None else 0
