@@ -24,6 +24,10 @@ from automatedub_studio.project.models import Project, Segment
 
 VIDEO_FILENAME = "video.mp4"
 
+# Common source video filenames the CLI or a user might place alongside the
+# rest of the output/ artifacts. Checked in order; the first match wins.
+VIDEO_CANDIDATE_FILENAMES = ("video.mp4", "movie.mp4", "input.mp4")
+
 
 class ProjectLoadError(Exception):
     """Raised when a directory cannot be opened as a Studio project."""
@@ -70,8 +74,11 @@ def count_tts_files(tts_dir: Path) -> int:
 
 
 def find_video_path(project_dir: Path) -> Path | None:
-    video_path = project_dir / VIDEO_FILENAME
-    return video_path if video_path.is_file() else None
+    for filename in VIDEO_CANDIDATE_FILENAMES:
+        video_path = project_dir / filename
+        if video_path.is_file():
+            return video_path
+    return None
 
 
 def load_project(project_dir: Path) -> Project:

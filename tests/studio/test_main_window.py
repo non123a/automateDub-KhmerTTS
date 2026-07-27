@@ -151,3 +151,50 @@ def test_open_project_path_invalid_project_shows_message_and_does_not_crash(
     assert window.project is None
     assert window.statusBar().currentMessage() == "Ready"
     assert window.windowTitle() == WINDOW_TITLE
+
+
+# ---------------------------------------------------------------------------
+# Milestone 3: Video player integration
+# ---------------------------------------------------------------------------
+
+
+def test_main_window_has_video_player(qapp):
+    from automatedub_studio.playback.video_player import VideoPlayerWidget
+
+    window = MainWindow(settings=_memory_settings())
+    assert isinstance(window.video_player, VideoPlayerWidget)
+
+
+def test_main_window_video_player_is_central_widget(qapp):
+    window = MainWindow(settings=_memory_settings())
+    assert window.centralWidget() is window.video_player
+
+
+def test_open_project_no_video_disables_player_controls(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, with_video=False)
+    window = MainWindow(settings=_memory_settings())
+
+    window.open_project_path(project_dir)
+
+    assert window.video_player._has_video is False
+    assert not window.video_player._play_button.isEnabled()
+
+
+def test_open_project_with_video_enables_player_controls(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, with_video=True)
+    window = MainWindow(settings=_memory_settings())
+
+    window.open_project_path(project_dir)
+
+    assert window.video_player._has_video is True
+    assert window.video_player._play_button.isEnabled()
+
+
+def test_open_project_with_video_switches_to_video_surface(qapp, tmp_path):
+
+    project_dir = make_valid_project(tmp_path, with_video=True)
+    window = MainWindow(settings=_memory_settings())
+
+    window.open_project_path(project_dir)
+
+    assert window.video_player._stack.currentWidget() is window.video_player._video_widget

@@ -8,6 +8,7 @@ from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMessageBox
 
+from automatedub_studio.playback.video_player import VideoPlayerWidget
 from automatedub_studio.project.loader import ProjectLoadError, load_project
 from automatedub_studio.project.models import Project
 from automatedub_studio.ui.about_dialog import AboutDialog
@@ -26,6 +27,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(WINDOW_TITLE)
         self._build_menu_bar()
         self._build_status_bar()
+        self._build_central_widget()
         self._build_info_dock()
         self._restore_geometry()
 
@@ -52,6 +54,11 @@ class MainWindow(QMainWindow):
 
     def _build_status_bar(self) -> None:
         self.statusBar().showMessage("Ready")
+
+    def _build_central_widget(self) -> None:
+        self.video_player = VideoPlayerWidget()
+        self.video_player.playbackStatusChanged.connect(self.statusBar().showMessage)
+        self.setCentralWidget(self.video_player)
 
     def _build_info_dock(self) -> None:
         self.info_panel = ProjectInfoPanel()
@@ -87,6 +94,7 @@ class MainWindow(QMainWindow):
         self.project = project
         self.setWindowTitle(f"{WINDOW_TITLE} - {project.project_path.name}")
         self.info_panel.set_project(project)
+        self.video_player.load_video(project.video_path)
         self.statusBar().showMessage(self._status_message(project))
 
     @staticmethod
