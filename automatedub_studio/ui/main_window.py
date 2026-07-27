@@ -7,15 +7,37 @@ from typing import Any
 
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QUndoStack
-from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMessageBox, QSplitter
+from PySide6.QtWidgets import (
+    QDockWidget,
+    QFileDialog,
+    QMainWindow,
+    QMessageBox,
+    QProgressDialog,
+    QSplitter,
+    QToolBar,
+)
 
+from automatedub.config import ToolConfig, load_tool_config
+from automatedub_studio.backend.jobs import JobRunner, RegenerationJob
+from automatedub_studio.backend.regeneration_service import (
+    RegenerationOutcome,
+    select_all_ids,
+    select_changed_ids,
+    select_failed_ids,
+    select_selected_ids,
+)
 from automatedub_studio.edit.commands import OffsetChangeCommand, PropertyChangeCommand
 from automatedub_studio.inspector.segment_inspector import SegmentInspectorWidget
 from automatedub_studio.playback.video_player import VideoPlayerWidget
 from automatedub_studio.project.editable_project import EditableSegment
 from automatedub_studio.project.edits import apply_edits, save_edits
-from automatedub_studio.project.loader import ProjectLoadError, load_project
+from automatedub_studio.project.loader import ProjectLoadError, count_tts_files, load_project
 from automatedub_studio.project.models import Project
+from automatedub_studio.timeline.clip_item import (
+    STATUS_FAILED,
+    STATUS_GENERATING,
+    STATUS_NEEDS_REGENERATION,
+)
 from automatedub_studio.timeline.timeline_widget import TimelineWidget
 from automatedub_studio.ui.about_dialog import AboutDialog
 from automatedub_studio.ui.project_info_panel import ProjectInfoPanel
@@ -25,20 +47,33 @@ _GEOMETRY_KEY = "main_window/geometry"
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, settings: QSettings | None = None, parent=None):
+    def __init__(
+        self,
+        settings: QSettings | None = None,
+        parent=None,
+        tool_config: ToolConfig | None = None,
+    ):
         super().__init__(parent)
         self._settings = settings if settings is not None else QSettings()
         self.project: Project | None = None
         self._editables: dict[int, EditableSegment] = {}
         self._undo_stack = QUndoStack(self)
+        self._tool_config = tool_config if tool_config is not None else load_tool_config()
+        self._job_runner = JobRunner()
+        self._progress_dialog: QProgressDialog | None = None
+        self._regen_completed = 0
+        self._regen_total = 0
+        self._regen_errors: list[str] = []
 
         self.setWindowTitle(WINDOW_TITLE)
         self._build_menu_bar()
+        self._build_toolbar()
         self._build_status_bar()
         self._build_central_widget()
         self._build_info_dock()
         self._build_inspector_dock()
         self._restore_geometry()
+        self._update_regenerate_actions()
 
     def _build_menu_bar(self) -> None:
         menu_bar = self.menuBar()
@@ -73,6 +108,27 @@ class MainWindow(QMainWindow):
         self.about_action = QAction("About", self)
         self.about_action.triggered.connect(self._show_about_dialog)
         help_menu.addAction(self.about_action)
+
+    def _build_toolbar(self) -> None:
+        toolbar = QToolBar("Regenerate", self)
+        toolbar.setObjectName("regenerate_toolbar")
+        self.addToolBar(toolbar)
+
+        self.regenerate_selected_action = QAction("Regenerate Selected", self)
+        self.regenerate_selected_action.triggered.connect(self._regenerate_selected)
+        toolbar.addAction(self.regenerate_selected_action)
+
+        self.regenerate_changed_action = QAction("Regenerate Changed", self)
+        self.regenerate_changed_action.triggered.connect(self._regenerate_selected_changed)
+        toolbar.addAction(self.regenerate_changed_action)
+
+        self.regenerate_failed_action = QAction("Regenerate Failed", self)
+        self.regenerate_failed_action.triggered.connect(self._regenerate_failed)
+        toolbar.addAction(self.regenerate_failed_action)
+
+        self.regenerate_all_action = QAction("Regenerate All", self)
+        self.regenerate_all_action.triggered.connect(self._regenerate_all)
+        toolbar.addAction(self.regenerate_all_action)
 
     def _build_status_bar(self) -> None:
         self.statusBar().showMessage("Ready")
@@ -112,6 +168,7 @@ class MainWindow(QMainWindow):
         self.inspector.fadeInChanged.connect(self._on_fade_in_changed)
         self.inspector.fadeOutChanged.connect(self._on_fade_out_changed)
         self.inspector.lockedChanged.connect(self._on_locked_changed)
+        self.inspector.regenerateRequested.connect(self._regenerate_ids)
 
         dock = QDockWidget("Segment Inspector", self)
         dock.setWidget(self.inspector)
@@ -128,6 +185,7 @@ class MainWindow(QMainWindow):
     def _on_segment_selected(self, segment) -> None:
         editable = self._editables.get(segment.id) if segment else None
         self.inspector.set_segment(segment, editable)
+        self._update_regenerate_actions()
 
     def _on_offset_live(self, _segment_id: int, offset_ms: int) -> None:
         self.inspector.refresh_offset(offset_ms)
@@ -186,6 +244,7 @@ class MainWindow(QMainWindow):
         setattr(es, field, value)
         if field == "locked":
             self.timeline.apply_locked(segment_id, value)
+            self._update_regenerate_actions()
         seg = self.timeline.selected_segment
         if seg is not None and seg.id == segment_id:
             self.inspector.refresh_property(field, value)
@@ -201,6 +260,151 @@ class MainWindow(QMainWindow):
             if seg.id == segment_id:
                 return seg
         return None
+
+    # ------------------------------------------------------------------
+    # Regenerate actions
+    # ------------------------------------------------------------------
+
+    def _update_regenerate_actions(self) -> None:
+        has_project = self.project is not None
+        busy = self._job_runner.is_running
+        selected_ids = self._selected_segment_ids()
+        changed_ids = (
+            select_changed_ids(self.project.segments, self._editables) if has_project else []
+        )
+        failed_ids = (
+            select_failed_ids(self.project.segments, self._editables) if has_project else []
+        )
+        all_ids = select_all_ids(self.project.segments, self._editables) if has_project else []
+
+        self.regenerate_selected_action.setEnabled(not busy and bool(selected_ids))
+        self.regenerate_changed_action.setEnabled(not busy and bool(changed_ids))
+        self.regenerate_failed_action.setEnabled(not busy and bool(failed_ids))
+        self.regenerate_all_action.setEnabled(not busy and bool(all_ids))
+
+    def _selected_segment_ids(self) -> list[int]:
+        seg = self.timeline.selected_segment
+        if seg is None:
+            return []
+        return select_selected_ids([seg.id], self._editables)
+
+    def _regenerate_selected(self) -> None:
+        self._start_regeneration(self._selected_segment_ids())
+
+    def _regenerate_selected_changed(self) -> None:
+        if self.project is None:
+            return
+        self._start_regeneration(select_changed_ids(self.project.segments, self._editables))
+
+    def _regenerate_failed(self) -> None:
+        if self.project is None:
+            return
+        self._start_regeneration(select_failed_ids(self.project.segments, self._editables))
+
+    def _regenerate_all(self) -> None:
+        if self.project is None:
+            return
+        ids = select_all_ids(self.project.segments, self._editables)
+        if not ids:
+            return
+        confirm = QMessageBox.question(
+            self,
+            "Regenerate All",
+            f"Regenerate all {len(ids)} segment(s)? This will call the TTS provider "
+            "for every unlocked segment in the project.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if confirm != QMessageBox.StandardButton.Yes:
+            return
+        self._start_regeneration(ids)
+
+    def _regenerate_ids(self, *segment_ids: int) -> None:
+        self._start_regeneration(list(segment_ids))
+
+    def _start_regeneration(self, segment_ids: list[int]) -> None:
+        if self.project is None or not segment_ids or self._job_runner.is_running:
+            return
+
+        for seg_id in segment_ids:
+            self.timeline.apply_status(seg_id, STATUS_GENERATING)
+
+        self._regen_completed = 0
+        self._regen_total = len(segment_ids)
+        self._regen_errors = []
+
+        self._progress_dialog = QProgressDialog(
+            "Regenerating segment...", "Cancel", 0, self._regen_total, self
+        )
+        self._progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self._progress_dialog.canceled.connect(self._cancel_regeneration)
+        self._progress_dialog.setValue(0)
+
+        job = RegenerationJob(
+            self.project.segments,
+            self._editables,
+            self.project.tts_directory,
+            self._tool_config,
+            segment_ids,
+        )
+        job.signals.started.connect(self._on_regen_started)
+        job.signals.resultReady.connect(self._on_regen_result)
+        job.signals.finished.connect(self._on_regen_finished)
+        self._job_runner.submit(job)
+        self._update_regenerate_actions()
+
+    def _cancel_regeneration(self) -> None:
+        self._job_runner.cancel()
+
+    def _on_regen_started(self, segment_id: int) -> None:
+        if self._progress_dialog is not None:
+            remaining = self._regen_total - self._regen_completed
+            self._progress_dialog.setLabelText(
+                f"Regenerating segment {segment_id}...  "
+                f"Completed: {self._regen_completed}  Remaining: {remaining}"
+            )
+        seg = self.timeline.selected_segment
+        if seg is not None and seg.id == segment_id:
+            self.inspector.set_generating(True)
+
+    def _on_regen_result(self, outcome: RegenerationOutcome) -> None:
+        es = self._editables.setdefault(outcome.segment_id, EditableSegment(id=outcome.segment_id))
+        if outcome.success:
+            es.needs_regeneration = False
+            es.last_error = None
+            es.generated_duration = outcome.duration_seconds
+            self.timeline.apply_status(outcome.segment_id, None)
+        else:
+            es.last_error = outcome.error
+            self._regen_errors.append(f"Segment {outcome.segment_id}: {outcome.error}")
+            self.timeline.apply_status(outcome.segment_id, STATUS_FAILED)
+
+        self._regen_completed += 1
+        if self._progress_dialog is not None:
+            self._progress_dialog.setValue(self._regen_completed)
+
+        seg = self.timeline.selected_segment
+        if seg is not None and seg.id == outcome.segment_id:
+            self.inspector.set_generating(False)
+            self.inspector.refresh_status()
+
+    def _on_regen_finished(self, outcomes: list[RegenerationOutcome]) -> None:
+        if self._progress_dialog is not None:
+            self._progress_dialog.close()
+            self._progress_dialog = None
+
+        if self.project is not None:
+            self.project.tts_file_count = count_tts_files(self.project.tts_directory)
+            self.statusBar().showMessage(self._status_message(self.project))
+
+        if self._regen_errors:
+            QMessageBox.warning(
+                self,
+                "Regeneration Errors",
+                f"{len(self._regen_errors)} segment(s) failed:\n"
+                + "\n".join(self._regen_errors),
+            )
+
+        self._update_regenerate_actions()
 
     def _show_about_dialog(self) -> None:
         dialog = AboutDialog(self)
@@ -233,8 +437,13 @@ class MainWindow(QMainWindow):
         for seg_id, es in self._editables.items():
             if es.locked:
                 self.timeline.apply_locked(seg_id, True)
+            elif es.last_error is not None:
+                self.timeline.apply_status(seg_id, STATUS_FAILED)
+            elif es.needs_regeneration:
+                self.timeline.apply_status(seg_id, STATUS_NEEDS_REGENERATION)
         self.inspector.set_segment(None)
         self.statusBar().showMessage(self._status_message(project))
+        self._update_regenerate_actions()
 
     def _save_project(self) -> None:
         if self.project is None:

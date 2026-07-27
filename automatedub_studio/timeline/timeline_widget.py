@@ -241,6 +241,11 @@ class TimelineWidget(QWidget):
         for clip in self._clips_by_segment.get(segment_id, []):
             clip.set_locked(locked)
 
+    def apply_status(self, segment_id: int, status: str | None) -> None:
+        """Update the regeneration status badge on all clips for a segment."""
+        for clip in self._clips_by_segment.get(segment_id, []):
+            clip.set_status(status)
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------

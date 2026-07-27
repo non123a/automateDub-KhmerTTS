@@ -20,6 +20,21 @@ NORMAL_PEN_WIDTH = 1
 
 CLIP_CORNER_RADIUS = 3.0
 
+STATUS_GENERATING = "generating"
+STATUS_FAILED = "failed"
+STATUS_NEEDS_REGENERATION = "needs_regeneration"
+
+STATUS_COLORS = {
+    STATUS_GENERATING: QColor("#D9B84D"),
+    STATUS_FAILED: QColor("#D9534F"),
+    STATUS_NEEDS_REGENERATION: QColor("#B06E3A"),
+}
+STATUS_ICONS = {
+    STATUS_GENERATING: "⏳",  # hourglass
+    STATUS_FAILED: "⚠",  # warning sign
+    STATUS_NEEDS_REGENERATION: "↻",  # clockwise arrow
+}
+
 
 class ClipItem(QGraphicsRectItem):
     """A single segment rectangle on the timeline."""
@@ -37,6 +52,7 @@ class ClipItem(QGraphicsRectItem):
         self.segment = segment
         self.lane = lane
         self.locked = False
+        self.status: str | None = None
 
         if lane == 1:
             self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable)
@@ -53,14 +69,41 @@ class ClipItem(QGraphicsRectItem):
 
     def set_locked(self, locked: bool) -> None:
         self.locked = locked
-        base_color = LOCKED_COLOR if locked else LANE_COLORS.get(self.lane, QColor("#888888"))
-        self.setBrush(QBrush(base_color))
-        if locked and self._lock_label is None:
-            self._lock_label = QGraphicsTextItem("\U0001f512", self)
-            self._lock_label.setDefaultTextColor(Qt.GlobalColor.white)
-            r = self.rect()
-            self._lock_label.setPos(r.x() + r.width() - 18, r.y() + 2)
-        elif not locked and self._lock_label is not None:
+        self._refresh_visuals()
+
+    def set_status(self, status: str | None) -> None:
+        """status is one of STATUS_GENERATING/STATUS_FAILED/STATUS_NEEDS_REGENERATION or None."""
+        self.status = status
+        self._refresh_visuals()
+
+    def _refresh_visuals(self) -> None:
+        # Precedence: Generating > Locked > Failed/Needs Regeneration > lane default.
+        if self.status == STATUS_GENERATING:
+            color = STATUS_COLORS[STATUS_GENERATING]
+            icon = STATUS_ICONS[STATUS_GENERATING]
+        elif self.locked:
+            color = LOCKED_COLOR
+            icon = "\U0001f512"
+        elif self.status in (STATUS_FAILED, STATUS_NEEDS_REGENERATION):
+            color = STATUS_COLORS[self.status]
+            icon = STATUS_ICONS[self.status]
+        else:
+            color = LANE_COLORS.get(self.lane, QColor("#888888"))
+            icon = None
+
+        self.setBrush(QBrush(color))
+        self._set_badge_icon(icon)
+
+    def _set_badge_icon(self, icon: str | None) -> None:
+        if icon is not None:
+            if self._lock_label is None:
+                self._lock_label = QGraphicsTextItem(icon, self)
+                self._lock_label.setDefaultTextColor(Qt.GlobalColor.white)
+                r = self.rect()
+                self._lock_label.setPos(r.x() + r.width() - 18, r.y() + 2)
+            else:
+                self._lock_label.setPlainText(icon)
+        elif self._lock_label is not None:
             self._lock_label.setParentItem(None)
             self._lock_label = None
 

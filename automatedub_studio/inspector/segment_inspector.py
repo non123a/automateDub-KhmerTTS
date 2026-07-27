@@ -24,6 +24,9 @@ from automatedub_studio.project.models import Segment
 _PLACEHOLDER = "—"
 _STATUS_GENERATED = "Generated"
 _STATUS_EDITED = "Edited"
+_STATUS_GENERATING = "Generating"
+_STATUS_FAILED = "Failed"
+_STATUS_NEEDS_REGENERATION = "Needs Regeneration"
 _NO_SELECTION_TEXT = "No segment selected."
 
 
@@ -35,12 +38,14 @@ class SegmentInspectorWidget(QWidget):
     fadeInChanged = Signal(int, int)       # (old_ms, new_ms)
     fadeOutChanged = Signal(int, int)      # (old_ms, new_ms)
     lockedChanged = Signal(bool, bool)     # (old, new)
+    regenerateRequested = Signal(int)      # segment_id
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._segment: Segment | None = None
         self._editable: EditableSegment | None = None
         self._live_offset_ms: int = 0
+        self._is_generating: bool = False
 
         self._stack = QStackedWidget()
         self._empty_label = QLabel(_NO_SELECTION_TEXT)
@@ -135,6 +140,10 @@ class SegmentInspectorWidget(QWidget):
         button_layout.addWidget(self._compare_button)
         layout.addWidget(button_group)
 
+        self._regenerate_button = QPushButton("Regenerate")
+        self._regenerate_button.clicked.connect(self._on_regenerate_clicked)
+        layout.addWidget(self._regenerate_button)
+
         self._connect_controls()
         return widget
 
@@ -160,6 +169,8 @@ class SegmentInspectorWidget(QWidget):
 
         self._segment = segment
         self._editable = editable
+        self._is_generating = False
+        self._regenerate_button.setEnabled(True)
 
         self._load_into_controls(segment, editable)
         self._stack.setCurrentWidget(self._detail_widget)
@@ -169,6 +180,20 @@ class SegmentInspectorWidget(QWidget):
             return
         self._live_offset_ms = offset_ms
         self._offset_label.setText(self._format_offset(offset_ms))
+        self._update_status()
+
+    def refresh_status(self) -> None:
+        """Recompute the status label from the current segment/editable state."""
+        if self._stack.currentWidget() != self._detail_widget:
+            return
+        self._update_status()
+
+    def set_generating(self, generating: bool) -> None:
+        """Show/hide the live 'Generating' status for the currently displayed segment."""
+        if self._stack.currentWidget() != self._detail_widget:
+            return
+        self._is_generating = generating
+        self._regenerate_button.setEnabled(not generating)
         self._update_status()
 
     def refresh_property(self, field: str, value: object) -> None:
@@ -196,6 +221,8 @@ class SegmentInspectorWidget(QWidget):
             self._locked_check.blockSignals(True)
             self._locked_check.setChecked(value)
             self._locked_check.blockSignals(False)
+        # needs_regeneration / last_error / generated_duration have no dedicated
+        # control; they only affect the status label, refreshed below.
         self._update_status()
 
     # ------------------------------------------------------------------
@@ -251,6 +278,19 @@ class SegmentInspectorWidget(QWidget):
         self._update_status()
 
     def _update_status(self) -> None:
+        if self._is_generating:
+            self._status_label.setText(_STATUS_GENERATING)
+            return
+        if self._locked_check.isChecked():
+            self._status_label.setText(_STATUS_EDITED)
+            return
+        if self._editable is not None and self._editable.last_error is not None:
+            self._status_label.setText(_STATUS_FAILED)
+            return
+        if self._editable is not None and self._editable.needs_regeneration:
+            self._status_label.setText(_STATUS_NEEDS_REGENERATION)
+            return
+
         offset_mod = self._live_offset_ms != 0
         editable_mod = self._editable is not None and self._editable.is_modified
         controls_mod = (
@@ -258,7 +298,6 @@ class SegmentInspectorWidget(QWidget):
             or self._volume_slider.value() != 100
             or self._fade_in_spin.value() != 0
             or self._fade_out_spin.value() != 0
-            or self._locked_check.isChecked()
         )
         is_edited = offset_mod or editable_mod or controls_mod
         self._status_label.setText(_STATUS_EDITED if is_edited else _STATUS_GENERATED)
@@ -303,6 +342,10 @@ class SegmentInspectorWidget(QWidget):
             return
         self.lockedChanged.emit(old_val, new_val)
         self._update_status()
+
+    def _on_regenerate_clicked(self) -> None:
+        if self._segment is not None:
+            self.regenerateRequested.emit(self._segment.id)
 
     @staticmethod
     def _format_offset(offset_ms: int) -> str:

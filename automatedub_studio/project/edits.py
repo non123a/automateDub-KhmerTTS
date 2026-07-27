@@ -16,7 +16,8 @@ _VERSION = 1
 
 _FLOAT_FIELDS = {"speed", "volume"}
 _INT_FIELDS = {"offset_ms", "fade_in_ms", "fade_out_ms"}
-_BOOL_FIELDS = {"locked"}
+_BOOL_FIELDS = {"locked", "needs_regeneration"}
+_STR_FIELDS = {"voice_id", "edited_text"}
 
 _DEFAULTS: dict[str, object] = {
     "offset_ms": 0,
@@ -25,6 +26,9 @@ _DEFAULTS: dict[str, object] = {
     "fade_in_ms": 0,
     "fade_out_ms": 0,
     "locked": False,
+    "needs_regeneration": False,
+    "voice_id": None,
+    "edited_text": None,
 }
 
 
@@ -49,6 +53,12 @@ def save_edits(
                 entry["fade_out_ms"] = es.fade_out_ms
             if es.locked:
                 entry["locked"] = True
+            if es.needs_regeneration:
+                entry["needs_regeneration"] = True
+            if es.voice_id is not None:
+                entry["voice_id"] = es.voice_id
+            if es.edited_text is not None:
+                entry["edited_text"] = es.edited_text
         if entry:
             entry["id"] = s.id
             records.append(entry)
@@ -81,6 +91,9 @@ def load_edits(project_path: Path) -> dict[int, dict]:
             for field in _BOOL_FIELDS:
                 if field in seg and isinstance(seg[field], bool):
                     entry[field] = bool(seg[field])
+            for field in _STR_FIELDS:
+                if field in seg and isinstance(seg[field], str):
+                    entry[field] = seg[field]
             if entry:
                 result[seg_id] = entry
         return result
@@ -106,6 +119,15 @@ def apply_edits(
             seg.offset_ms = entry["offset_ms"]
         if editables is not None:
             es = editables.setdefault(seg.id, ES(id=seg.id))
-            for field in ("speed", "volume", "fade_in_ms", "fade_out_ms", "locked"):
+            for field in (
+                "speed",
+                "volume",
+                "fade_in_ms",
+                "fade_out_ms",
+                "locked",
+                "needs_regeneration",
+                "voice_id",
+                "edited_text",
+            ):
                 if field in entry:
                     setattr(es, field, entry[field])

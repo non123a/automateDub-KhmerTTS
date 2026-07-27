@@ -21,6 +21,8 @@ class EditableSegment:
     edited_text: str | None = None
     locked: bool = False
     needs_regeneration: bool = False
+    last_error: str | None = None
+    generated_duration: float | None = None
 
     @property
     def is_modified(self) -> bool:
@@ -31,4 +33,7 @@ class EditableSegment:
             or self.fade_in_ms != 0
             or self.fade_out_ms != 0
             or self.locked
+            or self.needs_regeneration
+            or self.voice_id is not None
+            or self.edited_text is not None
         )
