@@ -53,9 +53,19 @@ Things that must never change:
 - Voice cloning is not the MVP default and requires explicit consent and licensing.
 - Do not assume a production-quality Khmer TTS provider exists without benchmarks.
 
+AutomateDub Studio (PySide6 desktop GUI):
+
+- Studio is a separate GUI application in `automatedub_studio/` for reviewing and editing dubbing projects.
+- Studio Milestone 1 — Project model, loader, and smoke-test wiring.
+- Studio Milestone 2 — Loader cleanup and smoke-test against real `output/` directories.
+- Studio Milestone 3 — VideoPlayerWidget (Play/Pause/Stop, seek slider, QStackedWidget for no-video vs video surface).
+- Studio Milestone 4 — TimelineWidget (two-lane QGraphicsScene/QGraphicsView, ClipItem selection, Ctrl+Wheel zoom, playhead tracking).
+- Studio Milestone 5 — SegmentInspectorWidget dock (empty state, full segment details, placeholder controls). Complete. 228 tests passing.
+- Next Studio milestone: Milestone 6 (TBD).
+
 Test findings:
 
-- Total test functions: 125.
+- Total test functions: 228 (125 pipeline + 103 studio).
 - VS0 is covered by input validation, FFmpeg command construction, audio extraction success/failure, and path naming.
 - VS1 is covered by WAV/model validation, whisper.cpp command construction, transcript normalization, transcript writing, CLI invocation, retry behavior, and failure reporting.
 - VS2 is covered by transcript parsing, prompt construction, response normalization, batch splitting/merging, Responses-to-Chat Completions fallback, debug artifact writing, and endpoint detection.

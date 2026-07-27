@@ -8,6 +8,7 @@ from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction, QCloseEvent
 from PySide6.QtWidgets import QDockWidget, QFileDialog, QMainWindow, QMessageBox, QSplitter
 
+from automatedub_studio.inspector.segment_inspector import SegmentInspectorWidget
 from automatedub_studio.playback.video_player import VideoPlayerWidget
 from automatedub_studio.project.loader import ProjectLoadError, load_project
 from automatedub_studio.project.models import Project
@@ -30,6 +31,7 @@ class MainWindow(QMainWindow):
         self._build_status_bar()
         self._build_central_widget()
         self._build_info_dock()
+        self._build_inspector_dock()
         self._restore_geometry()
 
     def _build_menu_bar(self) -> None:
@@ -69,6 +71,7 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 1)
 
         self.video_player.videoPositionChanged.connect(self.timeline.set_playhead_position)
+        self.timeline.segmentSelected.connect(self._on_segment_selected)
 
         self.setCentralWidget(splitter)
 
@@ -82,6 +85,20 @@ class MainWindow(QMainWindow):
             | QDockWidget.DockWidgetFeature.DockWidgetFloatable
         )
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+
+    def _build_inspector_dock(self) -> None:
+        self.inspector = SegmentInspectorWidget()
+
+        dock = QDockWidget("Segment Inspector", self)
+        dock.setWidget(self.inspector)
+        dock.setFeatures(
+            QDockWidget.DockWidgetFeature.DockWidgetMovable
+            | QDockWidget.DockWidgetFeature.DockWidgetFloatable
+        )
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+
+    def _on_segment_selected(self, segment) -> None:
+        self.inspector.set_segment(segment)
 
     def _show_about_dialog(self) -> None:
         dialog = AboutDialog(self)
@@ -108,6 +125,7 @@ class MainWindow(QMainWindow):
         self.info_panel.set_project(project)
         self.video_player.load_video(project.video_path)
         self.timeline.load_segments(project.segments)
+        self.inspector.set_segment(None)
         self.statusBar().showMessage(self._status_message(project))
 
     @staticmethod
