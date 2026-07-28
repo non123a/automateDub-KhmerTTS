@@ -6,7 +6,11 @@ import shutil
 import pytest
 from conftest import make_valid_project
 
-from automatedub_studio.project.loader import ProjectLoadError, load_project
+from automatedub_studio.project.loader import (
+    ProjectLoadError,
+    load_project,
+    save_video_selection,
+)
 from automatedub_studio.project.models import Project, Segment
 
 
@@ -128,3 +132,117 @@ def test_load_project_empty_tts_directory_does_not_fail(tmp_path):
 
     assert project.tts_file_count == 0
     assert project.segment_count == 2
+
+
+_VIDEO_BYTES = b"\x00\x00\x00\x18ftypmp42"
+
+
+def test_video_discovery_single_mp4(tmp_path):
+    project_dir = make_valid_project(tmp_path)
+    (project_dir / "clip.mp4").write_bytes(_VIDEO_BYTES)
+
+    project = load_project(project_dir)
+
+    assert project.video_path == project_dir / "clip.mp4"
+    assert project.has_video is True
+    assert project.video_candidates == []
+
+
+def test_video_discovery_single_mov(tmp_path):
+    project_dir = make_valid_project(tmp_path)
+    (project_dir / "clip.mov").write_bytes(_VIDEO_BYTES)
+
+    project = load_project(project_dir)
+
+    assert project.video_path == project_dir / "clip.mov"
+    assert project.has_video is True
+
+
+def test_video_discovery_single_mkv(tmp_path):
+    project_dir = make_valid_project(tmp_path)
+    (project_dir / "clip.mkv").write_bytes(_VIDEO_BYTES)
+
+    project = load_project(project_dir)
+
+    assert project.video_path == project_dir / "clip.mkv"
+    assert project.has_video is True
+
+
+def test_video_discovery_single_avi(tmp_path):
+    project_dir = make_valid_project(tmp_path)
+    (project_dir / "clip.avi").write_bytes(_VIDEO_BYTES)
+
+    project = load_project(project_dir)
+
+    assert project.video_path == project_dir / "clip.avi"
+    assert project.has_video is True
+
+
+def test_video_discovery_single_webm(tmp_path):
+    project_dir = make_valid_project(tmp_path)
+    (project_dir / "clip.webm").write_bytes(_VIDEO_BYTES)
+
+    project = load_project(project_dir)
+
+    assert project.video_path == project_dir / "clip.webm"
+    assert project.has_video is True
+
+
+def test_video_discovery_mixed_case_extension(tmp_path):
+    project_dir = make_valid_project(tmp_path)
+    (project_dir / "clip.MOV").write_bytes(_VIDEO_BYTES)
+
+    project = load_project(project_dir)
+
+    assert project.video_path == project_dir / "clip.MOV"
+    assert project.has_video is True
+
+
+def test_video_discovery_zero_videos(tmp_path):
+    project_dir = make_valid_project(tmp_path)
+
+    project = load_project(project_dir)
+
+    assert project.video_path is None
+    assert project.has_video is False
+    assert project.video_candidates == []
+
+
+def test_video_discovery_multiple_videos_no_selection(tmp_path):
+    project_dir = make_valid_project(tmp_path)
+    (project_dir / "alpha.mp4").write_bytes(_VIDEO_BYTES)
+    (project_dir / "beta.mp4").write_bytes(_VIDEO_BYTES)
+
+    project = load_project(project_dir)
+
+    assert project.video_path is None
+    assert project.has_video is False
+    assert len(project.video_candidates) == 2
+    assert project_dir / "alpha.mp4" in project.video_candidates
+    assert project_dir / "beta.mp4" in project.video_candidates
+
+
+def test_video_discovery_multiple_videos_with_saved_selection(tmp_path):
+    project_dir = make_valid_project(tmp_path)
+    (project_dir / "alpha.mp4").write_bytes(_VIDEO_BYTES)
+    (project_dir / "beta.mp4").write_bytes(_VIDEO_BYTES)
+    save_video_selection(project_dir, project_dir / "beta.mp4")
+
+    project = load_project(project_dir)
+
+    assert project.video_path == project_dir / "beta.mp4"
+    assert project.has_video is True
+    assert project.video_candidates == []
+
+
+def test_video_discovery_legacy_filenames(tmp_path):
+    for i, name in enumerate(("video.mp4", "movie.mp4", "input.mp4")):
+        root = tmp_path / f"proj{i}"
+        root.mkdir()
+        project_dir = make_valid_project(root)
+        (project_dir / name).write_bytes(_VIDEO_BYTES)
+
+        project = load_project(project_dir)
+
+        assert project.video_path == project_dir / name
+        assert project.has_video is True

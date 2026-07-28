@@ -25,11 +25,10 @@ from automatedub.vertical_slice.paths import (
 )
 from automatedub_studio.project.models import Project, Segment
 
-VIDEO_FILENAME = "video.mp4"
+# Supported source video extensions, matched case-insensitively.
+VIDEO_EXTENSIONS = (".mp4", ".mov", ".mkv", ".avi", ".webm")
 
-# Common source video filenames the CLI or a user might place alongside the
-# rest of the output/ artifacts. Checked in order; the first match wins.
-VIDEO_CANDIDATE_FILENAMES = ("video.mp4", "movie.mp4", "input.mp4")
+VIDEO_SELECTION_FILENAME = "video_selection.json"
 
 
 class ProjectLoadError(Exception):
@@ -89,12 +88,37 @@ def count_tts_files(tts_dir: Path) -> int:
     return sum(1 for path in tts_dir.iterdir() if path.is_file() and path.suffix.lower() == ".wav")
 
 
-def find_video_path(project_dir: Path) -> Path | None:
-    for filename in VIDEO_CANDIDATE_FILENAMES:
-        video_path = project_dir / filename
-        if video_path.is_file():
-            return video_path
+def find_video_candidates(project_dir: Path) -> list[Path]:
+    """Return all supported video files in *project_dir*, case-insensitively sorted."""
+    return sorted(
+        p for p in project_dir.iterdir()
+        if p.is_file() and p.suffix.lower() in VIDEO_EXTENSIONS
+    )
+
+
+def load_video_selection(project_dir: Path) -> Path | None:
+    """Return the previously-remembered video choice for this project, or None."""
+    selection_path = project_dir / VIDEO_SELECTION_FILENAME
+    if not selection_path.is_file():
+        return None
+    try:
+        data = json.loads(selection_path.read_text(encoding="utf-8"))
+        chosen = data.get("video_filename")
+        if isinstance(chosen, str):
+            candidate = project_dir / chosen
+            if candidate.is_file():
+                return candidate
+    except Exception:  # noqa: BLE001
+        pass
     return None
+
+
+def save_video_selection(project_dir: Path, video_path: Path) -> None:
+    """Persist the user's video file choice for this project."""
+    payload = {"video_filename": video_path.name}
+    (project_dir / VIDEO_SELECTION_FILENAME).write_text(
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+    )
 
 
 def load_project(project_dir: Path) -> Project:
@@ -110,7 +134,22 @@ def load_project(project_dir: Path) -> Project:
 
     apply_edits(segments, project_dir)
     tts_file_count = count_tts_files(tts_directory)
-    video_path = find_video_path(project_dir)
+
+    candidates = find_video_candidates(project_dir)
+    if len(candidates) == 0:
+        video_path: Path | None = None
+        video_candidates: list[Path] = []
+    elif len(candidates) == 1:
+        video_path = candidates[0]
+        video_candidates = []
+    else:
+        remembered = load_video_selection(project_dir)
+        if remembered is not None:
+            video_path = remembered
+            video_candidates = []
+        else:
+            video_path = None
+            video_candidates = candidates
 
     mixed_audio_path = mixed_audio_output_path(project_dir)
     if not mixed_audio_path.is_file():
@@ -129,4 +168,5 @@ def load_project(project_dir: Path) -> Project:
         tts_combined_path=tts_combined_path,
         segments=segments,
         tts_file_count=tts_file_count,
+        video_candidates=video_candidates,
     )

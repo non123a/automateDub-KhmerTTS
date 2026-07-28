@@ -33,6 +33,7 @@ class Project:
     tts_combined_path: Path | None = None
     segments: list[Segment] = field(default_factory=list)
     tts_file_count: int = 0
+    video_candidates: list[Path] = field(default_factory=list)
 
     @property
     def segment_count(self) -> int:

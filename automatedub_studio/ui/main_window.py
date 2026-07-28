@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QDockWidget,
     QFileDialog,
     QHBoxLayout,
+    QInputDialog,
     QLabel,
     QMainWindow,
     QMessageBox,
@@ -44,7 +45,12 @@ from automatedub_studio.playback.playback_controller import PlaybackController, 
 from automatedub_studio.playback.video_player import VideoPlayerWidget
 from automatedub_studio.project.editable_project import EditableSegment
 from automatedub_studio.project.edits import apply_edits, save_edits
-from automatedub_studio.project.loader import ProjectLoadError, count_tts_files, load_project
+from automatedub_studio.project.loader import (
+    ProjectLoadError,
+    count_tts_files,
+    load_project,
+    save_video_selection,
+)
 from automatedub_studio.project.models import Project
 from automatedub_studio.timeline.clip_item import (
     STATUS_FAILED,
@@ -486,6 +492,21 @@ class MainWindow(QMainWindow):
         except ProjectLoadError as exc:
             QMessageBox.critical(self, "Failed to Open Project", str(exc))
             return
+        if project.video_candidates:
+            names = [p.name for p in project.video_candidates]
+            choice, ok = QInputDialog.getItem(
+                self,
+                "Choose Video File",
+                "Multiple video files were found in this project. Choose which one to use:",
+                names,
+                0,
+                False,
+            )
+            if ok and choice:
+                chosen_path = project.project_path / choice
+                save_video_selection(project.project_path, chosen_path)
+                project.video_path = chosen_path
+                project.video_candidates = []
         self._apply_loaded_project(project)
 
     def _apply_loaded_project(self, project: Project) -> None:
