@@ -30,6 +30,11 @@ from automatedub_studio.timeline.ruler_widget import (
     TimelineRulerWidget,
     snap_offset,
 )
+from automatedub_studio.timeline.timeline_clip import (
+    KHMER_TTS_TRACK_ID,
+    ORIGINAL_AUDIO_TRACK_ID,
+    TimelineClip,
+)
 from automatedub_studio.timeline.waveform_cache import WaveformCache
 
 # ---------------------------------------------------------------------------
@@ -366,6 +371,8 @@ class TimelineWidget(QWidget):
         self._playhead_ms = 0
         self._segments: list[Segment] = []
         self._clips_by_segment: dict[int, list[ClipItem]] = {}
+        self._timeline_clips: list[TimelineClip] = []
+        self._clips_by_clip_id: dict[str, ClipItem] = {}
         self._waveform_cache = WaveformCache()
         self._audio_path: Path | None = None
         self._tts_directory: Path | None = None
@@ -420,6 +427,7 @@ class TimelineWidget(QWidget):
         self._segments = segments
         self._audio_path = audio_path
         self._tts_directory = tts_directory
+        self._timeline_clips = self._build_timeline_clips(segments)
         self._rebuild_scene(segments)
         self._ruler.set_duration(self._duration_ms)
 
@@ -445,6 +453,17 @@ class TimelineWidget(QWidget):
         return sorted(by_id.values(), key=lambda segment: (segment.start, segment.id))
 
     @property
+    def selected_timeline_clips(self) -> list[TimelineClip]:
+        clips = [
+            item.timeline_clip
+            for item in self._scene.selectedItems()
+            if isinstance(item, ClipItem) and item.timeline_clip is not None
+        ]
+        for clip in self._timeline_clips:
+            clip.selected = clip in clips
+        return sorted(clips, key=lambda clip: (clip.start_time, clip.track_id, clip.id))
+
+    @property
     def _clips(self) -> list[ClipItem]:
         return [clip for clips in self._clips_by_segment.values() for clip in clips]
 
@@ -460,6 +479,30 @@ class TimelineWidget(QWidget):
         for clip in clips:
             # rect().x() is the fixed scene-x set at construction; pos() is the delta
             clip.setX(new_x - clip.rect().x())
+
+    def apply_timeline_clip_offset(self, clip_id: str, offset_ms: int) -> None:
+        """Move one independent timeline clip without moving its sibling track clip."""
+        item = self._clips_by_clip_id.get(clip_id)
+        if item is None or item.timeline_clip is None:
+            return
+        segment = item.segment
+        timeline_clip = item.timeline_clip
+        duration = timeline_clip.duration
+        start_time = segment.start + offset_ms / 1000.0
+        timeline_clip.start_time = start_time
+        timeline_clip.end_time = start_time + duration
+        new_x = self._time_to_x(start_time)
+        item.setX(new_x - item.rect().x())
+
+    def set_timeline_clip_muted(self, clip_id: str, muted: bool) -> None:
+        clip = self._find_timeline_clip(clip_id)
+        if clip is not None:
+            clip.muted = muted
+
+    def set_timeline_clip_volume(self, clip_id: str, volume: float) -> None:
+        clip = self._find_timeline_clip(clip_id)
+        if clip is not None:
+            clip.volume = max(0.0, volume)
 
     def apply_locked(self, segment_id: int, locked: bool) -> None:
         """Update locked state on all clips for a segment."""
@@ -563,6 +606,7 @@ class TimelineWidget(QWidget):
     def _rebuild_scene(self, segments: list[Segment]) -> None:
         self._scene.clear()
         self._clips_by_segment = {}
+        self._clips_by_clip_id = {}
         self._playhead = None
         self._draw_static_lanes(self._duration_ms)
         self._draw_clips(segments)
@@ -572,6 +616,12 @@ class TimelineWidget(QWidget):
         for segment in self._segments:
             if segment.id == segment_id:
                 return segment
+        return None
+
+    def _find_timeline_clip(self, clip_id: str) -> TimelineClip | None:
+        for clip in self._timeline_clips:
+            if clip.id == clip_id:
+                return clip
         return None
 
     @staticmethod
@@ -614,32 +664,88 @@ class TimelineWidget(QWidget):
             self._scene.addItem(label)
 
     def _draw_clips(self, segments: list[Segment]) -> None:
+        segment_by_id = {segment.id: segment for segment in segments}
+        for timeline_clip in self._timeline_clips:
+            if timeline_clip.segment_id is None:
+                continue
+            segment = segment_by_id.get(timeline_clip.segment_id)
+            if segment is None:
+                continue
+            lane = self._lane_for_track_id(timeline_clip.track_id)
+            if lane is None:
+                continue
+            width = timeline_clip.duration * BASE_PIXELS_PER_SECOND
+            x = self._time_to_x(timeline_clip.start_time)
+            y = _lane_y(lane)
+            wav_path, wav_start, wav_end = self._wav_context_for_timeline_clip(timeline_clip)
+            clip = ClipItem(
+                segment,
+                x,
+                y + 4,
+                width,
+                LANE_HEIGHT - 8,
+                lane,
+                wav_path=wav_path,
+                waveform_cache=self._waveform_cache,
+                wav_start_seconds=wav_start,
+                wav_end_seconds=wav_end,
+                timeline_clip=timeline_clip,
+            )
+            self._scene.addItem(clip)
+            self._clips_by_segment.setdefault(segment.id, []).append(clip)
+            self._clips_by_clip_id[timeline_clip.id] = clip
+
+    def _build_timeline_clips(self, segments: list[Segment]) -> list[TimelineClip]:
+        clips: list[TimelineClip] = []
         for segment in segments:
-            duration = segment.end - segment.start
-            width = duration * BASE_PIXELS_PER_SECOND
-            effective_start = segment.start + segment.offset_ms / 1000.0
-            x = self._time_to_x(effective_start)
-
-            clips_for_segment = []
-            for lane in AUDIO_LANES:
-                y = _lane_y(lane)
-                wav_path, wav_start, wav_end = self._wav_context_for_lane(lane, segment)
-                clip = ClipItem(
-                    segment,
-                    x,
-                    y + 4,
-                    width,
-                    LANE_HEIGHT - 8,
-                    lane,
-                    wav_path=wav_path,
-                    waveform_cache=self._waveform_cache,
-                    wav_start_seconds=wav_start,
-                    wav_end_seconds=wav_end,
+            duration = max(0.0, segment.end - segment.start)
+            start_time = segment.start + segment.offset_ms / 1000.0
+            clips.append(
+                TimelineClip(
+                    id=f"original:{segment.id}",
+                    track_id=ORIGINAL_AUDIO_TRACK_ID,
+                    start_time=start_time,
+                    end_time=start_time + duration,
+                    source_path=self._audio_path,
+                    source_offset=segment.start,
+                    segment_id=segment.id,
                 )
-                self._scene.addItem(clip)
-                clips_for_segment.append(clip)
+            )
+            clips.append(
+                TimelineClip(
+                    id=f"khmer:{segment.id}",
+                    track_id=KHMER_TTS_TRACK_ID,
+                    start_time=start_time,
+                    end_time=start_time + duration,
+                    source_path=(
+                        tts_segment_output_path(self._tts_directory, segment.id)
+                        if self._tts_directory is not None
+                        else None
+                    ),
+                    source_offset=0.0,
+                    segment_id=segment.id,
+                )
+            )
+        return clips
 
-            self._clips_by_segment[segment.id] = clips_for_segment
+    @staticmethod
+    def _lane_for_track_id(track_id: str) -> int | None:
+        if track_id == ORIGINAL_AUDIO_TRACK_ID:
+            return ORIGINAL_AUDIO_LANE
+        if track_id == KHMER_TTS_TRACK_ID:
+            return KHMER_TTS_LANE
+        return None
+
+    def _wav_context_for_timeline_clip(
+        self, timeline_clip: TimelineClip
+    ) -> tuple[Path | None, float, float | None]:
+        if timeline_clip.track_id == ORIGINAL_AUDIO_TRACK_ID:
+            return timeline_clip.source_path, timeline_clip.source_offset, (
+                timeline_clip.source_offset + timeline_clip.duration
+            )
+        if timeline_clip.track_id == KHMER_TTS_TRACK_ID:
+            return timeline_clip.source_path, timeline_clip.source_offset, None
+        return None, 0.0, None
 
     def _wav_context_for_lane(
         self, lane: int, segment: Segment

@@ -9,6 +9,7 @@ from PySide6.QtGui import QBrush, QColor, QPen
 from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsTextItem
 
 from automatedub_studio.project.models import Segment
+from automatedub_studio.timeline.timeline_clip import TimelineClip
 from automatedub_studio.timeline.waveform_cache import (
     DEFAULT_BUCKET_COUNT,
     WaveformCache,
@@ -21,6 +22,7 @@ WAVEFORM_MARGIN = 2.0
 LANE_COLORS = {
     0: QColor("#5094D9"),
     1: QColor("#60C080"),
+    2: QColor("#C06A5F"),
 }
 LOCKED_COLOR = QColor("#8888AA")
 FLASH_COLOR = QColor("#F4D35E")
@@ -65,10 +67,12 @@ class ClipItem(QGraphicsRectItem):
         wav_start_seconds: float = 0.0,
         wav_end_seconds: float | None = None,
         waveform_bucket_count: int = DEFAULT_BUCKET_COUNT,
+        timeline_clip: TimelineClip | None = None,
     ):
         super().__init__(x, y, width, height)
         self.segment = segment
         self.lane = lane
+        self.timeline_clip = timeline_clip
         self.locked = False
         self.status: str | None = None
         self._hovered = False

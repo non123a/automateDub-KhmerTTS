@@ -7,6 +7,11 @@ from pathlib import Path
 
 from automatedub.vertical_slice.mix import MixSpeechTrack
 from automatedub_studio.project.models import Segment
+from automatedub_studio.timeline.timeline_clip import (
+    KHMER_TTS_TRACK_ID,
+    ORIGINAL_AUDIO_TRACK_ID,
+    TimelineClip,
+)
 
 
 @dataclass(frozen=True)
@@ -93,3 +98,51 @@ def position_within_track_ms(track: MixSpeechTrack, position_ms: int) -> int:
     start_ms, _ = track_window_ms(track)
     elapsed_master_ms = max(0, position_ms - start_ms)
     return elapsed_master_ms
+
+
+def build_original_timeline_clips(
+    audio_path: Path | None, segments: list[Segment]
+) -> list[TimelineClip]:
+    """Build independent Original Audio timeline clips from transcript timing."""
+    if audio_path is None:
+        return []
+    clips: list[TimelineClip] = []
+    for segment in sorted(segments, key=lambda item: (item.start, item.id)):
+        start_time = segment.start + segment.offset_ms / 1000.0
+        duration = max(0.0, segment.end - segment.start)
+        clips.append(
+            TimelineClip(
+                id=f"original:{segment.id}",
+                track_id=ORIGINAL_AUDIO_TRACK_ID,
+                start_time=start_time,
+                end_time=start_time + duration,
+                source_path=audio_path,
+                source_offset=segment.start,
+                segment_id=segment.id,
+            )
+        )
+    return clips
+
+
+def build_khmer_timeline_clips(tracks: list[MixSpeechTrack]) -> list[TimelineClip]:
+    """Build independent Khmer TTS timeline clips from generated speech tracks."""
+    clips: list[TimelineClip] = []
+    for track in tracks:
+        start_ms, end_ms = track_window_ms(track)
+        segment_id = getattr(track, "segment_id", track.id)
+        clips.append(
+            TimelineClip(
+                id=f"khmer:{segment_id}",
+                track_id=KHMER_TTS_TRACK_ID,
+                start_time=start_ms / 1000.0,
+                end_time=end_ms / 1000.0,
+                source_path=track.tts_path,
+                source_offset=0.0,
+                volume=track.volume,
+                muted=False,
+                fade_in=track.fade_in_ms / 1000.0,
+                fade_out=track.fade_out_ms / 1000.0,
+                segment_id=segment_id,
+            )
+        )
+    return clips
