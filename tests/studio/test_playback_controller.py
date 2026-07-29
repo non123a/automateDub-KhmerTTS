@@ -436,11 +436,13 @@ class _CountingPlayer:
         self.play_count = 0
         self.seek_count = 0
         self.stop_count = 0
+        self.source_calls: list[QUrl] = []
 
     def source(self):
         return self._source
 
     def setSource(self, source):
+        self.source_calls.append(source)
         self._source = source
 
     def position(self):
@@ -533,6 +535,24 @@ def test_active_khmer_clip_reseeks_on_large_drift(qapp, tmp_path):
 
     assert fake_player.seek_count == 1
     assert fake_player.play_count == 0
+
+
+def test_changed_file_at_same_clip_source_url_is_reloaded(qapp, tmp_path):
+    clip_path = tmp_path / "khmer_0.wav"
+    make_wav(clip_path, seconds=1.0)
+    url = QUrl.fromLocalFile(str(clip_path))
+    controller = PlaybackController(VideoPlayerWidget())
+    clip = make_timeline_clip("khmer:0", KHMER_TTS_TRACK_ID, clip_path)
+    fake_player = _CountingPlayer(url, position=0)
+    fake_output = _CountingOutput()
+    controller._khmer_clip_players = {"khmer:0": (fake_player, fake_output)}
+    controller._clip_source_fingerprints = {
+        "khmer:0": (clip_path, 1, 1),
+    }
+
+    controller.set_timeline(make_timeline(clip))
+
+    assert fake_player.source_calls == [QUrl(), url]
 
 
 def test_original_and_khmer_volumes_are_independent(qapp, tmp_path):

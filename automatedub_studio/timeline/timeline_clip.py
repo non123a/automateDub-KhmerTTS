@@ -38,6 +38,22 @@ class TimelineClip:
     segment_id: int | None = None
     source_text: str = ""
     target_text: str = ""
+    chinese_text: str = ""
+    khmer_text: str = ""
+    voice_model: str = ""
+    speaking_rate: float = 1.0
+    pitch: float = 0.0
+    gain: float = 1.0
+
+    def __post_init__(self) -> None:
+        if not self.chinese_text:
+            self.chinese_text = self.source_text
+        if not self.khmer_text:
+            self.khmer_text = self.target_text
+        if not self.source_text:
+            self.source_text = self.chinese_text
+        if not self.target_text:
+            self.target_text = self.khmer_text
 
     @property
     def duration(self) -> float:
@@ -80,6 +96,12 @@ class TimelineClip:
             "segment_id": self.segment_id,
             "source_text": self.source_text,
             "target_text": self.target_text,
+            "chinese_text": self.chinese_text,
+            "khmer_text": self.khmer_text,
+            "voice_model": self.voice_model,
+            "speaking_rate": self.speaking_rate,
+            "pitch": self.pitch,
+            "gain": self.gain,
         }
 
     @classmethod
@@ -101,6 +123,12 @@ class TimelineClip:
             segment_id=data.get("segment_id"),
             source_text=str(data.get("source_text", "")),
             target_text=str(data.get("target_text", "")),
+            chinese_text=str(data.get("chinese_text", "")),
+            khmer_text=str(data.get("khmer_text", "")),
+            voice_model=str(data.get("voice_model", "")),
+            speaking_rate=float(data.get("speaking_rate", 1.0)),
+            pitch=float(data.get("pitch", 0.0)),
+            gain=float(data.get("gain", 1.0)),
         )
 
 

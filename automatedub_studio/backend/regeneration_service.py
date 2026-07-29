@@ -22,6 +22,7 @@ from automatedub.vertical_slice.tts import (
 )
 from automatedub_studio.project.editable_project import EditableSegment
 from automatedub_studio.project.models import Segment
+from automatedub_studio.timeline.timeline_clip import TimelineClip
 
 ProviderFactory = Callable[[ToolConfig], TTSProvider]
 
@@ -29,6 +30,15 @@ ProviderFactory = Callable[[ToolConfig], TTSProvider]
 @dataclass(frozen=True)
 class RegenerationOutcome:
     segment_id: int
+    success: bool
+    error: str | None = None
+    duration_seconds: float | None = None
+    wav_path: Path | None = None
+
+
+@dataclass(frozen=True)
+class ClipRegenerationOutcome:
+    clip_id: str
     success: bool
     error: str | None = None
     duration_seconds: float | None = None
@@ -72,6 +82,43 @@ def regenerate_segment(
         )
     except Exception as exc:  # noqa: BLE001 — any provider/validation failure is a per-segment failure
         return RegenerationOutcome(segment_id=segment.id, success=False, error=str(exc))
+
+
+def clip_tts_output_path(tts_dir: Path, clip_id: str) -> Path:
+    safe_id = "".join(ch if ch.isalnum() or ch in {"-", "_"} else "_" for ch in clip_id)
+    return tts_dir / "clips" / f"{safe_id}.wav"
+
+
+def regenerate_timeline_clip(
+    clip: TimelineClip,
+    tts_dir: Path,
+    tool_config: ToolConfig,
+    provider_factory: ProviderFactory = create_tts_provider,
+) -> ClipRegenerationOutcome:
+    """Regenerate one TimelineClip WAV without touching sibling segment audio."""
+    output_path = clip_tts_output_path(tts_dir, clip.id)
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        effective_config = tool_config
+        if clip.voice_model:
+            effective_config = dataclasses.replace(tool_config, camb_voice_id=clip.voice_model)
+        if abs(clip.speaking_rate - tool_config.tts_speed) > 1e-9:
+            effective_config = dataclasses.replace(
+                effective_config, tts_speed=clip.speaking_rate
+            )
+        provider = provider_factory(effective_config)
+        speech = provider.generate(clip.khmer_text or clip.target_text)
+        validate_wav_audio(speech.audio, clip.segment_id if clip.segment_id is not None else 0)
+        output_path.write_bytes(speech.audio)
+        duration = probe_wav_duration_seconds(output_path)
+        return ClipRegenerationOutcome(
+            clip_id=clip.id,
+            success=True,
+            duration_seconds=duration,
+            wav_path=output_path,
+        )
+    except Exception as exc:  # noqa: BLE001
+        return ClipRegenerationOutcome(clip_id=clip.id, success=False, error=str(exc))
 
 
 def regenerate_segments(

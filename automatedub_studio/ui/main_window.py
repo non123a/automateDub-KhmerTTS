@@ -24,8 +24,9 @@ from automatedub.config import ToolConfig, load_tool_config
 from automatedub.vertical_slice.tts import tts_segment_output_path
 from automatedub_studio.backend.export_service import ExportOptions
 from automatedub_studio.backend.export_worker import ExportJob, ExportRunner
-from automatedub_studio.backend.jobs import JobRunner, RegenerationJob
+from automatedub_studio.backend.jobs import ClipRegenerationJob, JobRunner, RegenerationJob
 from automatedub_studio.backend.regeneration_service import (
+    ClipRegenerationOutcome,
     RegenerationOutcome,
     select_all_ids,
     select_changed_ids,
@@ -55,6 +56,10 @@ from automatedub_studio.project.loader import (
     save_video_selection,
 )
 from automatedub_studio.project.models import Project
+from automatedub_studio.project.timeline_edits import (
+    load_timeline_edits,
+    save_timeline_edits,
+)
 from automatedub_studio.project.video_proxy import PROXY_REQUIRED_CODECS
 from automatedub_studio.timeline.clip_item import (
     STATUS_FAILED,
@@ -96,6 +101,7 @@ class MainWindow(QMainWindow):
         self._regen_total = 0
         self._regen_errors: list[str] = []
         self._clipboard = ClipClipboard()
+        self._restoring_inspector_selection = False
 
         self.setWindowTitle(WINDOW_TITLE)
         self._build_menu_bar()
@@ -283,6 +289,10 @@ class MainWindow(QMainWindow):
         self.inspector.clipFadeInChanged.connect(self._on_clip_fade_in_changed)
         self.inspector.clipFadeOutChanged.connect(self._on_clip_fade_out_changed)
         self.inspector.clipLockedChanged.connect(self._on_clip_locked_changed)
+        self.inspector.clipTranslationSaveRequested.connect(
+            self._on_clip_translation_save_requested
+        )
+        self.inspector.clipRegenerateRequested.connect(self._regenerate_timeline_clip)
 
         dock = QDockWidget("Segment Inspector", self)
         dock.setWidget(self.inspector)
@@ -359,6 +369,14 @@ class MainWindow(QMainWindow):
 
     def _on_timeline_clips_selected(self, clips: list) -> None:
         if not hasattr(self.inspector, "_stack"):
+            return
+        if self._restoring_inspector_selection:
+            self._restoring_inspector_selection = False
+        elif not self._resolve_pending_inspector_edits():
+            previous = self.inspector._timeline_clip
+            if previous is not None:
+                self._restoring_inspector_selection = True
+                self.timeline.select_timeline_clip_ids([previous.id])
             return
         try:
             self.inspector.set_timeline_clips(clips)
@@ -437,6 +455,10 @@ class MainWindow(QMainWindow):
 
     def _on_clip_locked_changed(self, clip_id: str, old_val: bool, new_val: bool) -> None:
         self._push_clip_property_command(clip_id, "locked", old_val, new_val)
+
+    def _on_clip_translation_save_requested(self, clip_id: str, khmer_text: str) -> None:
+        self.timeline.set_timeline_clip_translation(clip_id, khmer_text)
+        self._refresh_playback_sources()
 
     def _push_clip_property_command(
         self, clip_id: str, field: str, old_val: Any, new_val: Any
@@ -542,7 +564,9 @@ class MainWindow(QMainWindow):
         )
         all_ids = select_all_ids(self.project.segments, self._editables) if has_project else []
 
-        self.regenerate_selected_action.setEnabled(not busy and bool(selected_ids))
+        self.regenerate_selected_action.setEnabled(
+            not busy and bool(selected_ids) and not self.inspector.has_unsaved_changes
+        )
         self.regenerate_changed_action.setEnabled(not busy and bool(changed_ids))
         self.regenerate_failed_action.setEnabled(not busy and bool(failed_ids))
         self.regenerate_all_action.setEnabled(not busy and bool(all_ids))
@@ -558,6 +582,10 @@ class MainWindow(QMainWindow):
         )
 
     def _regenerate_selected(self) -> None:
+        selected_clips = self.timeline.selected_timeline_clips
+        if len(selected_clips) == 1 and selected_clips[0].track_id == KHMER_TTS_TRACK_ID:
+            self._regenerate_timeline_clip(selected_clips[0].id)
+            return
         self._start_regeneration(self._selected_segment_ids())
 
     def _regenerate_selected_changed(self) -> None:
@@ -589,6 +617,22 @@ class MainWindow(QMainWindow):
 
     def _regenerate_ids(self, *segment_ids: int) -> None:
         self._start_regeneration(list(segment_ids))
+
+    def _regenerate_timeline_clip(self, clip_id: str) -> None:
+        if self.project is None or self._job_runner.is_running:
+            return
+        if self.inspector.has_unsaved_changes:
+            return
+        clip = next((item for item in self.timeline.timeline_clips if item.id == clip_id), None)
+        if clip is None or clip.locked or clip.source_path is None:
+            return
+        self.timeline.set_timeline_clip_status(clip.id, STATUS_GENERATING)
+        self.inspector.set_generating(True)
+        job = ClipRegenerationJob(clip, self.project.tts_directory, self._tool_config)
+        job.signals.resultReady.connect(self._on_clip_regen_result)
+        job.signals.finished.connect(self._on_clip_regen_finished)
+        self._job_runner.submit(job)
+        self._update_regenerate_actions()
 
     def _copy_selected_clips(self) -> None:
         selected = self._selected_segments_from_timeline_clips()
@@ -769,6 +813,25 @@ class MainWindow(QMainWindow):
         self._update_regenerate_actions()
         self._refresh_playback_sources()
 
+    def _on_clip_regen_result(self, outcome: ClipRegenerationOutcome) -> None:
+        if outcome.success and outcome.wav_path is not None:
+            self.timeline.set_timeline_clip_source_path(outcome.clip_id, outcome.wav_path)
+            self.timeline.set_timeline_clip_status(outcome.clip_id, None)
+            self.inspector.show_regeneration_completed()
+            self.statusBar().showMessage(f"Regeneration completed: {outcome.clip_id}")
+        else:
+            self.timeline.set_timeline_clip_status(outcome.clip_id, STATUS_FAILED)
+            self.inspector.show_regeneration_error(outcome.error or "Unknown error")
+            QMessageBox.warning(
+                self,
+                "Regeneration Error",
+                f"Clip {outcome.clip_id}: {outcome.error}",
+            )
+
+    def _on_clip_regen_finished(self, _outcome: ClipRegenerationOutcome) -> None:
+        self._update_regenerate_actions()
+        self._refresh_playback_sources()
+
     def _show_about_dialog(self) -> None:
         dialog = AboutDialog(self)
         dialog.exec()
@@ -869,6 +932,8 @@ class MainWindow(QMainWindow):
             audio_path=project.audio_path,
             tts_directory=project.tts_directory,
         )
+        if edited_timeline := load_timeline_edits(project.project_path):
+            self.timeline.load_timeline(edited_timeline)
         self._seed_timeline_clips_from_import_editables()
         self.inspector.set_timeline_clip(None)
         self.statusBar().showMessage(self._status_message(project))
@@ -903,8 +968,30 @@ class MainWindow(QMainWindow):
     def _save_project(self) -> None:
         if self.project is None:
             return
+        if not self._resolve_pending_inspector_edits():
+            return
         save_edits(self.project.segments, self.project.project_path, self._editables)
+        save_timeline_edits(self.timeline.timeline, self.project.project_path)
         self.statusBar().showMessage("Project saved.")
+
+    def _resolve_pending_inspector_edits(self) -> bool:
+        if not self.inspector.has_unsaved_changes:
+            return True
+        response = QMessageBox.question(
+            self,
+            "Unsaved Translation",
+            "Save changes to the selected clip translation?",
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+        )
+        if response == QMessageBox.StandardButton.Save:
+            self.inspector.save_translation()
+            return True
+        if response == QMessageBox.StandardButton.Discard:
+            self.inspector.revert_translation()
+            return True
+        return False
 
     def _export_video(self) -> None:
         if self.project is None:

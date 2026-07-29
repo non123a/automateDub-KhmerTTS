@@ -620,6 +620,12 @@ class TimelineWidget(QWidget):
         self._rebuild_scene(segments)
         self._ruler.set_duration(self._duration_ms)
 
+    def load_timeline(self, timeline: Timeline) -> None:
+        self._timeline = timeline
+        self._timeline_clips = self._timeline.all_clips()
+        self._rebuild_scene(self._segments)
+        self.timelineChanged.emit()
+
     def set_playhead_position(self, position_ms: int) -> None:
         self._playhead_ms = max(0, position_ms)
         x = self._time_to_x(self._playhead_ms / 1000.0)
@@ -644,7 +650,11 @@ class TimelineWidget(QWidget):
     def selected_segments(self) -> list[Segment]:
         by_id: dict[int, Segment] = {}
         for item in self._scene.selectedItems():
-            if isinstance(item, ClipItem):
+            if (
+                isinstance(item, ClipItem)
+                and hasattr(item.segment, "id")
+                and item.segment.id is not None
+            ):
                 by_id.setdefault(item.segment.id, item.segment)
         return sorted(by_id.values(), key=lambda segment: (segment.start, segment.id))
 
@@ -653,7 +663,9 @@ class TimelineWidget(QWidget):
         clips = [
             item.timeline_clip
             for item in self._scene.selectedItems()
-            if isinstance(item, ClipItem) and item.timeline_clip is not None
+            if isinstance(item, ClipItem)
+            and item.timeline_clip is not None
+            and hasattr(item.timeline_clip, "id")
         ]
         for clip in self._timeline_clips:
             clip.selected = clip in clips
@@ -716,6 +728,24 @@ class TimelineWidget(QWidget):
         clip = self._find_timeline_clip(clip_id)
         if clip is not None:
             clip.volume = max(0.0, volume)
+
+    def set_timeline_clip_translation(self, clip_id: str, khmer_text: str) -> None:
+        clip = self._find_timeline_clip(clip_id)
+        if clip is None:
+            return
+        clip.khmer_text = khmer_text
+        clip.target_text = khmer_text
+
+    def set_timeline_clip_source_path(self, clip_id: str, source_path: Path) -> None:
+        clip = self._find_timeline_clip(clip_id)
+        item = self._clips_by_clip_id.get(clip_id)
+        if clip is None:
+            return
+        clip.source_path = source_path
+        if item is not None:
+            item.set_wav_path(source_path)
+            item.update()
+        self.timelineChanged.emit()
 
     def set_timeline_clip_fade_in(self, clip_id: str, fade_in_ms: int) -> None:
         clip = self._find_timeline_clip(clip_id)
@@ -871,6 +901,17 @@ class TimelineWidget(QWidget):
         for segment_id in wanted:
             for clip in self._clips_by_segment.get(segment_id, []):
                 clip.setSelected(True)
+        self._scene.blockSignals(False)
+        self._on_selection_changed()
+
+    def select_timeline_clip_ids(self, clip_ids: list[str]) -> None:
+        wanted = set(clip_ids)
+        self._scene.blockSignals(True)
+        self._scene.clearSelection()
+        for clip_id in wanted:
+            item = self._clips_by_clip_id.get(clip_id)
+            if item is not None:
+                item.setSelected(True)
         self._scene.blockSignals(False)
         self._on_selection_changed()
 
@@ -1081,6 +1122,8 @@ class TimelineWidget(QWidget):
                     segment_id=segment.id,
                     source_text=segment.source_text,
                     target_text=segment.target_text,
+                    chinese_text=segment.source_text,
+                    khmer_text=segment.target_text,
                 )
             )
             clips.append(
@@ -1098,6 +1141,8 @@ class TimelineWidget(QWidget):
                     segment_id=segment.id,
                     source_text=segment.source_text,
                     target_text=segment.target_text,
+                    chinese_text=segment.source_text,
+                    khmer_text=segment.target_text,
                 )
             )
         original_track.clips = [

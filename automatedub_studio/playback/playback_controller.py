@@ -43,6 +43,7 @@ class PlaybackController(QObject):
         self._khmer_audio_player, self._khmer_audio_output = self._make_audio_player()
         self._audition_player, self._audition_output = self._make_audio_player()
         self._khmer_clip_players: dict[str, tuple[QMediaPlayer, QAudioOutput]] = {}
+        self._clip_source_fingerprints: dict[str, tuple[Path, int | None, int | None]] = {}
 
         self._pending_seek_ms: dict[QMediaPlayer, int] = {}
         self._pending_play: set[QMediaPlayer] = set()
@@ -79,7 +80,10 @@ class PlaybackController(QObject):
         self._timeline_clips = timeline.all_clips()
         self._configure_timeline_clip_players()
         self._active_khmer_clip_ids = set()
-        self._sync_audio_to_position(self._video_player.position_ms, start_playing=False)
+        self._sync_audio_to_position(
+            self._video_player.position_ms,
+            start_playing=self._video_player.is_playing,
+        )
 
     def set_original_muted(self, muted: bool) -> None:
         self.set_track_muted("original_audio", muted)
@@ -147,6 +151,7 @@ class PlaybackController(QObject):
         for clip_id in list(self._khmer_clip_players):
             if clip_id not in wanted_ids:
                 player, _output = self._khmer_clip_players.pop(clip_id)
+                self._clip_source_fingerprints.pop(clip_id, None)
                 self._stop_player(player)
                 player.setSource(QUrl())
 
@@ -164,11 +169,22 @@ class PlaybackController(QObject):
                 self._connect_audio_player(player)
                 self._khmer_clip_players[clip.id] = (player, output)
             url = QUrl.fromLocalFile(str(clip.source_path))
-            if player.source() != url:
+            fingerprint = self._source_fingerprint(clip.source_path)
+            if player.source() != url or self._clip_source_fingerprints.get(clip.id) != fingerprint:
                 self._stop_player(player)
                 self._pending_seek_ms[player] = 0
                 self._pending_play.discard(player)
+                player.setSource(QUrl())
                 player.setSource(url)
+                self._clip_source_fingerprints[clip.id] = fingerprint
+
+    @staticmethod
+    def _source_fingerprint(path: Path) -> tuple[Path, int | None, int | None]:
+        try:
+            stat = path.stat()
+            return path, stat.st_mtime_ns, stat.st_size
+        except OSError:
+            return path, None, None
 
     def _load_audio_source(
         self,
