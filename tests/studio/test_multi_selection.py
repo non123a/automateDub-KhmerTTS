@@ -13,7 +13,11 @@ from automatedub_studio.inspector.segment_inspector import SegmentInspectorWidge
 from automatedub_studio.project.editable_project import EditableSegment
 from automatedub_studio.project.models import Segment
 from automatedub_studio.timeline.clip_item import ClipItem
-from automatedub_studio.timeline.timeline_widget import TimelineWidget
+from automatedub_studio.timeline.timeline_widget import (
+    KHMER_TTS_LANE,
+    ORIGINAL_AUDIO_LANE,
+    TimelineWidget,
+)
 
 
 def _segments(count: int = 4) -> list[Segment]:
@@ -99,8 +103,12 @@ def test_shift_click_selects_range_on_same_track(qapp):
 def test_shift_click_range_selection_is_track_independent(qapp):
     widget = TimelineWidget()
     widget.load_segments(_segments(4))
-    first = next(clip for clip in widget._clips_by_segment[0] if clip.lane == 0)
-    last = next(clip for clip in widget._clips_by_segment[2] if clip.lane == 1)
+    first = next(
+        clip for clip in widget._clips_by_segment[0] if clip.lane == ORIGINAL_AUDIO_LANE
+    )
+    last = next(
+        clip for clip in widget._clips_by_segment[2] if clip.lane == KHMER_TTS_LANE
+    )
 
     widget._view._last_clicked_clip = first
     widget._view._select_range(last)

@@ -15,8 +15,8 @@ from PySide6.QtWidgets import QGraphicsScene
 from automatedub_studio.project.models import Segment
 from automatedub_studio.timeline.clip_item import ClipItem
 from automatedub_studio.timeline.timeline_widget import (
+    AUDIO_TRACK_COUNT,
     BASE_PIXELS_PER_SECOND,
-    LANE_COUNT,
     LANE_LABEL_WIDTH,
     SCENE_MARGIN_H,
     TimelineWidget,
@@ -87,8 +87,8 @@ def test_load_segments_creates_clips(qapp):
 
     widget.load_segments(segments)
 
-    # LANE_COUNT clips per segment
-    assert len(widget._clips) == 5 * LANE_COUNT
+    # AUDIO_TRACK_COUNT clips per segment; the video lane is a timeline lane, not per-segment audio.
+    assert len(widget._clips) == 5 * AUDIO_TRACK_COUNT
 
 
 def test_load_segments_creates_clip_items(qapp):
@@ -141,7 +141,7 @@ def test_reload_replaces_clips(qapp):
     widget = TimelineWidget()
     widget.load_segments(_make_segments(3))
     widget.load_segments(_make_segments(2))
-    assert len(widget._clips) == 2 * LANE_COUNT
+    assert len(widget._clips) == 2 * AUDIO_TRACK_COUNT
 
 
 # ---------------------------------------------------------------------------

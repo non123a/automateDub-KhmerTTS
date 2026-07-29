@@ -1,8 +1,8 @@
 """Timeline widget: QGraphicsView-based visualization of segment timing.
 
-Two lanes (Original Transcript, Khmer TTS) display the same timing until
-a future milestone separates them. Ctrl+Wheel zooms horizontally; the
-playhead tracks the video player's position. Selected clips can be dragged
+The timeline displays a video lane plus two permanent audio tracks:
+Original Audio and Khmer TTS. Ctrl+Wheel zooms horizontally; the playhead
+tracks the video player's position. Selected clips can be dragged
 horizontally to adjust offset_ms.
 """
 
@@ -41,11 +41,16 @@ LANE_GAP = 10
 LANE_LABEL_WIDTH = 140
 SCENE_MARGIN_H = 8
 SCENE_MARGIN_V = 10
-LANE_NAMES = ("Original Transcript", "Khmer TTS")
-LANE_COUNT = 2
+VIDEO_LANE = 0
+ORIGINAL_AUDIO_LANE = 1
+KHMER_TTS_LANE = 2
+AUDIO_LANES = (ORIGINAL_AUDIO_LANE, KHMER_TTS_LANE)
+LANE_NAMES = ("Video", "Original Audio", "Khmer TTS")
+LANE_COUNT = len(LANE_NAMES)
+AUDIO_TRACK_COUNT = len(AUDIO_LANES)
 
 HEADER_BG_COLOR = QColor("#2D2D2D")
-LANE_BG_COLORS = [QColor("#1E2A3A"), QColor("#1A2E1A")]
+LANE_BG_COLORS = [QColor("#242832"), QColor("#1E2A3A"), QColor("#1A2E1A")]
 PLAYHEAD_COLOR = QColor("#FF4444")
 PASTE_FLASH_MS = 650
 
@@ -175,7 +180,7 @@ class _TimelineView(QGraphicsView):
             return
         scene_pos = self.mapToScene(event.position().toPoint())
         item = self.scene().itemAt(scene_pos, self.transform())
-        if isinstance(item, ClipItem) and item.lane == 1:
+        if isinstance(item, ClipItem) and item.lane == KHMER_TTS_LANE:
             self.clipPlayRequested.emit(item.segment.id)
 
     def mouseMoveEvent(self, event) -> None:
@@ -616,7 +621,7 @@ class TimelineWidget(QWidget):
             x = self._time_to_x(effective_start)
 
             clips_for_segment = []
-            for lane in range(LANE_COUNT):
+            for lane in AUDIO_LANES:
                 y = _lane_y(lane)
                 wav_path, wav_start, wav_end = self._wav_context_for_lane(lane, segment)
                 clip = ClipItem(
@@ -641,17 +646,17 @@ class TimelineWidget(QWidget):
     ) -> tuple[Path | None, float, float | None]:
         """Return (wav_path, start_seconds, end_seconds) for a clip's waveform.
 
-        Lane 0 (Original Transcript) slices the shared project audio to this
-        segment's window; lane 1 (Khmer TTS) uses the segment's own WAV file
+        Original Audio slices the shared project audio to this segment's
+        window; Khmer TTS uses the segment's own WAV file
         in full.
         """
-        if lane == 0:
+        if lane == ORIGINAL_AUDIO_LANE:
             if self._audio_path is None:
                 return None, 0.0, None
             return self._audio_path, segment.start, segment.end
-        if self._tts_directory is None:
-            return None, 0.0, None
-        return tts_segment_output_path(self._tts_directory, segment.id), 0.0, None
+        if lane == KHMER_TTS_LANE and self._tts_directory is not None:
+            return tts_segment_output_path(self._tts_directory, segment.id), 0.0, None
+        return None, 0.0, None
 
 
     def _draw_playhead(self) -> None:

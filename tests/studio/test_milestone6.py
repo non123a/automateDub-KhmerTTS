@@ -14,7 +14,12 @@ from automatedub_studio.edit.commands import OffsetChangeCommand
 from automatedub_studio.inspector.segment_inspector import SegmentInspectorWidget
 from automatedub_studio.project.edits import apply_edits, load_edits, save_edits
 from automatedub_studio.project.models import Segment
-from automatedub_studio.timeline.timeline_widget import TimelineWidget
+from automatedub_studio.timeline.timeline_widget import (
+    KHMER_TTS_LANE,
+    ORIGINAL_AUDIO_LANE,
+    VIDEO_LANE,
+    TimelineWidget,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -325,24 +330,23 @@ def test_lane1_clip_is_selectable(qapp):
     assert clip.flags() & flag
 
 
-def test_timeline_lane0_clips_selectable(qapp):
+def test_timeline_video_lane_has_no_segment_clips(qapp):
     tl = TimelineWidget()
     seg = make_segment(1, start=0.0, end=1.0)
     tl.load_segments([seg])
     clips = tl._clips_by_segment[seg.id]
-    lane0_clip = next(c for c in clips if c.lane == 0)
-    flag = lane0_clip.GraphicsItemFlag.ItemIsSelectable
-    assert lane0_clip.flags() & flag
+    assert all(c.lane != VIDEO_LANE for c in clips)
 
 
-def test_timeline_lane1_clips_selectable(qapp):
+def test_timeline_audio_track_clips_selectable(qapp):
     tl = TimelineWidget()
     seg = make_segment(1, start=0.0, end=1.0)
     tl.load_segments([seg])
     clips = tl._clips_by_segment[seg.id]
-    lane1_clip = next(c for c in clips if c.lane == 1)
-    flag = lane1_clip.GraphicsItemFlag.ItemIsSelectable
-    assert lane1_clip.flags() & flag
+    for lane in (ORIGINAL_AUDIO_LANE, KHMER_TTS_LANE):
+        clip = next(c for c in clips if c.lane == lane)
+        flag = clip.GraphicsItemFlag.ItemIsSelectable
+        assert clip.flags() & flag
 
 
 # ===========================================================================
