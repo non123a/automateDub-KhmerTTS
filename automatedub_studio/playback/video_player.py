@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-NO_VIDEO_MESSAGE = "No video available"
+NO_VIDEO_MESSAGE = "No project video found."
 _DEFAULT_TIME_LABEL = "00:00:00 / 00:00:00"
 
 _STATUS_BY_PLAYBACK_STATE = {

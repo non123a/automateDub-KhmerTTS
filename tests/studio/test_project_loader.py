@@ -7,6 +7,7 @@ import pytest
 from conftest import make_valid_project
 
 from automatedub_studio.project.loader import (
+    PROJECT_METADATA_FILENAME,
     ProjectLoadError,
     load_project,
     save_video_selection,
@@ -148,6 +149,28 @@ def test_video_discovery_single_mp4(tmp_path):
     assert project.video_candidates == []
 
 
+def test_video_discovery_arbitrary_mp4_filename(tmp_path):
+    project_dir = make_valid_project(tmp_path)
+    (project_dir / "videoplayback3.mp4").write_bytes(_VIDEO_BYTES)
+
+    project = load_project(project_dir)
+
+    assert project.video_path == project_dir / "videoplayback3.mp4"
+    assert project.has_video is True
+    assert project.video_candidates == []
+
+
+def test_video_discovery_movie_mp4_filename(tmp_path):
+    project_dir = make_valid_project(tmp_path)
+    (project_dir / "movie.mp4").write_bytes(_VIDEO_BYTES)
+
+    project = load_project(project_dir)
+
+    assert project.video_path == project_dir / "movie.mp4"
+    assert project.has_video is True
+    assert project.video_candidates == []
+
+
 def test_video_discovery_single_mov(tmp_path):
     project_dir = make_valid_project(tmp_path)
     (project_dir / "clip.mov").write_bytes(_VIDEO_BYTES)
@@ -156,6 +179,21 @@ def test_video_discovery_single_mov(tmp_path):
 
     assert project.video_path == project_dir / "clip.mov"
     assert project.has_video is True
+
+
+def test_project_metadata_video_takes_precedence(tmp_path):
+    project_dir = make_valid_project(tmp_path)
+    (project_dir / "alpha.mp4").write_bytes(_VIDEO_BYTES)
+    (project_dir / "clip.mov").write_bytes(_VIDEO_BYTES)
+    (project_dir / PROJECT_METADATA_FILENAME).write_text(
+        json.dumps({"video_filename": "clip.mov"}), encoding="utf-8"
+    )
+
+    project = load_project(project_dir)
+
+    assert project.video_path == project_dir / "clip.mov"
+    assert project.has_video is True
+    assert project.video_candidates == []
 
 
 def test_video_discovery_single_mkv(tmp_path):
@@ -233,6 +271,10 @@ def test_video_discovery_multiple_videos_with_saved_selection(tmp_path):
     assert project.video_path == project_dir / "beta.mp4"
     assert project.has_video is True
     assert project.video_candidates == []
+    assert json.loads((project_dir / PROJECT_METADATA_FILENAME).read_text()) == {
+        "source_video": "beta.mp4",
+        "video_filename": "beta.mp4",
+    }
 
 
 def test_video_discovery_legacy_filenames(tmp_path):

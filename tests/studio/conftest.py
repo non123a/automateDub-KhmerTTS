@@ -56,5 +56,17 @@ def make_valid_project(root: Path, segment_count: int = 3, with_video: bool = Fa
 
     if with_video:
         (project_dir / "video.mp4").write_bytes(b"\x00\x00\x00\x18ftypmp42")
+        (project_dir / "project.json").write_text(
+            json.dumps(
+                {
+                    "source_video": "video.mp4",
+                    "editor_video": "video.mp4",
+                    "source_codec": "h264",
+                    "editor_codec": "h264",
+                    "video_filename": "video.mp4",
+                }
+            ),
+            encoding="utf-8",
+        )
 
     return project_dir

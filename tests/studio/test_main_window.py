@@ -207,6 +207,31 @@ def test_open_project_with_video_switches_to_video_surface(qapp, tmp_path):
     assert window.video_player._stack.currentWidget() is window.video_player._video_widget
 
 
+def test_multiple_videos_prompt_once_and_remember_selection(qapp, tmp_path, monkeypatch):
+    project_dir = make_valid_project(tmp_path)
+    (project_dir / "alpha.mp4").write_bytes(b"\x00\x00\x00\x18ftypmp42")
+    (project_dir / "clip.mov").write_bytes(b"\x00\x00\x00\x18ftypmp42")
+    calls = []
+
+    def choose_video(*args):
+        calls.append(args)
+        return "clip.mov", True
+
+    monkeypatch.setattr(main_window_module.QInputDialog, "getItem", choose_video)
+    monkeypatch.setattr(
+        MainWindow,
+        "_prepare_video_and_apply_project",
+        lambda self, project: setattr(self, "project", project),
+    )
+    window = MainWindow(settings=_memory_settings())
+
+    window.open_project_path(project_dir)
+    window.open_project_path(project_dir)
+
+    assert len(calls) == 1
+    assert window.project.video_path == project_dir / "clip.mov"
+
+
 # ---------------------------------------------------------------------------
 # Studio V3.2 — Dual Audio Playback
 # ---------------------------------------------------------------------------

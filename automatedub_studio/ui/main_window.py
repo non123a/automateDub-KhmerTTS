@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QSettings, Qt, QThreadPool
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QUndoStack
 from PySide6.QtWidgets import (
     QDockWidget,
@@ -32,6 +32,7 @@ from automatedub_studio.backend.regeneration_service import (
     select_failed_ids,
     select_selected_ids,
 )
+from automatedub_studio.backend.video_proxy_job import VideoProxyJob
 from automatedub_studio.edit.commands import (
     ClipClipboard,
     MultiTimelineClipOffsetChangeCommand,
@@ -54,6 +55,7 @@ from automatedub_studio.project.loader import (
     save_video_selection,
 )
 from automatedub_studio.project.models import Project
+from automatedub_studio.project.video_proxy import PROXY_REQUIRED_CODECS
 from automatedub_studio.timeline.clip_item import (
     STATUS_FAILED,
     STATUS_GENERATING,
@@ -87,6 +89,8 @@ class MainWindow(QMainWindow):
         self._export_runner = ExportRunner()
         self._export_dialog: ExportProgressDialog | None = None
         self._progress_dialog: QProgressDialog | None = None
+        self._video_proxy_dialog: QProgressDialog | None = None
+        self._video_proxy_job: VideoProxyJob | None = None
         self._regen_completed = 0
         self._regen_total = 0
         self._regen_errors: list[str] = []
@@ -327,6 +331,8 @@ class MainWindow(QMainWindow):
         self._update_regenerate_actions()
 
     def _on_timeline_clips_selected(self, clips: list) -> None:
+        if not hasattr(self.inspector, "_stack"):
+            return
         self.inspector.set_timeline_clips(clips)
 
     def _on_offset_live(self, _clip_id: str, offset_ms: int) -> None:
@@ -495,7 +501,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _update_regenerate_actions(self) -> None:
-        has_project = self.project is not None
+        has_project = self.project is not None and hasattr(self.project, "segments")
         busy = self._job_runner.is_running
         selected_ids = self._selected_segment_ids()
         changed_ids = (
@@ -764,7 +770,59 @@ class MainWindow(QMainWindow):
                 save_video_selection(project.project_path, chosen_path)
                 project.video_path = chosen_path
                 project.video_candidates = []
+        self._prepare_video_and_apply_project(project)
+
+    def _prepare_video_and_apply_project(self, project: Project) -> None:
+        if project.video_path is None:
+            self._apply_loaded_project(project)
+            return
+        if self._project_video_metadata_is_current(project):
+            self._apply_loaded_project(project)
+            return
+
+        self._video_proxy_dialog = QProgressDialog(
+            "Preparing video for editing...", "", 0, 0, self
+        )
+        self._video_proxy_dialog.setCancelButton(None)
+        self._video_proxy_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self._video_proxy_job = VideoProxyJob(project, self._tool_config)
+        self._video_proxy_job.signals.progressChanged.connect(self._on_video_proxy_progress)
+        self._video_proxy_job.signals.finished.connect(self._on_video_proxy_finished)
+        self._video_proxy_job.signals.errorOccurred.connect(self._on_video_proxy_error)
+        QThreadPool.globalInstance().start(self._video_proxy_job)
+        self._video_proxy_dialog.exec()
+
+    @staticmethod
+    def _project_video_metadata_is_current(project: Project) -> bool:
+        if (
+            project.editor_video_path is None
+            or project.source_codec is None
+            or project.editor_codec is None
+            or not project.editor_video_path.is_file()
+        ):
+            return False
+        if project.source_codec.lower() in PROXY_REQUIRED_CODECS:
+            return project.editor_video_path.stat().st_mtime >= project.video_path.stat().st_mtime
+        return True
+
+    def _on_video_proxy_progress(self, message: str) -> None:
+        if self._video_proxy_dialog is not None:
+            self._video_proxy_dialog.setLabelText(message)
+
+    def _on_video_proxy_finished(self, project: Project) -> None:
+        if self._video_proxy_dialog is not None:
+            self._video_proxy_dialog.setLabelText("Loading project...")
+            self._video_proxy_dialog.close()
+            self._video_proxy_dialog = None
+        self._video_proxy_job = None
         self._apply_loaded_project(project)
+
+    def _on_video_proxy_error(self, message: str) -> None:
+        if self._video_proxy_dialog is not None:
+            self._video_proxy_dialog.close()
+            self._video_proxy_dialog = None
+        self._video_proxy_job = None
+        QMessageBox.critical(self, "Failed to Prepare Video", message)
 
     def _apply_loaded_project(self, project: Project) -> None:
         self.project = project
@@ -775,7 +833,7 @@ class MainWindow(QMainWindow):
         self.export_video_action.setEnabled(True)
         self.setWindowTitle(f"{WINDOW_TITLE} - {project.project_path.name}")
         self.info_panel.set_project(project)
-        self.video_player.load_video(project.video_path)
+        self.video_player.load_video(project.editor_video_path or project.video_path)
         self.timeline.load_segments(
             project.segments,
             audio_path=project.audio_path,

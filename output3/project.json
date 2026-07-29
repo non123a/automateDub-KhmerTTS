@@ -1,0 +1,7 @@
+{
+  "video_filename": "videoplayback3.mp4",
+  "source_video": "videoplayback3.mp4",
+  "editor_video": "proxy_video.mp4",
+  "editor_codec": "h264",
+  "source_codec": "av1"
+}
