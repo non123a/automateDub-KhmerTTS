@@ -57,6 +57,7 @@ from automatedub_studio.timeline.clip_item import (
     STATUS_GENERATING,
     STATUS_NEEDS_REGENERATION,
 )
+from automatedub_studio.timeline.ruler_widget import DEFAULT_SNAP_INTERVAL_MS
 from automatedub_studio.timeline.timeline_widget import TimelineWidget
 from automatedub_studio.ui.about_dialog import AboutDialog
 from automatedub_studio.ui.export_dialog import ExportProgressDialog
@@ -159,6 +160,14 @@ class MainWindow(QMainWindow):
         self.regenerate_all_action.triggered.connect(self._regenerate_all)
         toolbar.addAction(self.regenerate_all_action)
 
+        toolbar.addSeparator()
+
+        self.snap_action = QAction("Snap: OFF", self)
+        self.snap_action.setCheckable(True)
+        self.snap_action.setToolTip(f"Snap clip drags to {DEFAULT_SNAP_INTERVAL_MS} ms")
+        self.snap_action.toggled.connect(self._on_snap_toggled)
+        toolbar.addAction(self.snap_action)
+
     def _build_status_bar(self) -> None:
         self.statusBar().showMessage("Ready")
 
@@ -240,6 +249,10 @@ class MainWindow(QMainWindow):
         mode = self.mode_selector.itemData(index)
         if mode is not None:
             self.playback_controller.set_mode(mode)
+
+    def _on_snap_toggled(self, enabled: bool) -> None:
+        self.snap_action.setText("Snap: ON" if enabled else "Snap: OFF")
+        self.timeline.set_snap_enabled(enabled)
 
     def _on_clip_play_requested(self, segment_id: int) -> None:
         """Timeline double-click: audition a single TTS clip in isolation."""

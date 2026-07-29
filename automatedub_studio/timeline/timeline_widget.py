@@ -8,7 +8,6 @@ horizontally to adjust offset_ms.
 
 from __future__ import annotations
 
-import math
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
@@ -19,13 +18,18 @@ from PySide6.QtWidgets import (
     QGraphicsScene,
     QGraphicsTextItem,
     QGraphicsView,
-    QHBoxLayout,
+    QVBoxLayout,
     QWidget,
 )
 
 from automatedub.vertical_slice.tts import tts_segment_output_path
 from automatedub_studio.project.models import Segment
 from automatedub_studio.timeline.clip_item import ClipItem
+from automatedub_studio.timeline.ruler_widget import (
+    DEFAULT_SNAP_INTERVAL_MS,
+    TimelineRulerWidget,
+    snap_offset,
+)
 from automatedub_studio.timeline.waveform_cache import WaveformCache
 
 # ---------------------------------------------------------------------------
@@ -52,7 +56,7 @@ _SNAP_MS = 10
 
 
 def _snap(offset_ms: int) -> int:
-    return math.floor(offset_ms / _SNAP_MS + 0.5) * _SNAP_MS
+    return snap_offset(offset_ms, _SNAP_MS)
 
 
 def _lane_y(lane: int) -> float:
@@ -78,6 +82,20 @@ class _TimelineView(QGraphicsView):
         self._drag_start_offset_ms: int = 0
         self._dragging: bool = False
         self._drag_label: QGraphicsTextItem | None = None
+        self._snap_enabled = False
+        self._snap_interval_ms = DEFAULT_SNAP_INTERVAL_MS
+
+    def set_snap_enabled(self, enabled: bool) -> None:
+        self._snap_enabled = enabled
+
+    def set_snap_interval_ms(self, interval_ms: int) -> None:
+        self._snap_interval_ms = max(1, interval_ms)
+
+    def _offset_for_drag_delta(self, delta_ms: int) -> int:
+        raw_offset = self._drag_start_offset_ms + delta_ms
+        if not self._snap_enabled:
+            return raw_offset
+        return snap_offset(raw_offset, self._snap_interval_ms)
 
     def wheelEvent(self, event: QWheelEvent) -> None:
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
@@ -121,9 +139,9 @@ class _TimelineView(QGraphicsView):
                 self._dragging = True
             if self._dragging:
                 delta_ms = round(dx / BASE_PIXELS_PER_SECOND * 1000)
-                snapped = _snap(self._drag_start_offset_ms + delta_ms)
-                self.clipDragMoved.emit(self._drag_clip.segment.id, snapped)
-                self._update_drag_label(self._drag_clip, snapped)
+                offset_ms = self._offset_for_drag_delta(delta_ms)
+                self.clipDragMoved.emit(self._drag_clip.segment.id, offset_ms)
+                self._update_drag_label(self._drag_clip, offset_ms)
                 event.accept()
                 return
         super().mouseMoveEvent(event)
@@ -134,9 +152,8 @@ class _TimelineView(QGraphicsView):
             if self._dragging:
                 scene_pos = self.mapToScene(event.position().toPoint())
                 dx = scene_pos.x() - self._drag_press_scene_x
-                new_offset_ms = _snap(
-                    self._drag_start_offset_ms + round(dx / BASE_PIXELS_PER_SECOND * 1000)
-                )
+                delta_ms = round(dx / BASE_PIXELS_PER_SECOND * 1000)
+                new_offset_ms = self._offset_for_drag_delta(delta_ms)
                 if new_offset_ms != self._drag_start_offset_ms:
                     self.clipDragEnded.emit(
                         self._drag_clip.segment.id,
@@ -194,6 +211,11 @@ class TimelineWidget(QWidget):
         self._scene = QGraphicsScene(self)
         self._scene.selectionChanged.connect(self._on_selection_changed)
 
+        self._ruler = TimelineRulerWidget(
+            pixels_per_second=BASE_PIXELS_PER_SECOND,
+            time_origin_x=LANE_LABEL_WIDTH + SCENE_MARGIN_H,
+        )
+
         self._view = _TimelineView()
         self._view.setScene(self._scene)
         self._view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
@@ -204,9 +226,12 @@ class TimelineWidget(QWidget):
         self._view.clipDragEnded.connect(self._on_clip_drag_ended)
         self._view.clipPlayRequested.connect(self.clipPlayRequested.emit)
         self._view.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        self._view.horizontalScrollBar().valueChanged.connect(self._ruler.set_scroll_value)
 
-        layout = QHBoxLayout(self)
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self._ruler)
         layout.addWidget(self._view)
 
         self._playhead: QGraphicsLineItem | None = None
@@ -230,12 +255,14 @@ class TimelineWidget(QWidget):
         self._audio_path = audio_path
         self._tts_directory = tts_directory
         self._rebuild_scene(segments)
+        self._ruler.set_duration(self._duration_ms)
 
     def set_playhead_position(self, position_ms: int) -> None:
         x = self._time_to_x(position_ms / 1000.0)
         if self._playhead is not None:
             self._playhead.setLine(x, 0, x, _scene_height())
         self._ensure_scene_rect_covers_time(position_ms / 1000.0)
+        self._ruler.set_playhead_position(position_ms)
 
     @property
     def selected_segment(self) -> Segment | None:
@@ -272,6 +299,14 @@ class TimelineWidget(QWidget):
         for clip in self._clips_by_segment.get(segment_id, []):
             clip.set_status(status)
 
+    def set_snap_enabled(self, enabled: bool) -> None:
+        """Enable or disable grid snapping for clip drag edits."""
+        self._view.set_snap_enabled(enabled)
+
+    def set_snap_interval_ms(self, interval_ms: int) -> None:
+        """Set the snap interval used by clip drag edits."""
+        self._view.set_snap_interval_ms(interval_ms)
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
@@ -282,6 +317,8 @@ class TimelineWidget(QWidget):
     def _apply_zoom(self, factor: float) -> None:
         self._zoom = max(_MIN_ZOOM, min(_MAX_ZOOM, self._zoom * factor))
         self._view.setTransform(QTransform().scale(self._zoom, 1.0))
+        self._ruler.set_zoom(self._zoom)
+        self._ruler.set_scroll_value(self._view.horizontalScrollBar().value())
 
     def _rebuild_scene(self, segments: list[Segment]) -> None:
         self._scene.clear()
@@ -380,4 +417,3 @@ class TimelineWidget(QWidget):
 
     def _on_clip_drag_ended(self, segment_id: int, old_offset_ms: int, new_offset_ms: int) -> None:
         self.segmentOffsetCommitted.emit(segment_id, old_offset_ms, new_offset_ms)
-

@@ -225,6 +225,18 @@ def test_mode_selector_starts_on_original(qapp):
     assert window.mode_selector.currentText() == "Original"
 
 
+def test_snap_toolbar_action_toggles_timeline_snapping(qapp):
+    window = MainWindow(settings=_memory_settings())
+
+    assert window.snap_action.text() == "Snap: OFF"
+    assert window.timeline._view._snap_enabled is False
+
+    window.snap_action.trigger()
+
+    assert window.snap_action.text() == "Snap: ON"
+    assert window.timeline._view._snap_enabled is True
+
+
 def test_selecting_mixed_mode_switches_controller(qapp):
     window = MainWindow(settings=_memory_settings())
     window.mode_selector.setCurrentIndex(window.mode_selector.findData(PlaybackMode.MIXED))
