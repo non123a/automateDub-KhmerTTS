@@ -39,7 +39,7 @@ from automatedub_studio.timeline.timeline_clip import (
 )
 
 _SYNC_INTERVAL_MS = 100
-_DRIFT_THRESHOLD_MS = 40
+_DRIFT_THRESHOLD_MS = 500
 _LOADED = QMediaPlayer.MediaStatus.LoadedMedia
 
 
@@ -244,7 +244,7 @@ class PlaybackController(QObject):
     def _on_play_requested(self) -> None:
         self._video_player.set_audio_muted(True)
         self._sync_audio_to_position(
-            self._video_player.position_ms, start_playing=True, force_seek=False
+            self._video_player.position_ms, start_playing=True, force_seek=True
         )
         self._sync_timer.start()
 

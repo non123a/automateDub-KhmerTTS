@@ -29,6 +29,7 @@ from automatedub_studio.playback.timeline_audio import (
 )
 from automatedub_studio.playback.video_player import VideoPlayerWidget
 from automatedub_studio.project.models import Segment
+from automatedub_studio.timeline.timeline_clip import KHMER_TTS_TRACK_ID, TimelineClip
 
 
 def pump_until(predicate, timeout_s: float = 3.0) -> None:
@@ -439,6 +440,52 @@ def test_stable_active_khmer_clip_is_not_replayed_or_reseeked_each_tick(qapp, tm
 
     assert fake_player.play_count == 0
     assert fake_player.seek_count == 0
+
+
+def test_active_khmer_clip_allows_normal_drift_without_reseek(qapp, tmp_path):
+    clip_path = tmp_path / "0000.wav"
+    make_wav(clip_path, seconds=2.0)
+    controller = PlaybackController(VideoPlayerWidget())
+    clip = TimelineClip(
+        id="khmer:0",
+        track_id=KHMER_TTS_TRACK_ID,
+        start_time=1.0,
+        end_time=3.0,
+        source_path=clip_path,
+    )
+    fake_player = _CountingPlayer(QUrl.fromLocalFile(str(clip_path)), position=445)
+    fake_output = _CountingOutput()
+    controller._timeline_clips = [clip]
+    controller._active_khmer_clip_ids = {"khmer:0"}
+    controller._khmer_clip_players = {"khmer:0": (fake_player, fake_output)}
+
+    controller._sync_khmer_audio(1500, start_playing=True)
+
+    assert fake_player.seek_count == 0
+    assert fake_player.play_count == 0
+
+
+def test_active_khmer_clip_reseeks_on_large_drift(qapp, tmp_path):
+    clip_path = tmp_path / "0000.wav"
+    make_wav(clip_path, seconds=2.0)
+    controller = PlaybackController(VideoPlayerWidget())
+    clip = TimelineClip(
+        id="khmer:0",
+        track_id=KHMER_TTS_TRACK_ID,
+        start_time=1.0,
+        end_time=3.0,
+        source_path=clip_path,
+    )
+    fake_player = _CountingPlayer(QUrl.fromLocalFile(str(clip_path)), position=0)
+    fake_output = _CountingOutput()
+    controller._timeline_clips = [clip]
+    controller._active_khmer_clip_ids = {"khmer:0"}
+    controller._khmer_clip_players = {"khmer:0": (fake_player, fake_output)}
+
+    controller._sync_khmer_audio(1600, start_playing=True)
+
+    assert fake_player.seek_count == 1
+    assert fake_player.play_count == 0
 
 
 def test_original_and_khmer_volumes_are_independent(qapp, tmp_path):
