@@ -8,7 +8,55 @@ uses, so switching to Timeline Preview never regenerates or remixes audio.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
+
 from automatedub.vertical_slice.mix import MixSpeechTrack
+from automatedub_studio.project.models import Segment
+
+
+@dataclass(frozen=True)
+class OriginalAudioClip:
+    id: int
+    path: Path
+    start_ms: int
+    end_ms: int
+    source_start_ms: int
+    volume: float = 1.0
+
+
+def build_original_audio_clips(
+    audio_path: Path | None, segments: list[Segment]
+) -> list[OriginalAudioClip]:
+    """Build timeline clips referencing windows inside the extracted source audio."""
+    if audio_path is None:
+        return []
+    clips = []
+    for segment in sorted(segments, key=lambda item: (item.start, item.id)):
+        duration_ms = max(0, round((segment.end - segment.start) * 1000))
+        timeline_start_ms = round(segment.start * 1000) + segment.offset_ms
+        clips.append(
+            OriginalAudioClip(
+                id=segment.id,
+                path=audio_path,
+                start_ms=timeline_start_ms,
+                end_ms=timeline_start_ms + duration_ms,
+                source_start_ms=round(segment.start * 1000),
+            )
+        )
+    return clips
+
+
+def find_active_original_clips(
+    clips: list[OriginalAudioClip], position_ms: int
+) -> list[OriginalAudioClip]:
+    """Return Original Audio clips active at a master timeline position."""
+    return [clip for clip in clips if clip.start_ms <= position_ms < clip.end_ms]
+
+
+def position_within_original_clip_ms(clip: OriginalAudioClip, position_ms: int) -> int:
+    """Map master timeline position to the corresponding source audio position."""
+    return clip.source_start_ms + max(0, position_ms - clip.start_ms)
 
 
 def track_window_ms(track: MixSpeechTrack) -> tuple[int, int]:

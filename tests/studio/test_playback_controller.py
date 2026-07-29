@@ -1,10 +1,4 @@
-"""Studio V2 — Professional Playback.
-
-Tests for:
-- timeline_audio.py: pure per-track timing/volume math for Timeline Preview
-- playback_controller.py: PlaybackController mode switching, play/pause/stop,
-  seek, clip preview, and video/audio synchronization
-"""
+"""Studio V3.2 dual-audio playback tests."""
 
 from __future__ import annotations
 
@@ -22,26 +16,21 @@ import pytest
 from PySide6.QtCore import QCoreApplication, QUrl
 
 from automatedub.vertical_slice.mix import MixSpeechTrack
-from automatedub_studio.playback.playback_controller import (
-    _LOADED,
-    PlaybackController,
-    PlaybackMode,
-)
+from automatedub_studio.playback.playback_controller import _LOADED, PlaybackController
 from automatedub_studio.playback.timeline_audio import (
+    build_original_audio_clips,
     compute_playback_volume,
+    find_active_original_clips,
     find_active_track,
+    position_within_original_clip_ms,
     position_within_track_ms,
     track_window_ms,
 )
 from automatedub_studio.playback.video_player import VideoPlayerWidget
+from automatedub_studio.project.models import Segment
 
 
 def pump_until(predicate, timeout_s: float = 3.0) -> None:
-    """Process Qt events until `predicate()` is true or `timeout_s` elapses.
-
-    Needed because QMediaPlayer loads media asynchronously even against the
-    offscreen ffmpeg backend used in tests.
-    """
     deadline = monotonic() + timeout_s
     while not predicate() and monotonic() < deadline:
         QCoreApplication.processEvents()
@@ -60,18 +49,28 @@ requires_ffmpeg = pytest.mark.skipif(not _HAS_FFMPEG, reason="ffmpeg not availab
 
 
 def make_playable_video(path: Path, seconds: float = 2.0) -> None:
-    """Generate a real, decodable MP4 (no fake header bytes).
-
-    `QMediaPlayer` silently drops `setPosition()` calls while the source is
-    a fake/undecodable file, so tests asserting on `position_ms` need a real
-    file the ffmpeg-backed Qt Multimedia backend can actually load.
-    """
     subprocess.run(
         [
-            "ffmpeg", "-y", "-loglevel", "error",
-            "-f", "lavfi", "-i", f"color=c=black:s=64x64:d={seconds}",
-            "-f", "lavfi", "-i", "anullsrc=r=16000:cl=mono",
-            "-t", str(seconds), "-c:v", "libx264", "-c:a", "aac", "-pix_fmt", "yuv420p",
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c=black:s=64x64:d={seconds}",
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=r=16000:cl=mono",
+            "-t",
+            str(seconds),
+            "-c:v",
+            "libx264",
+            "-c:a",
+            "aac",
+            "-pix_fmt",
+            "yuv420p",
             str(path),
         ],
         check=True,
@@ -113,6 +112,22 @@ def make_track(
     )
 
 
+def make_segment(
+    segment_id: int = 0,
+    start: float = 0.0,
+    end: float = 1.0,
+    offset_ms: int = 0,
+) -> Segment:
+    return Segment(
+        id=segment_id,
+        start=start,
+        end=end,
+        source_text="source",
+        target_text="target",
+        offset_ms=offset_ms,
+    )
+
+
 # ---------------------------------------------------------------------------
 # timeline_audio.py — pure timing math
 # ---------------------------------------------------------------------------
@@ -124,7 +139,6 @@ def test_track_window_ms_no_speed_change():
 
 
 def test_track_window_ms_sped_up():
-    # atempo > 1.0 means the clip plays faster, so its window shrinks.
     track = make_track(delay_ms=0, generated_duration=2.0, atempo=2.0)
     assert track_window_ms(track) == (0, 1000)
 
@@ -172,111 +186,149 @@ def test_position_within_track_ms_clamps_before_start():
     assert position_within_track_ms(track, 0) == 0
 
 
+def test_build_original_audio_clips_uses_segment_timing_and_offset(tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    segment = make_segment(start=1.0, end=2.5, offset_ms=250)
+
+    clips = build_original_audio_clips(audio_path, [segment])
+
+    assert clips[0].path == audio_path
+    assert clips[0].start_ms == 1250
+    assert clips[0].end_ms == 2750
+    assert clips[0].source_start_ms == 1000
+
+
+def test_find_active_original_clips_returns_matching_windows(tmp_path):
+    clips = build_original_audio_clips(
+        tmp_path / "audio.wav",
+        [make_segment(0, 0.0, 1.0), make_segment(1, 2.0, 3.0)],
+    )
+    assert [clip.id for clip in find_active_original_clips(clips, 500)] == [0]
+    assert find_active_original_clips(clips, 1500) == []
+
+
+def test_position_within_original_clip_maps_to_source_audio(tmp_path):
+    clip = build_original_audio_clips(
+        tmp_path / "audio.wav", [make_segment(start=2.0, end=3.0, offset_ms=500)]
+    )[0]
+    assert position_within_original_clip_ms(clip, 2600) == 2100
+
+
 # ---------------------------------------------------------------------------
-# PlaybackController — construction and mode switching
+# PlaybackController — V3.2 dual audio playback
 # ---------------------------------------------------------------------------
 
 
-def test_controller_starts_in_original_mode(qapp):
-    controller = PlaybackController(VideoPlayerWidget())
-    assert controller.mode == PlaybackMode.ORIGINAL
-
-
-def test_original_mode_leaves_video_audio_unmuted(qapp):
+def test_video_audio_is_always_muted(qapp):
     video_player = VideoPlayerWidget()
     controller = PlaybackController(video_player)
-    controller.set_sources(None, None, [])
-    assert video_player._audio_output.isMuted() is False
 
+    video_player.set_audio_muted(False)
+    controller.set_sources(None, [], [])
+    controller._sync_audio_to_position(0, start_playing=False)
 
-def test_switching_to_mixed_mode_mutes_video_audio(qapp):
-    video_player = VideoPlayerWidget()
-    controller = PlaybackController(video_player)
-    controller.set_mode(PlaybackMode.MIXED)
     assert video_player._audio_output.isMuted() is True
 
 
-def test_switching_to_khmer_mode_mutes_video_audio(qapp):
-    video_player = VideoPlayerWidget()
-    controller = PlaybackController(video_player)
-    controller.set_mode(PlaybackMode.KHMER_TTS)
-    assert video_player._audio_output.isMuted() is True
-
-
-def test_switching_to_timeline_preview_mutes_video_audio(qapp):
-    video_player = VideoPlayerWidget()
-    controller = PlaybackController(video_player)
-    controller.set_mode(PlaybackMode.TIMELINE_PREVIEW)
-    assert video_player._audio_output.isMuted() is True
-
-
-def test_switching_back_to_original_unmutes_video_audio(qapp):
-    video_player = VideoPlayerWidget()
-    controller = PlaybackController(video_player)
-    controller.set_mode(PlaybackMode.MIXED)
-    controller.set_mode(PlaybackMode.ORIGINAL)
-    assert video_player._audio_output.isMuted() is False
-
-
-def test_switching_to_same_mode_is_a_no_op(qapp):
+def test_playback_no_longer_exposes_playback_modes(qapp):
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_mode(PlaybackMode.ORIGINAL)
-    assert controller.mode == PlaybackMode.ORIGINAL
+
+    assert not hasattr(controller, "mode")
+    assert not hasattr(controller, "set_mode")
 
 
-@requires_ffmpeg
-def test_mode_switch_does_not_touch_master_clock_position(qapp, tmp_path):
-    video_path = tmp_path / "video.mp4"
-    make_playable_video(video_path, seconds=10.0)
-    video_player = VideoPlayerWidget()
-    video_player.load_video(video_path)
-    pump_until(lambda: video_player._has_video and video_player._media_player.duration() > 0)
-    controller = PlaybackController(video_player)
-
-    controller.seek(5000)
-    pump_until(lambda: video_player.position_ms == 5000)
-    controller.set_mode(PlaybackMode.MIXED)
-    assert video_player.position_ms == 5000
-    controller.set_mode(PlaybackMode.KHMER_TTS)
-    assert video_player.position_ms == 5000
-
-
-# ---------------------------------------------------------------------------
-# PlaybackController — sources per mode
-# ---------------------------------------------------------------------------
-
-
-def test_set_sources_mixed_mode_loads_mixed_audio_path(qapp, tmp_path):
-    mixed_path = tmp_path / "mixed_audio.wav"
-    make_wav(mixed_path)
+def test_playback_uses_original_audio(qapp, tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    make_wav(audio_path, seconds=3.0)
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_mode(PlaybackMode.MIXED)
-    controller.set_sources(mixed_path, None, [])
+    controller.set_sources(audio_path, [make_segment(0, 1.0, 2.0)], [])
+
+    controller.seek(1200)
+
+    assert controller._active_original_clip is not None
+    assert controller._original_audio_player.source() == QUrl.fromLocalFile(str(audio_path))
+
+
+def test_playback_uses_khmer_tts(qapp, tmp_path):
+    clip_path = tmp_path / "0000.wav"
+    make_wav(clip_path, seconds=1.0)
+    track = make_track(track_id=0, delay_ms=1000, generated_duration=1.0, tts_path=clip_path)
+    controller = PlaybackController(VideoPlayerWidget())
+    controller.set_sources(None, [], [track])
+
+    controller.seek(1200)
+
+    assert controller._active_khmer_track is track
+    assert controller._khmer_audio_player.source() == QUrl.fromLocalFile(str(clip_path))
+
+
+def test_mute_original_only_khmer_plays(qapp, tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    clip_path = tmp_path / "0000.wav"
+    make_wav(audio_path, seconds=2.0)
+    make_wav(clip_path, seconds=1.0)
+    track = make_track(track_id=0, delay_ms=0, generated_duration=1.0, tts_path=clip_path)
+    controller = PlaybackController(VideoPlayerWidget())
+    controller.set_sources(audio_path, [make_segment(0, 0.0, 1.0)], [track])
+
+    controller.set_original_muted(True)
+    controller.seek(500)
+
+    assert controller._active_original_clip is None
+    assert controller._active_khmer_track is track
+    assert controller._original_audio_player.source().isEmpty()
+    assert controller._khmer_audio_player.source() == QUrl.fromLocalFile(str(clip_path))
+
+
+def test_mute_khmer_only_original_plays(qapp, tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    clip_path = tmp_path / "0000.wav"
+    make_wav(audio_path, seconds=2.0)
+    make_wav(clip_path, seconds=1.0)
+    track = make_track(track_id=0, delay_ms=0, generated_duration=1.0, tts_path=clip_path)
+    controller = PlaybackController(VideoPlayerWidget())
+    controller.set_sources(audio_path, [make_segment(0, 0.0, 1.0)], [track])
+
+    controller.set_khmer_muted(True)
+    controller.seek(500)
+
+    assert controller._active_original_clip is not None
+    assert controller._active_khmer_track is None
+    assert controller._original_audio_player.source() == QUrl.fromLocalFile(str(audio_path))
+    assert controller._khmer_audio_player.source().isEmpty()
+
+
+def test_both_unmuted_both_tracks_are_mixed_by_parallel_players(qapp, tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    clip_path = tmp_path / "0000.wav"
+    make_wav(audio_path, seconds=2.0)
+    make_wav(clip_path, seconds=1.0)
+    track = make_track(track_id=0, delay_ms=0, generated_duration=1.0, tts_path=clip_path)
+    controller = PlaybackController(VideoPlayerWidget())
+    controller.set_sources(audio_path, [make_segment(0, 0.0, 1.0)], [track])
+
+    controller.seek(500)
+
+    assert controller._active_original_clip is not None
+    assert controller._active_khmer_track is track
+    assert controller._original_audio_player.source() == QUrl.fromLocalFile(str(audio_path))
+    assert controller._khmer_audio_player.source() == QUrl.fromLocalFile(str(clip_path))
+
+
+def test_khmer_volume_applies_fade(qapp, tmp_path):
+    clip_path = tmp_path / "0000.wav"
+    make_wav(clip_path, seconds=1.0)
+    track = make_track(
+        track_id=0, delay_ms=0, generated_duration=1.0, fade_in_ms=500, tts_path=clip_path
+    )
+    controller = PlaybackController(VideoPlayerWidget())
+    controller.set_sources(None, [], [track])
+
     controller.seek(0)
-    assert controller._audio_player.source() == QUrl.fromLocalFile(str(mixed_path))
+    assert controller._khmer_audio_output.volume() == 0.0
 
-
-def test_set_sources_khmer_mode_loads_tts_combined_path(qapp, tmp_path):
-    khmer_path = tmp_path / "tts_combined.wav"
-    make_wav(khmer_path)
-    controller = PlaybackController(VideoPlayerWidget())
-    controller.set_mode(PlaybackMode.KHMER_TTS)
-    controller.set_sources(None, khmer_path, [])
-    controller.seek(0)
-    assert controller._audio_player.source() == QUrl.fromLocalFile(str(khmer_path))
-
-
-def test_mixed_mode_without_source_does_not_raise(qapp):
-    controller = PlaybackController(VideoPlayerWidget())
-    controller.set_mode(PlaybackMode.MIXED)
-    controller.set_sources(None, None, [])
-    controller.seek(0)
-    assert controller._audio_player.source().isEmpty()
-
-
-# ---------------------------------------------------------------------------
-# PlaybackController — play / pause / stop
-# ---------------------------------------------------------------------------
+    controller.seek(500)
+    assert controller._khmer_audio_output.volume() == 1.0
 
 
 def test_stop_stops_video_and_audio(qapp, tmp_path):
@@ -300,90 +352,13 @@ def test_pause_stops_sync_timer(qapp, tmp_path):
     assert controller._sync_timer.isActive() is False
 
 
-# ---------------------------------------------------------------------------
-# PlaybackController — Timeline Preview
-# ---------------------------------------------------------------------------
-
-
-def test_timeline_preview_selects_active_track_on_seek(qapp, tmp_path):
-    clip_path = tmp_path / "0000.wav"
-    make_wav(clip_path, seconds=1.0)
-    track = make_track(track_id=0, delay_ms=0, generated_duration=1.0, tts_path=clip_path)
-
-    controller = PlaybackController(VideoPlayerWidget())
-    controller.set_mode(PlaybackMode.TIMELINE_PREVIEW)
-    controller.set_sources(None, None, [track])
-
-    controller.seek(200)
-    assert controller._active_timeline_track is track
-    assert controller._audio_player.source() == QUrl.fromLocalFile(str(clip_path))
-
-
-def test_timeline_preview_clears_active_track_between_clips(qapp, tmp_path):
-    clip_path = tmp_path / "0000.wav"
-    make_wav(clip_path, seconds=1.0)
-    track = make_track(track_id=0, delay_ms=0, generated_duration=1.0, tts_path=clip_path)
-
-    controller = PlaybackController(VideoPlayerWidget())
-    controller.set_mode(PlaybackMode.TIMELINE_PREVIEW)
-    controller.set_sources(None, None, [track])
-
-    controller.seek(200)
-    assert controller._active_timeline_track is track
-
-    controller.seek(5000)
-    assert controller._active_timeline_track is None
-
-
-def test_timeline_preview_switches_between_two_clips(qapp, tmp_path):
-    clip_a = tmp_path / "0000.wav"
-    clip_b = tmp_path / "0001.wav"
-    make_wav(clip_a, seconds=1.0)
-    make_wav(clip_b, seconds=1.0)
-    track_a = make_track(track_id=0, delay_ms=0, generated_duration=1.0, tts_path=clip_a)
-    track_b = make_track(track_id=1, delay_ms=2000, generated_duration=1.0, tts_path=clip_b)
-
-    controller = PlaybackController(VideoPlayerWidget())
-    controller.set_mode(PlaybackMode.TIMELINE_PREVIEW)
-    controller.set_sources(None, None, [track_a, track_b])
-
-    controller.seek(200)
-    assert controller._audio_player.source() == QUrl.fromLocalFile(str(clip_a))
-
-    controller.seek(2200)
-    assert controller._audio_player.source() == QUrl.fromLocalFile(str(clip_b))
-
-
-def test_timeline_preview_applies_fade_volume(qapp, tmp_path):
-    clip_path = tmp_path / "0000.wav"
-    make_wav(clip_path, seconds=1.0)
-    track = make_track(
-        track_id=0, delay_ms=0, generated_duration=1.0, fade_in_ms=500, tts_path=clip_path
-    )
-
-    controller = PlaybackController(VideoPlayerWidget())
-    controller.set_mode(PlaybackMode.TIMELINE_PREVIEW)
-    controller.set_sources(None, None, [track])
-
-    controller.seek(0)
-    assert controller._audio_output.volume() == 0.0
-
-    controller.seek(500)
-    assert controller._audio_output.volume() == 1.0
-
-
-# ---------------------------------------------------------------------------
-# PlaybackController — Play Clip (single-clip audition)
-# ---------------------------------------------------------------------------
-
-
-def test_play_clip_loads_and_plays_single_source(qapp, tmp_path):
+def test_play_clip_loads_single_audition_source(qapp, tmp_path):
     clip_path = tmp_path / "clip.wav"
     make_wav(clip_path, seconds=0.5)
 
     controller = PlaybackController(VideoPlayerWidget())
     controller.play_clip(clip_path)
-    assert controller._audio_player.source() == QUrl.fromLocalFile(str(clip_path))
+    assert controller._audition_player.source() == QUrl.fromLocalFile(str(clip_path))
 
 
 @requires_ffmpeg
@@ -401,7 +376,7 @@ def test_play_clip_does_not_move_master_clock(qapp, tmp_path):
     pump_until(lambda: video_player.position_ms == 3000)
 
     controller.play_clip(clip_path)
-    pump_until(lambda: not controller._audio_player.source().isEmpty())
+    pump_until(lambda: not controller._audition_player.source().isEmpty())
     assert video_player.position_ms == 3000
 
 
@@ -419,43 +394,33 @@ def test_play_clip_stops_sync_timer(qapp, tmp_path):
     assert controller._sync_timer.isActive() is False
 
 
-# ---------------------------------------------------------------------------
-# PlaybackController — video/audio synchronization
-# ---------------------------------------------------------------------------
-
-
-def test_resync_reseeks_audio_on_drift(qapp, tmp_path):
-    mixed_path = tmp_path / "mixed_audio.wav"
-    make_wav(mixed_path, seconds=10.0)
+def test_resync_reseeks_original_audio_on_drift(qapp, tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    make_wav(audio_path, seconds=10.0)
 
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_mode(PlaybackMode.MIXED)
-    controller.set_sources(mixed_path, None, [])
-    controller.seek(0)
-    pump_until(lambda: controller._audio_player.mediaStatus() == _LOADED)
-
-    controller._audio_player.setPosition(5000)
-    controller._maybe_resync(1000)
-    assert controller._audio_player.position() == 1000
-
-
-def test_resync_ignores_small_drift(qapp, tmp_path):
-    mixed_path = tmp_path / "mixed_audio.wav"
-    make_wav(mixed_path, seconds=10.0)
-
-    controller = PlaybackController(VideoPlayerWidget())
-    controller.set_mode(PlaybackMode.MIXED)
-    controller.set_sources(mixed_path, None, [])
+    controller.set_sources(audio_path, [make_segment(0, 0.0, 5.0)], [])
     controller.seek(1000)
-    pump_until(lambda: controller._audio_player.mediaStatus() == _LOADED)
+    pump_until(lambda: controller._original_audio_player.mediaStatus() == _LOADED)
 
-    controller._audio_player.setPosition(1010)
+    controller._original_audio_player.setPosition(5000)
     controller._maybe_resync(1000)
-    assert controller._audio_player.position() == 1010
+    assert controller._original_audio_player.position() == 1000
 
 
-def test_resync_no_op_in_original_mode(qapp, tmp_path):
+def test_resync_ignores_small_original_audio_drift(qapp, tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    make_wav(audio_path, seconds=10.0)
+
     controller = PlaybackController(VideoPlayerWidget())
-    assert controller.mode == PlaybackMode.ORIGINAL
+    controller.set_sources(audio_path, [make_segment(0, 0.0, 5.0)], [])
+    controller.seek(1000)
+    pump_until(lambda: controller._original_audio_player.mediaStatus() == _LOADED)
+
+    controller._original_audio_player.setPosition(1010)
     controller._maybe_resync(1000)
-    assert controller._audio_player.source().isEmpty()
+    assert controller._original_audio_player.position() == 1010
+
+
+def test_make_wav_bytes_returns_valid_wav_bytes():
+    assert make_wav_bytes().startswith(b"RIFF")

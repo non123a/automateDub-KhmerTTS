@@ -8,12 +8,9 @@ from typing import Any
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QUndoStack
 from PySide6.QtWidgets import (
-    QComboBox,
     QDockWidget,
     QFileDialog,
-    QHBoxLayout,
     QInputDialog,
-    QLabel,
     QMainWindow,
     QMessageBox,
     QProgressDialog,
@@ -49,7 +46,7 @@ from automatedub_studio.edit.commands import (
     TrimSegmentCommand,
 )
 from automatedub_studio.inspector.segment_inspector import SegmentInspectorWidget
-from automatedub_studio.playback.playback_controller import PlaybackController, PlaybackMode
+from automatedub_studio.playback.playback_controller import PlaybackController
 from automatedub_studio.playback.video_player import VideoPlayerWidget
 from automatedub_studio.project.editable_project import EditableSegment
 from automatedub_studio.project.edits import apply_edits, save_edits
@@ -209,28 +206,10 @@ class MainWindow(QMainWindow):
         self.video_player.playbackStatusChanged.connect(self.statusBar().showMessage)
         self.playback_controller = PlaybackController(self.video_player, self)
 
-        self.mode_selector = QComboBox()
-        for mode, label in (
-            (PlaybackMode.ORIGINAL, "Original"),
-            (PlaybackMode.MIXED, "Mixed"),
-            (PlaybackMode.KHMER_TTS, "Khmer TTS"),
-            (PlaybackMode.TIMELINE_PREVIEW, "Timeline Preview"),
-        ):
-            self.mode_selector.addItem(label, mode)
-        self.mode_selector.currentIndexChanged.connect(self._on_mode_selector_changed)
-
-        mode_bar = QWidget()
-        mode_bar_layout = QHBoxLayout(mode_bar)
-        mode_bar_layout.setContentsMargins(4, 4, 4, 4)
-        mode_bar_layout.addWidget(QLabel("Audio:"))
-        mode_bar_layout.addWidget(self.mode_selector)
-        mode_bar_layout.addStretch(1)
-
         self.timeline = TimelineWidget()
         video_container = QWidget()
         video_layout = QVBoxLayout(video_container)
         video_layout.setContentsMargins(0, 0, 0, 0)
-        video_layout.addWidget(mode_bar)
         video_layout.addWidget(self.video_player, 1)
 
         splitter = QSplitter(Qt.Orientation.Vertical)
@@ -281,11 +260,6 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
     # Signal handlers — timeline
     # ------------------------------------------------------------------
-
-    def _on_mode_selector_changed(self, index: int) -> None:
-        mode = self.mode_selector.itemData(index)
-        if mode is not None:
-            self.playback_controller.set_mode(mode)
 
     def _on_snap_toggled(self, enabled: bool) -> None:
         self.snap_action.setText("Snap: ON" if enabled else "Snap: OFF")
@@ -760,7 +734,7 @@ class MainWindow(QMainWindow):
         current `EditableSegment` state without ever re-mixing or exporting.
         """
         if self.project is None:
-            self.playback_controller.set_sources(None, None, [])
+            self.playback_controller.set_sources(None, [], [])
             return
         try:
             timeline_tracks = build_export_speech_tracks(
@@ -772,7 +746,7 @@ class MainWindow(QMainWindow):
         except ExportError:
             timeline_tracks = []
         self.playback_controller.set_sources(
-            self.project.mixed_audio_path, self.project.tts_combined_path, timeline_tracks
+            self.project.audio_path, self.project.segments, timeline_tracks
         )
 
     def _save_project(self) -> None:

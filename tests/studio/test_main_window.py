@@ -4,7 +4,6 @@ from conftest import make_valid_project
 from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QMenu
 
-from automatedub_studio.playback.playback_controller import PlaybackMode
 from automatedub_studio.ui import main_window as main_window_module
 from automatedub_studio.ui.main_window import WINDOW_TITLE, MainWindow
 
@@ -173,8 +172,8 @@ def test_main_window_video_player_is_central_widget(qapp):
     window = MainWindow(settings=_memory_settings())
     central = window.centralWidget()
     assert isinstance(central, QSplitter)
-    # The video player now lives inside a container widget (alongside the
-    # playback mode selector) rather than directly in the splitter.
+    # The video player now lives inside a container widget rather than
+    # directly in the splitter.
     assert central.isAncestorOf(window.video_player)
 
 
@@ -209,20 +208,13 @@ def test_open_project_with_video_switches_to_video_surface(qapp, tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Studio V2 — Professional Playback
+# Studio V3.2 — Dual Audio Playback
 # ---------------------------------------------------------------------------
 
 
-def test_mode_selector_has_four_modes(qapp):
+def test_playback_mode_selector_removed(qapp):
     window = MainWindow(settings=_memory_settings())
-    labels = [window.mode_selector.itemText(i) for i in range(window.mode_selector.count())]
-    assert labels == ["Original", "Mixed", "Khmer TTS", "Timeline Preview"]
-
-
-def test_mode_selector_starts_on_original(qapp):
-    window = MainWindow(settings=_memory_settings())
-    assert window.playback_controller.mode == PlaybackMode.ORIGINAL
-    assert window.mode_selector.currentText() == "Original"
+    assert not hasattr(window, "mode_selector")
 
 
 def test_snap_toolbar_action_toggles_timeline_snapping(qapp):
@@ -237,19 +229,6 @@ def test_snap_toolbar_action_toggles_timeline_snapping(qapp):
     assert window.timeline._view._snap_enabled is True
 
 
-def test_selecting_mixed_mode_switches_controller(qapp):
-    window = MainWindow(settings=_memory_settings())
-    window.mode_selector.setCurrentIndex(window.mode_selector.findData(PlaybackMode.MIXED))
-    assert window.playback_controller.mode == PlaybackMode.MIXED
-
-
-def test_selecting_timeline_preview_mode_switches_controller(qapp):
-    window = MainWindow(settings=_memory_settings())
-    index = window.mode_selector.findData(PlaybackMode.TIMELINE_PREVIEW)
-    window.mode_selector.setCurrentIndex(index)
-    assert window.playback_controller.mode == PlaybackMode.TIMELINE_PREVIEW
-
-
 def _write_valid_wav(path, seconds: float = 0.5, frame_rate: int = 16000) -> None:
     import wave
 
@@ -260,7 +239,7 @@ def _write_valid_wav(path, seconds: float = 0.5, frame_rate: int = 16000) -> Non
         wf.writeframes(b"\x00\x00" * int(frame_rate * seconds))
 
 
-def test_open_project_populates_timeline_preview_tracks(qapp, tmp_path):
+def test_open_project_populates_dual_audio_tracks(qapp, tmp_path):
     project_dir = make_valid_project(tmp_path, segment_count=3)
     for wav_path in (project_dir / "tts").glob("*.wav"):
         _write_valid_wav(wav_path)
@@ -268,7 +247,8 @@ def test_open_project_populates_timeline_preview_tracks(qapp, tmp_path):
 
     window.open_project_path(project_dir)
 
-    assert len(window.playback_controller._timeline_tracks) > 0
+    assert len(window.playback_controller._original_audio_clips) == 3
+    assert len(window.playback_controller._khmer_tracks) > 0
 
 
 def test_double_clicking_clip_plays_it_in_isolation(qapp, tmp_path):
@@ -285,20 +265,27 @@ def test_double_clicking_clip_plays_it_in_isolation(qapp, tmp_path):
     from automatedub.vertical_slice.tts import tts_segment_output_path
 
     expected = tts_segment_output_path(window.project.tts_directory, 0)
-    assert window.playback_controller._audio_player.source() == QUrl.fromLocalFile(str(expected))
+    assert window.playback_controller._audition_player.source() == QUrl.fromLocalFile(str(expected))
 
 
-def test_offset_edit_refreshes_timeline_preview_tracks(qapp, tmp_path):
+def test_offset_edit_refreshes_dual_audio_tracks(qapp, tmp_path):
     project_dir = make_valid_project(tmp_path, segment_count=2)
     for wav_path in (project_dir / "tts").glob("*.wav"):
         _write_valid_wav(wav_path)
     window = MainWindow(settings=_memory_settings())
     window.open_project_path(project_dir)
 
-    baseline = next(t for t in window.playback_controller._timeline_tracks if t.id == 0)
+    baseline = next(t for t in window.playback_controller._khmer_tracks if t.id == 0)
     baseline_delay_ms = baseline.delay_ms
+    original_baseline = next(
+        clip for clip in window.playback_controller._original_audio_clips if clip.id == 0
+    )
 
     window._on_offset_committed(0, 0, 250)
 
-    track = next(t for t in window.playback_controller._timeline_tracks if t.id == 0)
+    track = next(t for t in window.playback_controller._khmer_tracks if t.id == 0)
+    original = next(
+        clip for clip in window.playback_controller._original_audio_clips if clip.id == 0
+    )
     assert track.delay_ms == baseline_delay_ms + 250
+    assert original.start_ms == original_baseline.start_ms + 250
