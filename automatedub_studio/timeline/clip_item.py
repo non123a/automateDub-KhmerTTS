@@ -23,6 +23,7 @@ LANE_COLORS = {
     1: QColor("#60C080"),
 }
 LOCKED_COLOR = QColor("#8888AA")
+FLASH_COLOR = QColor("#F4D35E")
 
 SELECTED_PEN_COLOR = QColor("#FF8800")
 SELECTED_PEN_WIDTH = 3
@@ -71,6 +72,7 @@ class ClipItem(QGraphicsRectItem):
         self.locked = False
         self.status: str | None = None
         self._hovered = False
+        self._flashing = False
         self._wav_path = wav_path
         self._waveform_cache = waveform_cache
         self._wav_start_seconds = wav_start_seconds
@@ -108,6 +110,10 @@ class ClipItem(QGraphicsRectItem):
     def set_status(self, status: str | None) -> None:
         """status is one of STATUS_GENERATING/STATUS_FAILED/STATUS_NEEDS_REGENERATION or None."""
         self.status = status
+        self._refresh_visuals()
+
+    def set_flash(self, flashing: bool) -> None:
+        self._flashing = flashing
         self._refresh_visuals()
 
     def paint(self, painter, option, widget=None) -> None:
@@ -162,7 +168,10 @@ class ClipItem(QGraphicsRectItem):
 
     def _refresh_visuals(self) -> None:
         # Precedence: Generating > Locked > Failed/Needs Regeneration > lane default.
-        if self.status == STATUS_GENERATING:
+        if self._flashing:
+            color = FLASH_COLOR
+            icon = None
+        elif self.status == STATUS_GENERATING:
             color = STATUS_COLORS[STATUS_GENERATING]
             icon = STATUS_ICONS[STATUS_GENERATING]
         elif self.locked:

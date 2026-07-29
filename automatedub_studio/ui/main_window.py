@@ -40,8 +40,10 @@ from automatedub_studio.backend.regeneration_service import (
     select_selected_ids,
 )
 from automatedub_studio.edit.commands import (
+    ClipClipboard,
     MultiOffsetChangeCommand,
     OffsetChangeCommand,
+    PasteSegmentsCommand,
     PropertyChangeCommand,
     SplitSegmentCommand,
     TrimSegmentCommand,
@@ -93,6 +95,7 @@ class MainWindow(QMainWindow):
         self._regen_completed = 0
         self._regen_total = 0
         self._regen_errors: list[str] = []
+        self._clipboard = ClipClipboard()
 
         self.setWindowTitle(WINDOW_TITLE)
         self._build_menu_bar()
@@ -139,6 +142,25 @@ class MainWindow(QMainWindow):
         self.redo_action = self._undo_stack.createRedoAction(self, "&Redo")
         self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
         edit_menu.addAction(self.redo_action)
+
+        edit_menu.addSeparator()
+
+        self.copy_clip_action = QAction("Copy Clips", self)
+        self.copy_clip_action.setShortcut(QKeySequence.StandardKey.Copy)
+        self.copy_clip_action.triggered.connect(self._copy_selected_clips)
+        edit_menu.addAction(self.copy_clip_action)
+
+        self.paste_clip_action = QAction("Paste Clips", self)
+        self.paste_clip_action.setShortcut(QKeySequence.StandardKey.Paste)
+        self.paste_clip_action.triggered.connect(self._paste_clipboard)
+        edit_menu.addAction(self.paste_clip_action)
+
+        self.duplicate_clip_action = QAction("Duplicate Clips", self)
+        self.duplicate_clip_action.setShortcut("Ctrl+D")
+        self.duplicate_clip_action.triggered.connect(self._duplicate_selected_clips)
+        edit_menu.addAction(self.duplicate_clip_action)
+
+        edit_menu.addSeparator()
 
         self.split_clip_action = QAction("Split Clip", self)
         self.split_clip_action.setShortcut("S")
@@ -409,7 +431,9 @@ class MainWindow(QMainWindow):
             self.inspector.set_segment(selected[0], self._editables.get(segment_id))
         self._refresh_playback_sources()
 
-    def _apply_structural_timeline_edit(self) -> None:
+    def _apply_structural_timeline_edit(
+        self, selected_ids: list[int] | None = None, flash: bool = False
+    ) -> None:
         if self.project is None:
             return
         self.timeline.load_segments(
@@ -424,7 +448,13 @@ class MainWindow(QMainWindow):
                 self.timeline.apply_status(seg_id, STATUS_FAILED)
             elif es.needs_regeneration:
                 self.timeline.apply_status(seg_id, STATUS_NEEDS_REGENERATION)
-        self.inspector.set_segment(None)
+        selected_ids = selected_ids or []
+        if selected_ids:
+            self.timeline.select_segment_ids(selected_ids)
+            if flash:
+                self.timeline.flash_segment_ids(selected_ids)
+        else:
+            self.inspector.set_segment(None)
         self._update_regenerate_actions()
         self._refresh_playback_sources()
 
@@ -499,6 +529,56 @@ class MainWindow(QMainWindow):
     def _regenerate_ids(self, *segment_ids: int) -> None:
         self._start_regeneration(list(segment_ids))
 
+    def _copy_selected_clips(self) -> None:
+        selected = self.timeline.selected_segments
+        if not selected:
+            return
+        self._clipboard.replace(selected, self._editables)
+
+    def _paste_clipboard(self) -> None:
+        if self.project is None or self._clipboard.is_empty:
+            return
+        self._paste_segments(
+            self._clipboard.segments,
+            self._clipboard.editables,
+            self.timeline.playhead_ms / 1000.0,
+        )
+
+    def _duplicate_selected_clips(self) -> None:
+        if self.project is None:
+            return
+        selected = self.timeline.selected_segments
+        if not selected:
+            return
+        source_editables = {
+            segment.id: self._editables[segment.id]
+            for segment in selected
+            if segment.id in self._editables
+        }
+        paste_start = max(segment.end for segment in selected)
+        self._paste_segments(selected, source_editables, paste_start)
+
+    def _paste_segments(
+        self,
+        source_segments: list,
+        source_editables: dict[int, EditableSegment],
+        paste_start_seconds: float,
+    ) -> None:
+        if self.project is None or not source_segments:
+            return
+        new_ids = self._next_segment_ids(len(source_segments))
+        cmd = PasteSegmentsCommand(
+            self.project.segments,
+            source_segments,
+            paste_start_seconds,
+            new_ids,
+            self._editables,
+            source_editables,
+            self.project.tts_directory,
+            apply_cb=self._apply_structural_timeline_edit,
+        )
+        self._undo_stack.push(cmd)
+
     def _split_selected_clip(self) -> None:
         if self.project is None:
             return
@@ -519,6 +599,12 @@ class MainWindow(QMainWindow):
             apply_cb=self._apply_structural_timeline_edit,
         )
         self._undo_stack.push(cmd)
+
+    def _next_segment_ids(self, count: int) -> list[int]:
+        if self.project is None:
+            return []
+        start = max((item.id for item in self.project.segments), default=-1) + 1
+        return list(range(start, start + count))
 
     def _start_regeneration(self, segment_ids: list[int]) -> None:
         if self.project is None or not segment_ids or self._job_runner.is_running:

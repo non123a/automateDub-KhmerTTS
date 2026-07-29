@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QBrush, QColor, QPen, QTransform, QWheelEvent
 from PySide6.QtWidgets import (
     QGraphicsLineItem,
@@ -47,6 +47,7 @@ LANE_COUNT = 2
 HEADER_BG_COLOR = QColor("#2D2D2D")
 LANE_BG_COLORS = [QColor("#1E2A3A"), QColor("#1A2E1A")]
 PLAYHEAD_COLOR = QColor("#FF4444")
+PASTE_FLASH_MS = 650
 
 _MIN_ZOOM = 0.05
 _MAX_ZOOM = 20.0
@@ -465,6 +466,30 @@ class TimelineWidget(QWidget):
         for clip in self._clips_by_segment.get(segment_id, []):
             clip.set_status(status)
 
+    def select_segment_ids(self, segment_ids: list[int]) -> None:
+        """Select all clip items belonging to the given segment IDs."""
+        wanted = set(segment_ids)
+        self._scene.blockSignals(True)
+        self._scene.clearSelection()
+        for segment_id in wanted:
+            for clip in self._clips_by_segment.get(segment_id, []):
+                clip.setSelected(True)
+        self._scene.blockSignals(False)
+        self._on_selection_changed()
+
+    def flash_segment_ids(self, segment_ids: list[int]) -> None:
+        """Briefly highlight newly pasted/duplicated clips."""
+        wanted = set(segment_ids)
+        clips = [
+            clip
+            for segment_id in wanted
+            for clip in self._clips_by_segment.get(segment_id, [])
+        ]
+        for clip in clips:
+            clip.set_flash(True)
+        if clips:
+            QTimer.singleShot(PASTE_FLASH_MS, lambda: self._clear_flash(clips))
+
     def apply_trim(self, segment_id: int, start_seconds: float, end_seconds: float) -> None:
         """Apply a constrained trim to a segment and redraw its clips."""
         segment = self._find_segment(segment_id)
@@ -543,6 +568,11 @@ class TimelineWidget(QWidget):
             if segment.id == segment_id:
                 return segment
         return None
+
+    @staticmethod
+    def _clear_flash(clips: list[ClipItem]) -> None:
+        for clip in clips:
+            clip.set_flash(False)
 
     def _neighbor_bounds(self, segment: Segment) -> tuple[float, float]:
         lane_segments = sorted(self._segments, key=lambda item: (item.start, item.id))
