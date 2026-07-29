@@ -59,3 +59,34 @@ class OffsetChangeCommand(QUndoCommand):
     def redo(self) -> None:
         self._segment.offset_ms = self._new
         self._apply_cb(self._segment.id, self._new)
+
+
+class MultiOffsetChangeCommand(QUndoCommand):
+    """Record multiple segment offset changes as one undoable move."""
+
+    def __init__(
+        self,
+        segments: list[Segment],
+        old_offsets_ms: dict[int, int],
+        new_offsets_ms: dict[int, int],
+        apply_cb: Callable[[int, int], None],
+    ):
+        super().__init__(f"Move {len(new_offsets_ms)} segments")
+        self._segments = {segment.id: segment for segment in segments}
+        self._old = dict(old_offsets_ms)
+        self._new = dict(new_offsets_ms)
+        self._apply_cb = apply_cb
+
+    def undo(self) -> None:
+        for segment_id, offset_ms in self._old.items():
+            segment = self._segments.get(segment_id)
+            if segment is not None:
+                segment.offset_ms = offset_ms
+            self._apply_cb(segment_id, offset_ms)
+
+    def redo(self) -> None:
+        for segment_id, offset_ms in self._new.items():
+            segment = self._segments.get(segment_id)
+            if segment is not None:
+                segment.offset_ms = offset_ms
+            self._apply_cb(segment_id, offset_ms)

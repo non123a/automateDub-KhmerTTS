@@ -71,8 +71,9 @@ class _TimelineView(QGraphicsView):
     """QGraphicsView with Ctrl+Wheel zoom and horizontal clip dragging."""
 
     zoomRequested = Signal(float)
-    clipDragMoved = Signal(int, int)      # (segment_id, live_offset_ms)
-    clipDragEnded = Signal(int, int, int) # (segment_id, old_offset_ms, new_offset_ms)
+    clipDragMoved = Signal(int, int)  # (segment_id, live_offset_ms)
+    clipDragEnded = Signal(int, int, int)  # (segment_id, old_offset_ms, new_offset_ms)
+    clipsDragEnded = Signal(dict, dict)  # old_offsets_by_segment_id, new_offsets_by_segment_id
     clipPlayRequested = Signal(int)       # segment_id, from double-clicking a clip
 
     def __init__(self):
@@ -80,10 +81,14 @@ class _TimelineView(QGraphicsView):
         self._drag_clip: ClipItem | None = None
         self._drag_press_scene_x: float = 0.0
         self._drag_start_offset_ms: int = 0
+        self._drag_start_offsets_ms: dict[int, int] = {}
         self._dragging: bool = False
         self._drag_label: QGraphicsTextItem | None = None
         self._snap_enabled = False
         self._snap_interval_ms = DEFAULT_SNAP_INTERVAL_MS
+        self._last_clicked_clip: ClipItem | None = None
+        self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
+        self.setRubberBandSelectionMode(Qt.ItemSelectionMode.IntersectsItemShape)
 
     def set_snap_enabled(self, enabled: bool) -> None:
         self._snap_enabled = enabled
@@ -91,8 +96,9 @@ class _TimelineView(QGraphicsView):
     def set_snap_interval_ms(self, interval_ms: int) -> None:
         self._snap_interval_ms = max(1, interval_ms)
 
-    def _offset_for_drag_delta(self, delta_ms: int) -> int:
-        raw_offset = self._drag_start_offset_ms + delta_ms
+    def _offset_for_drag_delta(self, delta_ms: int, start_offset_ms: int | None = None) -> int:
+        raw_offset = (self._drag_start_offset_ms if start_offset_ms is None else start_offset_ms)
+        raw_offset += delta_ms
         if not self._snap_enabled:
             return raw_offset
         return snap_offset(raw_offset, self._snap_interval_ms)
@@ -106,21 +112,39 @@ class _TimelineView(QGraphicsView):
             super().wheelEvent(event)
 
     def mousePressEvent(self, event) -> None:
-        super().mousePressEvent(event)
         if event.button() != Qt.MouseButton.LeftButton:
+            super().mousePressEvent(event)
             return
         scene_pos = self.mapToScene(event.position().toPoint())
         item = self.scene().itemAt(scene_pos, self.transform())
+        if isinstance(item, ClipItem) and self._is_additive_modifier(event.modifiers()):
+            self._toggle_clip_selection(item)
+            self._last_clicked_clip = item
+            event.accept()
+            return
+        if isinstance(item, ClipItem) and event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
+            self._select_range(item)
+            self._last_clicked_clip = item
+            event.accept()
+            return
+
+        was_selected_clip = isinstance(item, ClipItem) and item.isSelected()
+        if not was_selected_clip or event.modifiers():
+            super().mousePressEvent(event)
+
         if (
             isinstance(item, ClipItem)
             and item.isSelected()
-            and item.lane == 1
             and not item.locked
         ):
             self._drag_clip = item
             self._drag_press_scene_x = scene_pos.x()
             self._drag_start_offset_ms = item.segment.offset_ms
+            self._drag_start_offsets_ms = self._selected_unlocked_segment_offsets()
             self._dragging = False
+            self._last_clicked_clip = item
+        elif isinstance(item, ClipItem):
+            self._last_clicked_clip = item
 
     def mouseDoubleClickEvent(self, event) -> None:
         super().mouseDoubleClickEvent(event)
@@ -139,9 +163,12 @@ class _TimelineView(QGraphicsView):
                 self._dragging = True
             if self._dragging:
                 delta_ms = round(dx / BASE_PIXELS_PER_SECOND * 1000)
-                offset_ms = self._offset_for_drag_delta(delta_ms)
-                self.clipDragMoved.emit(self._drag_clip.segment.id, offset_ms)
-                self._update_drag_label(self._drag_clip, offset_ms)
+                moved_offsets = self._moved_offsets(delta_ms)
+                for segment_id, offset_ms in moved_offsets.items():
+                    self.clipDragMoved.emit(segment_id, offset_ms)
+                self._update_drag_label(
+                    self._drag_clip, moved_offsets[self._drag_clip.segment.id]
+                )
                 event.accept()
                 return
         super().mouseMoveEvent(event)
@@ -153,15 +180,28 @@ class _TimelineView(QGraphicsView):
                 scene_pos = self.mapToScene(event.position().toPoint())
                 dx = scene_pos.x() - self._drag_press_scene_x
                 delta_ms = round(dx / BASE_PIXELS_PER_SECOND * 1000)
-                new_offset_ms = self._offset_for_drag_delta(delta_ms)
-                if new_offset_ms != self._drag_start_offset_ms:
+                new_offsets_ms = self._moved_offsets(delta_ms)
+                changed_new_offsets = {
+                    segment_id: offset_ms
+                    for segment_id, offset_ms in new_offsets_ms.items()
+                    if offset_ms != self._drag_start_offsets_ms.get(segment_id)
+                }
+                if len(changed_new_offsets) == 1:
+                    segment_id, new_offset_ms = next(iter(changed_new_offsets.items()))
                     self.clipDragEnded.emit(
-                        self._drag_clip.segment.id,
-                        self._drag_start_offset_ms,
+                        segment_id,
+                        self._drag_start_offsets_ms[segment_id],
                         new_offset_ms,
                     )
+                elif changed_new_offsets:
+                    old_offsets_ms = {
+                        segment_id: self._drag_start_offsets_ms[segment_id]
+                        for segment_id in changed_new_offsets
+                    }
+                    self.clipsDragEnded.emit(old_offsets_ms, changed_new_offsets)
             self._remove_drag_label()
         self._drag_clip = None
+        self._drag_start_offsets_ms = {}
         self._dragging = False
 
     def _update_drag_label(self, clip: ClipItem, offset_ms: int) -> None:
@@ -183,6 +223,56 @@ class _TimelineView(QGraphicsView):
             self.scene().removeItem(self._drag_label)
             self._drag_label = None
 
+    def _selected_unlocked_segment_offsets(self) -> dict[int, int]:
+        offsets: dict[int, int] = {}
+        for item in self.scene().selectedItems():
+            if isinstance(item, ClipItem) and not item.locked:
+                offsets.setdefault(item.segment.id, item.segment.offset_ms)
+        if self._drag_clip is not None and not self._drag_clip.locked:
+            offsets.setdefault(self._drag_clip.segment.id, self._drag_clip.segment.offset_ms)
+        return offsets
+
+    def _moved_offsets(self, delta_ms: int) -> dict[int, int]:
+        return {
+            segment_id: self._offset_for_drag_delta(delta_ms, start_offset)
+            for segment_id, start_offset in self._drag_start_offsets_ms.items()
+        }
+
+    def _select_range(self, item: ClipItem) -> None:
+        if self._last_clicked_clip is None or self._last_clicked_clip.lane != item.lane:
+            self.scene().clearSelection()
+            item.setSelected(True)
+            return
+        lane_items = sorted(
+            (
+                scene_item
+                for scene_item in self.scene().items()
+                if isinstance(scene_item, ClipItem) and scene_item.lane == item.lane
+            ),
+            key=lambda clip: (clip.segment.start, clip.segment.id),
+        )
+        try:
+            start_index = lane_items.index(self._last_clicked_clip)
+            end_index = lane_items.index(item)
+        except ValueError:
+            self.scene().clearSelection()
+            item.setSelected(True)
+            return
+        lower, upper = sorted((start_index, end_index))
+        self.scene().clearSelection()
+        for clip in lane_items[lower : upper + 1]:
+            clip.setSelected(True)
+
+    @staticmethod
+    def _is_additive_modifier(modifiers: Qt.KeyboardModifier) -> bool:
+        return bool(
+            modifiers
+            & (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.MetaModifier)
+        )
+
+    def _toggle_clip_selection(self, item: ClipItem) -> None:
+        item.setSelected(not item.isSelected())
+
 
 class TimelineWidget(QWidget):
     """Horizontal timeline showing segment clips across two lanes.
@@ -195,8 +285,10 @@ class TimelineWidget(QWidget):
     """
 
     segmentSelected = Signal(object)  # emits Segment | None
+    segmentsSelected = Signal(list)  # emits selected Segment list
     segmentOffsetChanged = Signal(int, int)   # (segment_id, offset_ms) live during drag
     segmentOffsetCommitted = Signal(int, int, int)  # (segment_id, old_ms, new_ms) on drag end
+    segmentsOffsetCommitted = Signal(dict, dict)  # old_offsets, new_offsets
     clipPlayRequested = Signal(int)  # segment_id, from double-clicking a clip
 
     def __init__(self, parent: QWidget | None = None):
@@ -224,6 +316,7 @@ class TimelineWidget(QWidget):
         self._view.zoomRequested.connect(self._apply_zoom)
         self._view.clipDragMoved.connect(self._on_clip_drag_moved)
         self._view.clipDragEnded.connect(self._on_clip_drag_ended)
+        self._view.clipsDragEnded.connect(self._on_clips_drag_ended)
         self._view.clipPlayRequested.connect(self.clipPlayRequested.emit)
         self._view.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self._view.horizontalScrollBar().valueChanged.connect(self._ruler.set_scroll_value)
@@ -266,11 +359,16 @@ class TimelineWidget(QWidget):
 
     @property
     def selected_segment(self) -> Segment | None:
-        selected = self._scene.selectedItems()
-        for item in selected:
+        selected = self.selected_segments
+        return selected[0] if len(selected) == 1 else None
+
+    @property
+    def selected_segments(self) -> list[Segment]:
+        by_id: dict[int, Segment] = {}
+        for item in self._scene.selectedItems():
             if isinstance(item, ClipItem):
-                return item.segment
-        return None
+                by_id.setdefault(item.segment.id, item.segment)
+        return sorted(by_id.values(), key=lambda segment: (segment.start, segment.id))
 
     @property
     def _clips(self) -> list[ClipItem]:
@@ -410,6 +508,7 @@ class TimelineWidget(QWidget):
 
     def _on_selection_changed(self) -> None:
         self.segmentSelected.emit(self.selected_segment)
+        self.segmentsSelected.emit(self.selected_segments)
 
     def _on_clip_drag_moved(self, segment_id: int, offset_ms: int) -> None:
         self.apply_offset(segment_id, offset_ms)
@@ -417,3 +516,8 @@ class TimelineWidget(QWidget):
 
     def _on_clip_drag_ended(self, segment_id: int, old_offset_ms: int, new_offset_ms: int) -> None:
         self.segmentOffsetCommitted.emit(segment_id, old_offset_ms, new_offset_ms)
+
+    def _on_clips_drag_ended(
+        self, old_offsets_ms: dict[int, int], new_offsets_ms: dict[int, int]
+    ) -> None:
+        self.segmentsOffsetCommitted.emit(old_offsets_ms, new_offsets_ms)

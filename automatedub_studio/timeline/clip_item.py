@@ -74,8 +74,7 @@ class ClipItem(QGraphicsRectItem):
         self._wav_end_seconds = wav_end_seconds
         self._waveform_bucket_count = waveform_bucket_count
 
-        if lane == 1:
-            self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable)
+        self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable)
         self.setBrush(QBrush(LANE_COLORS.get(lane, QColor("#888888"))))
         self.setPen(QPen(QColor("#333333"), NORMAL_PEN_WIDTH))
 

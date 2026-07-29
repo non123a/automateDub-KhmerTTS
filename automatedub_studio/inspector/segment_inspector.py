@@ -53,8 +53,10 @@ class SegmentInspectorWidget(QWidget):
         self._empty_label.setWordWrap(True)
 
         self._detail_widget = self._build_detail_widget()
+        self._multi_widget = self._build_multi_widget()
         self._stack.addWidget(self._empty_label)
         self._stack.addWidget(self._detail_widget)
+        self._stack.addWidget(self._multi_widget)
         self._stack.setCurrentWidget(self._empty_label)
 
         layout = QVBoxLayout(self)
@@ -147,6 +149,30 @@ class SegmentInspectorWidget(QWidget):
         self._connect_controls()
         return widget
 
+    def _build_multi_widget(self) -> QWidget:
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        self._multi_count_label = QLabel()
+        self._multi_average_offset_label = QLabel()
+        self._multi_speed_label = QLabel()
+        self._multi_volume_label = QLabel()
+        self._multi_fade_in_label = QLabel()
+        self._multi_fade_out_label = QLabel()
+        self._multi_locked_label = QLabel()
+
+        form = QFormLayout()
+        form.addRow("Selected:", self._multi_count_label)
+        form.addRow("Average Offset:", self._multi_average_offset_label)
+        form.addRow("Speed:", self._multi_speed_label)
+        form.addRow("Volume:", self._multi_volume_label)
+        form.addRow("Fade In:", self._multi_fade_in_label)
+        form.addRow("Fade Out:", self._multi_fade_out_label)
+        form.addRow("Locked:", self._multi_locked_label)
+        layout.addLayout(form)
+        layout.addStretch()
+        return widget
+
     def _connect_controls(self) -> None:
         self._speed_spin.valueChanged.connect(self._on_speed_changed)
         self._volume_slider.valueChanged.connect(self._on_volume_changed)
@@ -174,6 +200,55 @@ class SegmentInspectorWidget(QWidget):
 
         self._load_into_controls(segment, editable)
         self._stack.setCurrentWidget(self._detail_widget)
+
+    def set_segments(
+        self,
+        segments: list[Segment],
+        editables: dict[int, EditableSegment] | None = None,
+    ) -> None:
+        """Show aggregate state for a multi-selection."""
+        if not segments:
+            self.set_segment(None)
+            return
+        if len(segments) == 1:
+            editable = editables.get(segments[0].id) if editables else None
+            self.set_segment(segments[0], editable)
+            return
+
+        self._segment = None
+        self._editable = None
+        self._is_generating = False
+        editables = editables or {}
+        count = len(segments)
+        average_offset = round(sum(segment.offset_ms for segment in segments) / count)
+        editable_values = [
+            editables.get(segment.id, EditableSegment(segment.id)) for segment in segments
+        ]
+
+        self._multi_count_label.setText(f"{count} clips")
+        self._multi_average_offset_label.setText(self._format_offset(average_offset))
+        self._multi_speed_label.setText(
+            self._format_common_float([editable.speed for editable in editable_values])
+        )
+        self._multi_volume_label.setText(
+            self._format_common_percent([editable.volume for editable in editable_values])
+        )
+        self._multi_fade_in_label.setText(
+            self._format_common_int(
+                [editable.fade_in_ms for editable in editable_values],
+                suffix=" ms",
+            )
+        )
+        self._multi_fade_out_label.setText(
+            self._format_common_int(
+                [editable.fade_out_ms for editable in editable_values],
+                suffix=" ms",
+            )
+        )
+        self._multi_locked_label.setText(
+            self._format_common_bool([editable.locked for editable in editable_values])
+        )
+        self._stack.setCurrentWidget(self._multi_widget)
 
     def refresh_offset(self, offset_ms: int) -> None:
         if self._stack.currentWidget() != self._detail_widget:
@@ -353,3 +428,31 @@ class SegmentInspectorWidget(QWidget):
             return "0 ms"
         sign = "+" if offset_ms > 0 else ""
         return f"{sign}{offset_ms} ms"
+
+    @staticmethod
+    def _format_common_float(values: list[float]) -> str:
+        first = values[0]
+        if all(abs(value - first) < 1e-9 for value in values):
+            return f"{first:.2f}"
+        return "Mixed"
+
+    @staticmethod
+    def _format_common_percent(values: list[float]) -> str:
+        first = values[0]
+        if all(abs(value - first) < 1e-9 for value in values):
+            return f"{round(first * 100)}%"
+        return "Mixed"
+
+    @staticmethod
+    def _format_common_int(values: list[int], *, suffix: str = "") -> str:
+        first = values[0]
+        if all(value == first for value in values):
+            return f"{first}{suffix}"
+        return "Mixed"
+
+    @staticmethod
+    def _format_common_bool(values: list[bool]) -> str:
+        first = values[0]
+        if all(value is first for value in values):
+            return "Yes" if first else "No"
+        return "Mixed"

@@ -39,7 +39,11 @@ from automatedub_studio.backend.regeneration_service import (
     select_failed_ids,
     select_selected_ids,
 )
-from automatedub_studio.edit.commands import OffsetChangeCommand, PropertyChangeCommand
+from automatedub_studio.edit.commands import (
+    MultiOffsetChangeCommand,
+    OffsetChangeCommand,
+    PropertyChangeCommand,
+)
 from automatedub_studio.inspector.segment_inspector import SegmentInspectorWidget
 from automatedub_studio.playback.playback_controller import PlaybackController, PlaybackMode
 from automatedub_studio.playback.video_player import VideoPlayerWidget
@@ -208,8 +212,10 @@ class MainWindow(QMainWindow):
 
         self.video_player.videoPositionChanged.connect(self.timeline.set_playhead_position)
         self.timeline.segmentSelected.connect(self._on_segment_selected)
+        self.timeline.segmentsSelected.connect(self._on_segments_selected)
         self.timeline.segmentOffsetChanged.connect(self._on_offset_live)
         self.timeline.segmentOffsetCommitted.connect(self._on_offset_committed)
+        self.timeline.segmentsOffsetCommitted.connect(self._on_offsets_committed)
         self.timeline.clipPlayRequested.connect(self._on_clip_play_requested)
 
         self.setCentralWidget(splitter)
@@ -263,12 +269,18 @@ class MainWindow(QMainWindow):
             self.playback_controller.play_clip(clip_path)
 
     def _on_segment_selected(self, segment) -> None:
-        editable = self._editables.get(segment.id) if segment else None
-        self.inspector.set_segment(segment, editable)
+        self._update_regenerate_actions()
+
+    def _on_segments_selected(self, segments: list) -> None:
+        self.inspector.set_segments(segments, self._editables)
         self._update_regenerate_actions()
 
     def _on_offset_live(self, _segment_id: int, offset_ms: int) -> None:
-        self.inspector.refresh_offset(offset_ms)
+        selected = self.timeline.selected_segments
+        if len(selected) > 1:
+            self.inspector.set_segments(selected, self._editables)
+        else:
+            self.inspector.refresh_offset(offset_ms)
 
     def _on_offset_committed(
         self, segment_id: int, old_offset_ms: int, new_offset_ms: int
@@ -278,6 +290,24 @@ class MainWindow(QMainWindow):
             return
         cmd = OffsetChangeCommand(
             segment, old_offset_ms, new_offset_ms, apply_cb=self._apply_offset
+        )
+        self._undo_stack.push(cmd)
+
+    def _on_offsets_committed(
+        self, old_offsets_ms: dict[int, int], new_offsets_ms: dict[int, int]
+    ) -> None:
+        segments = [
+            segment
+            for segment_id in new_offsets_ms
+            if (segment := self._find_segment(segment_id)) is not None
+        ]
+        if not segments:
+            return
+        cmd = MultiOffsetChangeCommand(
+            segments,
+            old_offsets_ms,
+            new_offsets_ms,
+            apply_cb=self._apply_offset,
         )
         self._undo_stack.push(cmd)
 
@@ -315,8 +345,10 @@ class MainWindow(QMainWindow):
 
     def _apply_offset(self, segment_id: int, offset_ms: int) -> None:
         self.timeline.apply_offset(segment_id, offset_ms)
-        seg = self.timeline.selected_segment
-        if seg is not None and seg.id == segment_id:
+        selected = self.timeline.selected_segments
+        if len(selected) > 1 and any(segment.id == segment_id for segment in selected):
+            self.inspector.set_segments(selected, self._editables)
+        elif selected and selected[0].id == segment_id:
             self.inspector.refresh_offset(offset_ms)
         self._refresh_playback_sources()
 
@@ -365,10 +397,9 @@ class MainWindow(QMainWindow):
         self.regenerate_all_action.setEnabled(not busy and bool(all_ids))
 
     def _selected_segment_ids(self) -> list[int]:
-        seg = self.timeline.selected_segment
-        if seg is None:
-            return []
-        return select_selected_ids([seg.id], self._editables)
+        return select_selected_ids(
+            [segment.id for segment in self.timeline.selected_segments], self._editables
+        )
 
     def _regenerate_selected(self) -> None:
         self._start_regeneration(self._selected_segment_ids())

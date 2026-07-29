@@ -303,17 +303,17 @@ def test_editable_segment_fields_mutable():
 
 
 # ===========================================================================
-# ClipItem — lane restriction
+# ClipItem — lane selection
 # ===========================================================================
 
 
-def test_lane0_clip_is_not_selectable(qapp):
+def test_lane0_clip_is_selectable(qapp):
     from automatedub_studio.timeline.clip_item import ClipItem
 
     seg = make_segment()
     clip = ClipItem(seg, 0, 0, 100, 40, lane=0)
     flag = ClipItem.GraphicsItemFlag.ItemIsSelectable
-    assert not clip.flags() & flag
+    assert clip.flags() & flag
 
 
 def test_lane1_clip_is_selectable(qapp):
@@ -325,14 +325,14 @@ def test_lane1_clip_is_selectable(qapp):
     assert clip.flags() & flag
 
 
-def test_timeline_lane0_clips_not_selectable(qapp):
+def test_timeline_lane0_clips_selectable(qapp):
     tl = TimelineWidget()
     seg = make_segment(1, start=0.0, end=1.0)
     tl.load_segments([seg])
     clips = tl._clips_by_segment[seg.id]
     lane0_clip = next(c for c in clips if c.lane == 0)
     flag = lane0_clip.GraphicsItemFlag.ItemIsSelectable
-    assert not lane0_clip.flags() & flag
+    assert lane0_clip.flags() & flag
 
 
 def test_timeline_lane1_clips_selectable(qapp):
