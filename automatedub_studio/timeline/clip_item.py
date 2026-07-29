@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QPen
 from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsTextItem
 
@@ -27,6 +27,8 @@ LOCKED_COLOR = QColor("#8888AA")
 SELECTED_PEN_COLOR = QColor("#FF8800")
 SELECTED_PEN_WIDTH = 3
 NORMAL_PEN_WIDTH = 1
+TRIM_HANDLE_WIDTH = 6.0
+TRIM_HANDLE_COLOR = QColor("#F2D27A")
 
 CLIP_CORNER_RADIUS = 3.0
 
@@ -68,6 +70,7 @@ class ClipItem(QGraphicsRectItem):
         self.lane = lane
         self.locked = False
         self.status: str | None = None
+        self._hovered = False
         self._wav_path = wav_path
         self._waveform_cache = waveform_cache
         self._wav_start_seconds = wav_start_seconds
@@ -75,6 +78,7 @@ class ClipItem(QGraphicsRectItem):
         self._waveform_bucket_count = waveform_bucket_count
 
         self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable)
+        self.setAcceptHoverEvents(True)
         self.setBrush(QBrush(LANE_COLORS.get(lane, QColor("#888888"))))
         self.setPen(QPen(QColor("#333333"), NORMAL_PEN_WIDTH))
 
@@ -109,6 +113,7 @@ class ClipItem(QGraphicsRectItem):
     def paint(self, painter, option, widget=None) -> None:
         super().paint(painter, option, widget)
         if self._wav_path is None or self._waveform_cache is None:
+            self._paint_trim_handles(painter)
             return
         try:
             peaks = self._waveform_cache.get_or_compute(
@@ -118,11 +123,42 @@ class ClipItem(QGraphicsRectItem):
                 end_seconds=self._wav_end_seconds,
             )
         except WaveformError:
+            self._paint_trim_handles(painter)
             return
         rect = self.rect().adjusted(
             WAVEFORM_MARGIN, WAVEFORM_MARGIN, -WAVEFORM_MARGIN, -WAVEFORM_MARGIN
         )
         paint_waveform(painter, rect, peaks)
+        self._paint_trim_handles(painter)
+
+    def trim_handle_at(self, pos) -> str | None:
+        """Return 'left'/'right' when a local item position is over a trim handle."""
+        rect = self.rect()
+        if not rect.contains(pos):
+            return None
+        if self._left_handle_rect().contains(pos):
+            return "left"
+        if self._right_handle_rect().contains(pos):
+            return "right"
+        return None
+
+    def hoverEnterEvent(self, event) -> None:
+        self._hovered = True
+        self.update()
+        super().hoverEnterEvent(event)
+
+    def hoverLeaveEvent(self, event) -> None:
+        self._hovered = False
+        self.unsetCursor()
+        self.update()
+        super().hoverLeaveEvent(event)
+
+    def hoverMoveEvent(self, event) -> None:
+        if self.trim_handle_at(event.pos()) is not None:
+            self.setCursor(Qt.CursorShape.SizeHorCursor)
+        else:
+            self.unsetCursor()
+        super().hoverMoveEvent(event)
 
     def _refresh_visuals(self) -> None:
         # Precedence: Generating > Locked > Failed/Needs Regeneration > lane default.
@@ -154,6 +190,24 @@ class ClipItem(QGraphicsRectItem):
         elif self._lock_label is not None:
             self._lock_label.setParentItem(None)
             self._lock_label = None
+
+    def _paint_trim_handles(self, painter) -> None:
+        if not self._hovered and not self.isSelected():
+            return
+        painter.setPen(QPen(Qt.PenStyle.NoPen))
+        painter.setBrush(QBrush(TRIM_HANDLE_COLOR))
+        painter.drawRect(self._left_handle_rect())
+        painter.drawRect(self._right_handle_rect())
+
+    def _left_handle_rect(self) -> QRectF:
+        rect = self.rect()
+        width = min(TRIM_HANDLE_WIDTH, rect.width() / 2)
+        return QRectF(rect.left(), rect.top(), width, rect.height())
+
+    def _right_handle_rect(self) -> QRectF:
+        rect = self.rect()
+        width = min(TRIM_HANDLE_WIDTH, rect.width() / 2)
+        return QRectF(rect.right() - width, rect.top(), width, rect.height())
 
     def _center_label(self) -> None:
         rect = self.rect()

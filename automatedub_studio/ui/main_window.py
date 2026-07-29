@@ -43,6 +43,8 @@ from automatedub_studio.edit.commands import (
     MultiOffsetChangeCommand,
     OffsetChangeCommand,
     PropertyChangeCommand,
+    SplitSegmentCommand,
+    TrimSegmentCommand,
 )
 from automatedub_studio.inspector.segment_inspector import SegmentInspectorWidget
 from automatedub_studio.playback.playback_controller import PlaybackController, PlaybackMode
@@ -138,6 +140,11 @@ class MainWindow(QMainWindow):
         self.redo_action.setShortcut(QKeySequence.StandardKey.Redo)
         edit_menu.addAction(self.redo_action)
 
+        self.split_clip_action = QAction("Split Clip", self)
+        self.split_clip_action.setShortcut("S")
+        self.split_clip_action.triggered.connect(self._split_selected_clip)
+        edit_menu.addAction(self.split_clip_action)
+
         help_menu = menu_bar.addMenu("&Help")
         self.about_action = QAction("About", self)
         self.about_action.triggered.connect(self._show_about_dialog)
@@ -216,6 +223,8 @@ class MainWindow(QMainWindow):
         self.timeline.segmentOffsetChanged.connect(self._on_offset_live)
         self.timeline.segmentOffsetCommitted.connect(self._on_offset_committed)
         self.timeline.segmentsOffsetCommitted.connect(self._on_offsets_committed)
+        self.timeline.segmentTrimChanged.connect(self._on_trim_live)
+        self.timeline.segmentTrimCommitted.connect(self._on_trim_committed)
         self.timeline.clipPlayRequested.connect(self._on_clip_play_requested)
 
         self.setCentralWidget(splitter)
@@ -311,6 +320,36 @@ class MainWindow(QMainWindow):
         )
         self._undo_stack.push(cmd)
 
+    def _on_trim_live(
+        self, _segment_id: int, _start_seconds: float, _end_seconds: float
+    ) -> None:
+        selected = self.timeline.selected_segments
+        if len(selected) == 1:
+            self.inspector.set_segment(selected[0], self._editables.get(selected[0].id))
+
+    def _on_trim_committed(
+        self,
+        segment_id: int,
+        old_start: float,
+        old_end: float,
+        new_start: float,
+        new_end: float,
+    ) -> None:
+        if abs(old_start - new_start) < 1e-9 and abs(old_end - new_end) < 1e-9:
+            return
+        segment = self._find_segment(segment_id)
+        if segment is None:
+            return
+        cmd = TrimSegmentCommand(
+            segment,
+            old_start,
+            old_end,
+            new_start,
+            new_end,
+            apply_cb=self._apply_trim,
+        )
+        self._undo_stack.push(cmd)
+
     # ------------------------------------------------------------------
     # Signal handlers — inspector properties
     # ------------------------------------------------------------------
@@ -361,6 +400,32 @@ class MainWindow(QMainWindow):
         seg = self.timeline.selected_segment
         if seg is not None and seg.id == segment_id:
             self.inspector.refresh_property(field, value)
+        self._refresh_playback_sources()
+
+    def _apply_trim(self, segment_id: int, start_seconds: float, end_seconds: float) -> None:
+        self.timeline.apply_trim(segment_id, start_seconds, end_seconds)
+        selected = self.timeline.selected_segments
+        if len(selected) == 1 and selected[0].id == segment_id:
+            self.inspector.set_segment(selected[0], self._editables.get(segment_id))
+        self._refresh_playback_sources()
+
+    def _apply_structural_timeline_edit(self) -> None:
+        if self.project is None:
+            return
+        self.timeline.load_segments(
+            self.project.segments,
+            audio_path=self.project.audio_path,
+            tts_directory=self.project.tts_directory,
+        )
+        for seg_id, es in self._editables.items():
+            if es.locked:
+                self.timeline.apply_locked(seg_id, True)
+            elif es.last_error is not None:
+                self.timeline.apply_status(seg_id, STATUS_FAILED)
+            elif es.needs_regeneration:
+                self.timeline.apply_status(seg_id, STATUS_NEEDS_REGENERATION)
+        self.inspector.set_segment(None)
+        self._update_regenerate_actions()
         self._refresh_playback_sources()
 
     # ------------------------------------------------------------------
@@ -433,6 +498,27 @@ class MainWindow(QMainWindow):
 
     def _regenerate_ids(self, *segment_ids: int) -> None:
         self._start_regeneration(list(segment_ids))
+
+    def _split_selected_clip(self) -> None:
+        if self.project is None:
+            return
+        selected = self.timeline.selected_segments
+        if len(selected) != 1:
+            return
+        segment = selected[0]
+        split_seconds = self.timeline.playhead_ms / 1000.0
+        if not (segment.start < split_seconds < segment.end):
+            return
+        new_segment_id = max((item.id for item in self.project.segments), default=-1) + 1
+        cmd = SplitSegmentCommand(
+            self.project.segments,
+            segment,
+            split_seconds,
+            new_segment_id,
+            self._editables,
+            apply_cb=self._apply_structural_timeline_edit,
+        )
+        self._undo_stack.push(cmd)
 
     def _start_regeneration(self, segment_ids: list[int]) -> None:
         if self.project is None or not segment_ids or self._job_runner.is_running:

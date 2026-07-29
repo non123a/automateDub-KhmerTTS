@@ -53,6 +53,7 @@ _MAX_ZOOM = 20.0
 _ZOOM_STEP = 1.18
 _DRAG_THRESHOLD_PX = 3
 _SNAP_MS = 10
+MIN_CLIP_DURATION_SECONDS = 0.001
 
 
 def _snap(offset_ms: int) -> int:
@@ -74,6 +75,9 @@ class _TimelineView(QGraphicsView):
     clipDragMoved = Signal(int, int)  # (segment_id, live_offset_ms)
     clipDragEnded = Signal(int, int, int)  # (segment_id, old_offset_ms, new_offset_ms)
     clipsDragEnded = Signal(dict, dict)  # old_offsets_by_segment_id, new_offsets_by_segment_id
+    clipTrimMoved = Signal(int, float, float)  # segment_id, start_seconds, end_seconds
+    # segment_id, old_start, old_end, new_start, new_end
+    clipTrimEnded = Signal(int, float, float, float, float)
     clipPlayRequested = Signal(int)       # segment_id, from double-clicking a clip
 
     def __init__(self):
@@ -84,6 +88,12 @@ class _TimelineView(QGraphicsView):
         self._drag_start_offsets_ms: dict[int, int] = {}
         self._dragging: bool = False
         self._drag_label: QGraphicsTextItem | None = None
+        self._trim_clip: ClipItem | None = None
+        self._trim_handle: str | None = None
+        self._trim_press_scene_x: float = 0.0
+        self._trim_start_seconds: float = 0.0
+        self._trim_end_seconds: float = 0.0
+        self._trimming: bool = False
         self._snap_enabled = False
         self._snap_interval_ms = DEFAULT_SNAP_INTERVAL_MS
         self._last_clicked_clip: ClipItem | None = None
@@ -117,6 +127,18 @@ class _TimelineView(QGraphicsView):
             return
         scene_pos = self.mapToScene(event.position().toPoint())
         item = self.scene().itemAt(scene_pos, self.transform())
+        if isinstance(item, ClipItem) and not item.locked:
+            handle = item.trim_handle_at(item.mapFromScene(scene_pos))
+            if handle is not None:
+                self._trim_clip = item
+                self._trim_handle = handle
+                self._trim_press_scene_x = scene_pos.x()
+                self._trim_start_seconds = item.segment.start
+                self._trim_end_seconds = item.segment.end
+                self._trimming = False
+                item.setSelected(True)
+                event.accept()
+                return
         if isinstance(item, ClipItem) and self._is_additive_modifier(event.modifiers()):
             self._toggle_clip_selection(item)
             self._last_clicked_clip = item
@@ -156,6 +178,22 @@ class _TimelineView(QGraphicsView):
             self.clipPlayRequested.emit(item.segment.id)
 
     def mouseMoveEvent(self, event) -> None:
+        if self._trim_clip is not None and event.buttons() & Qt.MouseButton.LeftButton:
+            scene_pos = self.mapToScene(event.position().toPoint())
+            dx = scene_pos.x() - self._trim_press_scene_x
+            if not self._trimming and abs(dx) > _DRAG_THRESHOLD_PX:
+                self._trimming = True
+            if self._trimming:
+                delta_seconds = dx / BASE_PIXELS_PER_SECOND
+                if self._trim_handle == "left":
+                    start = self._trim_start_seconds + delta_seconds
+                    end = self._trim_end_seconds
+                else:
+                    start = self._trim_start_seconds
+                    end = self._trim_end_seconds + delta_seconds
+                self.clipTrimMoved.emit(self._trim_clip.segment.id, start, end)
+                event.accept()
+                return
         if self._drag_clip is not None and event.buttons() & Qt.MouseButton.LeftButton:
             scene_pos = self.mapToScene(event.position().toPoint())
             dx = scene_pos.x() - self._drag_press_scene_x
@@ -175,6 +213,28 @@ class _TimelineView(QGraphicsView):
 
     def mouseReleaseEvent(self, event) -> None:
         super().mouseReleaseEvent(event)
+        if self._trim_clip is not None and event.button() == Qt.MouseButton.LeftButton:
+            if self._trimming:
+                scene_pos = self.mapToScene(event.position().toPoint())
+                dx = scene_pos.x() - self._trim_press_scene_x
+                delta_seconds = dx / BASE_PIXELS_PER_SECOND
+                if self._trim_handle == "left":
+                    start = self._trim_start_seconds + delta_seconds
+                    end = self._trim_end_seconds
+                else:
+                    start = self._trim_start_seconds
+                    end = self._trim_end_seconds + delta_seconds
+                self.clipTrimEnded.emit(
+                    self._trim_clip.segment.id,
+                    self._trim_start_seconds,
+                    self._trim_end_seconds,
+                    start,
+                    end,
+                )
+            self._trim_clip = None
+            self._trim_handle = None
+            self._trimming = False
+            return
         if self._drag_clip is not None and event.button() == Qt.MouseButton.LeftButton:
             if self._dragging:
                 scene_pos = self.mapToScene(event.position().toPoint())
@@ -289,12 +349,16 @@ class TimelineWidget(QWidget):
     segmentOffsetChanged = Signal(int, int)   # (segment_id, offset_ms) live during drag
     segmentOffsetCommitted = Signal(int, int, int)  # (segment_id, old_ms, new_ms) on drag end
     segmentsOffsetCommitted = Signal(dict, dict)  # old_offsets, new_offsets
+    segmentTrimChanged = Signal(int, float, float)  # live trim
+    segmentTrimCommitted = Signal(int, float, float, float, float)
     clipPlayRequested = Signal(int)  # segment_id, from double-clicking a clip
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._zoom = 1.0
         self._duration_ms = 0
+        self._playhead_ms = 0
+        self._segments: list[Segment] = []
         self._clips_by_segment: dict[int, list[ClipItem]] = {}
         self._waveform_cache = WaveformCache()
         self._audio_path: Path | None = None
@@ -317,6 +381,8 @@ class TimelineWidget(QWidget):
         self._view.clipDragMoved.connect(self._on_clip_drag_moved)
         self._view.clipDragEnded.connect(self._on_clip_drag_ended)
         self._view.clipsDragEnded.connect(self._on_clips_drag_ended)
+        self._view.clipTrimMoved.connect(self._on_clip_trim_moved)
+        self._view.clipTrimEnded.connect(self._on_clip_trim_ended)
         self._view.clipPlayRequested.connect(self.clipPlayRequested.emit)
         self._view.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self._view.horizontalScrollBar().valueChanged.connect(self._ruler.set_scroll_value)
@@ -345,6 +411,7 @@ class TimelineWidget(QWidget):
             duration_ms,
             int(max((s.end for s in segments), default=0.0) * 1000),
         )
+        self._segments = segments
         self._audio_path = audio_path
         self._tts_directory = tts_directory
         self._rebuild_scene(segments)
@@ -352,6 +419,7 @@ class TimelineWidget(QWidget):
 
     def set_playhead_position(self, position_ms: int) -> None:
         x = self._time_to_x(position_ms / 1000.0)
+        self._playhead_ms = max(0, position_ms)
         if self._playhead is not None:
             self._playhead.setLine(x, 0, x, _scene_height())
         self._ensure_scene_rect_covers_time(position_ms / 1000.0)
@@ -397,6 +465,46 @@ class TimelineWidget(QWidget):
         for clip in self._clips_by_segment.get(segment_id, []):
             clip.set_status(status)
 
+    def apply_trim(self, segment_id: int, start_seconds: float, end_seconds: float) -> None:
+        """Apply a constrained trim to a segment and redraw its clips."""
+        segment = self._find_segment(segment_id)
+        if segment is None:
+            return
+        start_seconds, end_seconds = self.constrain_trim(segment_id, start_seconds, end_seconds)
+        segment.start = start_seconds
+        segment.end = end_seconds
+        clips = self._clips_by_segment.get(segment_id, [])
+        width = max(0.0, (segment.end - segment.start) * BASE_PIXELS_PER_SECOND)
+        x = self._time_to_x(segment.start + segment.offset_ms / 1000.0)
+        for clip in clips:
+            rect = clip.rect()
+            clip.setRect(x, rect.y(), width, rect.height())
+            clip.setX(0)
+            clip.update()
+        self._ensure_scene_rect_covers_time(segment.end)
+
+    def constrain_trim(
+        self, segment_id: int, start_seconds: float, end_seconds: float
+    ) -> tuple[float, float]:
+        """Clamp trim timing to duration, neighbors, and source length constraints."""
+        segment = self._find_segment(segment_id)
+        if segment is None:
+            return start_seconds, end_seconds
+        previous_end, next_start = self._neighbor_bounds(segment)
+        source_end = self._duration_ms / 1000.0 if self._duration_ms > 0 else segment.end
+        constrained_start = max(0.0, previous_end, start_seconds)
+        constrained_end = min(source_end, next_start, end_seconds)
+        if constrained_end - constrained_start < MIN_CLIP_DURATION_SECONDS:
+            if abs(start_seconds - segment.start) > abs(end_seconds - segment.end):
+                constrained_start = constrained_end - MIN_CLIP_DURATION_SECONDS
+            else:
+                constrained_end = constrained_start + MIN_CLIP_DURATION_SECONDS
+        constrained_start = max(0.0, previous_end, constrained_start)
+        constrained_end = min(source_end, next_start, constrained_end)
+        if constrained_end <= constrained_start:
+            return segment.start, segment.end
+        return constrained_start, constrained_end
+
     def set_snap_enabled(self, enabled: bool) -> None:
         """Enable or disable grid snapping for clip drag edits."""
         self._view.set_snap_enabled(enabled)
@@ -404,6 +512,10 @@ class TimelineWidget(QWidget):
     def set_snap_interval_ms(self, interval_ms: int) -> None:
         """Set the snap interval used by clip drag edits."""
         self._view.set_snap_interval_ms(interval_ms)
+
+    @property
+    def playhead_ms(self) -> int:
+        return self._playhead_ms
 
     # ------------------------------------------------------------------
     # Private helpers
@@ -425,6 +537,24 @@ class TimelineWidget(QWidget):
         self._draw_static_lanes(self._duration_ms)
         self._draw_clips(segments)
         self._draw_playhead()
+
+    def _find_segment(self, segment_id: int) -> Segment | None:
+        for segment in self._segments:
+            if segment.id == segment_id:
+                return segment
+        return None
+
+    def _neighbor_bounds(self, segment: Segment) -> tuple[float, float]:
+        lane_segments = sorted(self._segments, key=lambda item: (item.start, item.id))
+        index = lane_segments.index(segment)
+        previous_end = lane_segments[index - 1].end if index > 0 else 0.0
+        source_end = self._duration_ms / 1000.0 if self._duration_ms > 0 else segment.end
+        next_start = (
+            lane_segments[index + 1].start
+            if index < len(lane_segments) - 1
+            else source_end
+        )
+        return previous_end, next_start
 
     def _draw_static_lanes(self, duration_ms: int) -> None:
         scene_w = self._time_to_x(max(duration_ms / 1000.0, 30.0)) + SCENE_MARGIN_H
@@ -521,3 +651,25 @@ class TimelineWidget(QWidget):
         self, old_offsets_ms: dict[int, int], new_offsets_ms: dict[int, int]
     ) -> None:
         self.segmentsOffsetCommitted.emit(old_offsets_ms, new_offsets_ms)
+
+    def _on_clip_trim_moved(
+        self, segment_id: int, start_seconds: float, end_seconds: float
+    ) -> None:
+        constrained_start, constrained_end = self.constrain_trim(
+            segment_id, start_seconds, end_seconds
+        )
+        self.apply_trim(segment_id, constrained_start, constrained_end)
+        self.segmentTrimChanged.emit(segment_id, constrained_start, constrained_end)
+
+    def _on_clip_trim_ended(
+        self,
+        segment_id: int,
+        old_start: float,
+        old_end: float,
+        new_start: float,
+        new_end: float,
+    ) -> None:
+        constrained_start, constrained_end = self.constrain_trim(segment_id, new_start, new_end)
+        self.segmentTrimCommitted.emit(
+            segment_id, old_start, old_end, constrained_start, constrained_end
+        )
