@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QBrush, QColor, QPen
 from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsTextItem
 
 from automatedub_studio.project.models import Segment
+from automatedub_studio.timeline.waveform_cache import (
+    DEFAULT_BUCKET_COUNT,
+    WaveformCache,
+    WaveformError,
+)
+from automatedub_studio.timeline.waveform_renderer import paint_waveform
+
+WAVEFORM_MARGIN = 2.0
 
 LANE_COLORS = {
     0: QColor("#5094D9"),
@@ -47,12 +57,22 @@ class ClipItem(QGraphicsRectItem):
         width: float,
         height: float,
         lane: int,
+        wav_path: Path | None = None,
+        waveform_cache: WaveformCache | None = None,
+        wav_start_seconds: float = 0.0,
+        wav_end_seconds: float | None = None,
+        waveform_bucket_count: int = DEFAULT_BUCKET_COUNT,
     ):
         super().__init__(x, y, width, height)
         self.segment = segment
         self.lane = lane
         self.locked = False
         self.status: str | None = None
+        self._wav_path = wav_path
+        self._waveform_cache = waveform_cache
+        self._wav_start_seconds = wav_start_seconds
+        self._wav_end_seconds = wav_end_seconds
+        self._waveform_bucket_count = waveform_bucket_count
 
         if lane == 1:
             self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable)
@@ -71,10 +91,39 @@ class ClipItem(QGraphicsRectItem):
         self.locked = locked
         self._refresh_visuals()
 
+    def set_wav_path(self, wav_path: Path | None) -> None:
+        """Point this clip at a (possibly new) WAV file and force a repaint.
+
+        Called after regeneration so the waveform reflects the new audio
+        instead of a stale cached rendering of the previous WAV.
+        """
+        self._wav_path = wav_path
+        if self._waveform_cache is not None and wav_path is not None:
+            self._waveform_cache.invalidate(wav_path)
+        self.update()
+
     def set_status(self, status: str | None) -> None:
         """status is one of STATUS_GENERATING/STATUS_FAILED/STATUS_NEEDS_REGENERATION or None."""
         self.status = status
         self._refresh_visuals()
+
+    def paint(self, painter, option, widget=None) -> None:
+        super().paint(painter, option, widget)
+        if self._wav_path is None or self._waveform_cache is None:
+            return
+        try:
+            peaks = self._waveform_cache.get_or_compute(
+                self._wav_path,
+                bucket_count=self._waveform_bucket_count,
+                start_seconds=self._wav_start_seconds,
+                end_seconds=self._wav_end_seconds,
+            )
+        except WaveformError:
+            return
+        rect = self.rect().adjusted(
+            WAVEFORM_MARGIN, WAVEFORM_MARGIN, -WAVEFORM_MARGIN, -WAVEFORM_MARGIN
+        )
+        paint_waveform(painter, rect, peaks)
 
     def _refresh_visuals(self) -> None:
         # Precedence: Generating > Locked > Failed/Needs Regeneration > lane default.

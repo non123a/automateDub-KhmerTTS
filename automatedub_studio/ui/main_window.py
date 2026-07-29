@@ -519,7 +519,11 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{WINDOW_TITLE} - {project.project_path.name}")
         self.info_panel.set_project(project)
         self.video_player.load_video(project.video_path)
-        self.timeline.load_segments(project.segments)
+        self.timeline.load_segments(
+            project.segments,
+            audio_path=project.audio_path,
+            tts_directory=project.tts_directory,
+        )
         for seg_id, es in self._editables.items():
             if es.locked:
                 self.timeline.apply_locked(seg_id, True)

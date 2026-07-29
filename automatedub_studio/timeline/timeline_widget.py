@@ -9,6 +9,7 @@ horizontally to adjust offset_ms.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QPen, QTransform, QWheelEvent
@@ -22,8 +23,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from automatedub.vertical_slice.tts import tts_segment_output_path
 from automatedub_studio.project.models import Segment
 from automatedub_studio.timeline.clip_item import ClipItem
+from automatedub_studio.timeline.waveform_cache import WaveformCache
 
 # ---------------------------------------------------------------------------
 # Layout constants (scene coordinates, zoom=1.0)
@@ -184,6 +187,9 @@ class TimelineWidget(QWidget):
         self._zoom = 1.0
         self._duration_ms = 0
         self._clips_by_segment: dict[int, list[ClipItem]] = {}
+        self._waveform_cache = WaveformCache()
+        self._audio_path: Path | None = None
+        self._tts_directory: Path | None = None
 
         self._scene = QGraphicsScene(self)
         self._scene.selectionChanged.connect(self._on_selection_changed)
@@ -210,11 +216,19 @@ class TimelineWidget(QWidget):
     # Public API
     # ------------------------------------------------------------------
 
-    def load_segments(self, segments: list[Segment], duration_ms: int = 0) -> None:
+    def load_segments(
+        self,
+        segments: list[Segment],
+        duration_ms: int = 0,
+        audio_path: Path | None = None,
+        tts_directory: Path | None = None,
+    ) -> None:
         self._duration_ms = max(
             duration_ms,
             int(max((s.end for s in segments), default=0.0) * 1000),
         )
+        self._audio_path = audio_path
+        self._tts_directory = tts_directory
         self._rebuild_scene(segments)
 
     def set_playhead_position(self, position_ms: int) -> None:
@@ -309,11 +323,41 @@ class TimelineWidget(QWidget):
             clips_for_segment = []
             for lane in range(LANE_COUNT):
                 y = _lane_y(lane)
-                clip = ClipItem(segment, x, y + 4, width, LANE_HEIGHT - 8, lane)
+                wav_path, wav_start, wav_end = self._wav_context_for_lane(lane, segment)
+                clip = ClipItem(
+                    segment,
+                    x,
+                    y + 4,
+                    width,
+                    LANE_HEIGHT - 8,
+                    lane,
+                    wav_path=wav_path,
+                    waveform_cache=self._waveform_cache,
+                    wav_start_seconds=wav_start,
+                    wav_end_seconds=wav_end,
+                )
                 self._scene.addItem(clip)
                 clips_for_segment.append(clip)
 
             self._clips_by_segment[segment.id] = clips_for_segment
+
+    def _wav_context_for_lane(
+        self, lane: int, segment: Segment
+    ) -> tuple[Path | None, float, float | None]:
+        """Return (wav_path, start_seconds, end_seconds) for a clip's waveform.
+
+        Lane 0 (Original Transcript) slices the shared project audio to this
+        segment's window; lane 1 (Khmer TTS) uses the segment's own WAV file
+        in full.
+        """
+        if lane == 0:
+            if self._audio_path is None:
+                return None, 0.0, None
+            return self._audio_path, segment.start, segment.end
+        if self._tts_directory is None:
+            return None, 0.0, None
+        return tts_segment_output_path(self._tts_directory, segment.id), 0.0, None
+
 
     def _draw_playhead(self) -> None:
         self._playhead = QGraphicsLineItem(0, 0, 0, _scene_height())
