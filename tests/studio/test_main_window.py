@@ -340,8 +340,8 @@ def test_track_mute_original_does_not_mute_timeline_clips(qapp, tmp_path):
 
     window.mute_original_track_action.trigger()
 
-    assert window.playback_controller._original_muted is True
-    assert window.playback_controller._khmer_muted is False
+    assert window.playback_controller._timeline.track_by_id("original_audio").muted is True
+    assert window.playback_controller._timeline.track_by_id("khmer_tts").muted is False
     assert original.timeline_clip.muted is False
     assert khmer.timeline_clip.muted is False
 
@@ -355,8 +355,8 @@ def test_track_mute_khmer_does_not_mute_timeline_clips(qapp, tmp_path):
 
     window.mute_khmer_track_action.trigger()
 
-    assert window.playback_controller._khmer_muted is True
-    assert window.playback_controller._original_muted is False
+    assert window.playback_controller._timeline.track_by_id("khmer_tts").muted is True
+    assert window.playback_controller._timeline.track_by_id("original_audio").muted is False
     assert original.timeline_clip.muted is False
     assert khmer.timeline_clip.muted is False
 

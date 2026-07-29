@@ -179,6 +179,15 @@ class Timeline:
         return next((clip for clip in self.all_clips() if clip.id == clip_id), None)
 
     def move_clip_to_track(self, clip_id: str, track_id: str) -> bool:
+        clip = self.clip_by_id(clip_id)
+        if clip is None:
+            return False
+        return self.move_clip(clip_id, track_id, clip.start_time)
+
+    def move_clip(self, clip_id: str, track_id: str, start_time: float) -> bool:
+        clip = self.clip_by_id(clip_id)
+        if clip is None:
+            return False
         source_track = next(
             (track for track in self.tracks if any(clip.id == clip_id for clip in track.clips)),
             None,
@@ -188,11 +197,15 @@ class Timeline:
             return False
         if source_track.locked or target_track.locked:
             return False
-        clip = next(clip for clip in source_track.clips if clip.id == clip_id)
         if clip.locked:
+            return False
+        if clip.track_id != source_track.id:
             return False
         source_track.clips.remove(clip)
         clip.track_id = target_track.id
+        duration = clip.duration
+        clip.start_time = start_time
+        clip.end_time = start_time + duration
         target_track.clips.append(clip)
         target_track.clips.sort(key=lambda item: (item.start_time, item.id))
         return True

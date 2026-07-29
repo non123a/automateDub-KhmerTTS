@@ -16,6 +16,7 @@ from automatedub_studio.project.models import Segment
 from automatedub_studio.timeline.timeline_clip import (
     KHMER_TTS_TRACK_ID,
     ORIGINAL_AUDIO_TRACK_ID,
+    Timeline,
     TimelineClip,
     active_clips,
 )
@@ -122,19 +123,28 @@ def test_playback_preloads_khmer_sources_without_boundary_set_source(qapp, tmp_p
     first_path.write_bytes(b"placeholder")
     second_path.write_bytes(b"placeholder")
     controller = PlaybackController(VideoPlayerWidget())
-
-    controller.set_sources(
-        None,
-        [],
-        [_track(0, first_path, delay_ms=0), _track(1, second_path, delay_ms=1000)],
+    first_clip = TimelineClip(
+        id="khmer:0",
+        track_id=KHMER_TTS_TRACK_ID,
+        start_time=0.0,
+        end_time=1.0,
+        source_path=first_path,
     )
+    second_clip = TimelineClip(
+        id="khmer:1",
+        track_id=KHMER_TTS_TRACK_ID,
+        start_time=1.0,
+        end_time=2.0,
+        source_path=second_path,
+    )
+    controller.set_timeline(Timeline.from_clips([first_clip, second_clip]))
 
     first_player = controller._khmer_clip_players["khmer:0"][0]
     second_player = controller._khmer_clip_players["khmer:1"][0]
 
     assert first_player.source() == QUrl.fromLocalFile(str(first_path))
     assert second_player.source() == QUrl.fromLocalFile(str(second_path))
-    controller._sync_khmer_audio(1200, start_playing=False)
+    controller._sync_timeline_audio(1200, start_playing=False)
     assert second_player.source() == QUrl.fromLocalFile(str(second_path))
 
 
@@ -210,5 +220,5 @@ def test_playback_reads_muted_volume_and_timing_from_timeline_clip(qapp, tmp_pat
 
     controller._sync_audio_to_position(750, start_playing=False)
 
-    assert controller._active_original_timeline_clip is None
+    assert controller._active_khmer_clip_ids == {"khmer:1"}
     assert controller._khmer_clip_players["khmer:1"][1].volume() == pytest.approx(0.7)

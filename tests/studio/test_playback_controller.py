@@ -29,7 +29,12 @@ from automatedub_studio.playback.timeline_audio import (
 )
 from automatedub_studio.playback.video_player import VideoPlayerWidget
 from automatedub_studio.project.models import Segment
-from automatedub_studio.timeline.timeline_clip import KHMER_TTS_TRACK_ID, TimelineClip
+from automatedub_studio.timeline.timeline_clip import (
+    KHMER_TTS_TRACK_ID,
+    ORIGINAL_AUDIO_TRACK_ID,
+    Timeline,
+    TimelineClip,
+)
 
 
 def pump_until(predicate, timeout_s: float = 3.0) -> None:
@@ -130,6 +135,34 @@ def make_segment(
     )
 
 
+def make_timeline_clip(
+    clip_id: str,
+    track_id: str,
+    path: Path,
+    start: float = 0.0,
+    end: float = 1.0,
+    source_offset: float = 0.0,
+    volume: float = 1.0,
+    fade_in: float = 0.0,
+    fade_out: float = 0.0,
+) -> TimelineClip:
+    return TimelineClip(
+        id=clip_id,
+        track_id=track_id,
+        start_time=start,
+        end_time=end,
+        source_path=path,
+        source_offset=source_offset,
+        volume=volume,
+        fade_in=fade_in,
+        fade_out=fade_out,
+    )
+
+
+def make_timeline(*clips: TimelineClip) -> Timeline:
+    return Timeline.from_clips(list(clips))
+
+
 # ---------------------------------------------------------------------------
 # timeline_audio.py — pure timing math
 # ---------------------------------------------------------------------------
@@ -226,7 +259,7 @@ def test_video_audio_is_always_muted(qapp):
     controller = PlaybackController(video_player)
 
     video_player.set_audio_muted(False)
-    controller.set_sources(None, [], [])
+    controller.set_timeline(Timeline.default())
     controller._sync_audio_to_position(0, start_playing=False)
 
     assert video_player._audio_output.isMuted() is True
@@ -243,24 +276,33 @@ def test_playback_uses_original_audio(qapp, tmp_path):
     audio_path = tmp_path / "audio.wav"
     make_wav(audio_path, seconds=3.0)
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_sources(audio_path, [make_segment(0, 1.0, 2.0)], [])
+    clip = make_timeline_clip(
+        "original:0",
+        ORIGINAL_AUDIO_TRACK_ID,
+        audio_path,
+        start=1.0,
+        end=2.0,
+        source_offset=1.0,
+    )
+    controller.set_timeline(make_timeline(clip))
 
     controller.seek(1200)
 
-    assert controller._active_original_clip is not None
-    assert controller._original_audio_player.source() == QUrl.fromLocalFile(str(audio_path))
+    assert controller._active_khmer_clip_ids == {"original:0"}
+    player, _output = controller._khmer_clip_players["original:0"]
+    assert player.source() == QUrl.fromLocalFile(str(audio_path))
 
 
 def test_playback_uses_khmer_tts(qapp, tmp_path):
     clip_path = tmp_path / "0000.wav"
     make_wav(clip_path, seconds=1.0)
-    track = make_track(track_id=0, delay_ms=1000, generated_duration=1.0, tts_path=clip_path)
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_sources(None, [], [track])
+    clip = make_timeline_clip("khmer:0", KHMER_TTS_TRACK_ID, clip_path, start=1.0, end=2.0)
+    controller.set_timeline(make_timeline(clip))
 
     controller.seek(1200)
 
-    assert controller._active_khmer_track is track
+    assert controller._active_khmer_clip_ids == {"khmer:0"}
     assert controller._khmer_audio_player.source() == QUrl.fromLocalFile(str(clip_path))
 
 
@@ -269,17 +311,19 @@ def test_mute_original_only_khmer_plays(qapp, tmp_path):
     clip_path = tmp_path / "0000.wav"
     make_wav(audio_path, seconds=2.0)
     make_wav(clip_path, seconds=1.0)
-    track = make_track(track_id=0, delay_ms=0, generated_duration=1.0, tts_path=clip_path)
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_sources(audio_path, [make_segment(0, 0.0, 1.0)], [track])
+    original = make_timeline_clip(
+        "original:0", ORIGINAL_AUDIO_TRACK_ID, audio_path, start=0.0, end=1.0
+    )
+    khmer = make_timeline_clip("khmer:0", KHMER_TTS_TRACK_ID, clip_path)
+    controller.set_timeline(make_timeline(original, khmer))
 
     controller.set_original_muted(True)
     controller.seek(500)
 
-    assert controller._active_original_clip is None
-    assert controller._active_khmer_track is track
-    assert controller._original_audio_player.source().isEmpty()
-    assert controller._khmer_audio_player.source() == QUrl.fromLocalFile(str(clip_path))
+    assert controller._active_khmer_clip_ids == {"khmer:0"}
+    player, _output = controller._khmer_clip_players["khmer:0"]
+    assert player.source() == QUrl.fromLocalFile(str(clip_path))
 
 
 def test_mute_khmer_only_original_plays(qapp, tmp_path):
@@ -287,17 +331,19 @@ def test_mute_khmer_only_original_plays(qapp, tmp_path):
     clip_path = tmp_path / "0000.wav"
     make_wav(audio_path, seconds=2.0)
     make_wav(clip_path, seconds=1.0)
-    track = make_track(track_id=0, delay_ms=0, generated_duration=1.0, tts_path=clip_path)
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_sources(audio_path, [make_segment(0, 0.0, 1.0)], [track])
+    original = make_timeline_clip(
+        "original:0", ORIGINAL_AUDIO_TRACK_ID, audio_path, start=0.0, end=1.0
+    )
+    khmer = make_timeline_clip("khmer:0", KHMER_TTS_TRACK_ID, clip_path)
+    controller.set_timeline(make_timeline(original, khmer))
 
     controller.set_khmer_muted(True)
     controller.seek(500)
 
-    assert controller._active_original_clip is not None
-    assert controller._active_khmer_track is None
-    assert controller._original_audio_player.source() == QUrl.fromLocalFile(str(audio_path))
-    assert controller._khmer_audio_player.source().isEmpty()
+    assert controller._active_khmer_clip_ids == {"original:0"}
+    player, _output = controller._khmer_clip_players["original:0"]
+    assert player.source() == QUrl.fromLocalFile(str(audio_path))
 
 
 def test_both_unmuted_both_tracks_are_mixed_by_parallel_players(qapp, tmp_path):
@@ -305,26 +351,33 @@ def test_both_unmuted_both_tracks_are_mixed_by_parallel_players(qapp, tmp_path):
     clip_path = tmp_path / "0000.wav"
     make_wav(audio_path, seconds=2.0)
     make_wav(clip_path, seconds=1.0)
-    track = make_track(track_id=0, delay_ms=0, generated_duration=1.0, tts_path=clip_path)
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_sources(audio_path, [make_segment(0, 0.0, 1.0)], [track])
+    original = make_timeline_clip(
+        "original:0", ORIGINAL_AUDIO_TRACK_ID, audio_path, start=0.0, end=1.0
+    )
+    khmer = make_timeline_clip("khmer:0", KHMER_TTS_TRACK_ID, clip_path)
+    controller.set_timeline(make_timeline(original, khmer))
 
     controller.seek(500)
 
-    assert controller._active_original_clip is not None
-    assert controller._active_khmer_track is track
-    assert controller._original_audio_player.source() == QUrl.fromLocalFile(str(audio_path))
-    assert controller._khmer_audio_player.source() == QUrl.fromLocalFile(str(clip_path))
+    assert controller._active_khmer_clip_ids == {"original:0", "khmer:0"}
+    assert {
+        player.source()
+        for player, _output in controller._khmer_clip_players.values()
+    } == {
+        QUrl.fromLocalFile(str(audio_path)),
+        QUrl.fromLocalFile(str(clip_path)),
+    }
 
 
 def test_khmer_volume_applies_fade(qapp, tmp_path):
     clip_path = tmp_path / "0000.wav"
     make_wav(clip_path, seconds=1.0)
-    track = make_track(
-        track_id=0, delay_ms=0, generated_duration=1.0, fade_in_ms=500, tts_path=clip_path
-    )
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_sources(None, [], [track])
+    clip = make_timeline_clip(
+        "khmer:0", KHMER_TTS_TRACK_ID, clip_path, fade_in=0.5
+    )
+    controller.set_timeline(make_timeline(clip))
 
     controller.seek(0)
     assert controller._khmer_audio_output.volume() == 0.0
@@ -336,15 +389,9 @@ def test_khmer_volume_applies_fade(qapp, tmp_path):
 def test_khmer_timeline_playback_uses_same_natural_position_as_audition(qapp, tmp_path):
     clip_path = tmp_path / "0000.wav"
     make_wav(clip_path, seconds=2.0)
-    track = make_track(
-        track_id=0,
-        delay_ms=0,
-        generated_duration=2.0,
-        atempo=2.0,
-        tts_path=clip_path,
-    )
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_sources(None, [], [track])
+    clip = make_timeline_clip("khmer:0", KHMER_TTS_TRACK_ID, clip_path, end=2.0)
+    controller.set_timeline(make_timeline(clip))
 
     controller.seek(500)
 
@@ -354,9 +401,9 @@ def test_khmer_timeline_playback_uses_same_natural_position_as_audition(qapp, tm
 def test_khmer_playback_marked_pending_when_play_starts_during_load(qapp, tmp_path):
     clip_path = tmp_path / "0000.wav"
     make_wav(clip_path, seconds=1.0)
-    track = make_track(track_id=0, delay_ms=0, generated_duration=1.0, tts_path=clip_path)
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_sources(None, [], [track])
+    clip = make_timeline_clip("khmer:0", KHMER_TTS_TRACK_ID, clip_path)
+    controller.set_timeline(make_timeline(clip))
 
     controller._on_play_requested()
 
@@ -368,9 +415,10 @@ def test_sync_reuses_existing_audio_players(qapp, tmp_path):
     clip_path = tmp_path / "0000.wav"
     make_wav(audio_path, seconds=2.0)
     make_wav(clip_path, seconds=1.0)
-    track = make_track(track_id=0, delay_ms=0, generated_duration=1.0, tts_path=clip_path)
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_sources(audio_path, [make_segment(0, 0.0, 1.0)], [track])
+    original = make_timeline_clip("original:0", ORIGINAL_AUDIO_TRACK_ID, audio_path)
+    khmer = make_timeline_clip("khmer:0", KHMER_TTS_TRACK_ID, clip_path)
+    controller.set_timeline(make_timeline(original, khmer))
     original_player = controller._original_audio_player
     khmer_player = controller._khmer_audio_player
 
@@ -427,16 +475,15 @@ class _CountingOutput:
 def test_stable_active_khmer_clip_is_not_replayed_or_reseeked_each_tick(qapp, tmp_path):
     clip_path = tmp_path / "0000.wav"
     make_wav(clip_path, seconds=2.0)
-    track = make_track(track_id=0, delay_ms=0, generated_duration=2.0, tts_path=clip_path)
     controller = PlaybackController(VideoPlayerWidget())
+    clip = make_timeline_clip("khmer:0", KHMER_TTS_TRACK_ID, clip_path, end=2.0)
     fake_player = _CountingPlayer(QUrl.fromLocalFile(str(clip_path)), position=500)
     fake_output = _CountingOutput()
-    controller._khmer_tracks = [track]
-    controller._active_khmer_track = track
-    controller._khmer_audio_player = fake_player
-    controller._khmer_audio_output = fake_output
+    controller.set_timeline(make_timeline(clip))
+    controller._active_khmer_clip_ids = {"khmer:0"}
+    controller._khmer_clip_players = {"khmer:0": (fake_player, fake_output)}
 
-    controller._sync_khmer_audio(520, start_playing=True)
+    controller._sync_timeline_audio(520, start_playing=True)
 
     assert fake_player.play_count == 0
     assert fake_player.seek_count == 0
@@ -455,11 +502,11 @@ def test_active_khmer_clip_allows_normal_drift_without_reseek(qapp, tmp_path):
     )
     fake_player = _CountingPlayer(QUrl.fromLocalFile(str(clip_path)), position=445)
     fake_output = _CountingOutput()
-    controller._timeline_clips = [clip]
+    controller.set_timeline(make_timeline(clip))
     controller._active_khmer_clip_ids = {"khmer:0"}
     controller._khmer_clip_players = {"khmer:0": (fake_player, fake_output)}
 
-    controller._sync_khmer_audio(1500, start_playing=True)
+    controller._sync_timeline_audio(1500, start_playing=True)
 
     assert fake_player.seek_count == 0
     assert fake_player.play_count == 0
@@ -478,11 +525,11 @@ def test_active_khmer_clip_reseeks_on_large_drift(qapp, tmp_path):
     )
     fake_player = _CountingPlayer(QUrl.fromLocalFile(str(clip_path)), position=0)
     fake_output = _CountingOutput()
-    controller._timeline_clips = [clip]
+    controller.set_timeline(make_timeline(clip))
     controller._active_khmer_clip_ids = {"khmer:0"}
     controller._khmer_clip_players = {"khmer:0": (fake_player, fake_output)}
 
-    controller._sync_khmer_audio(1600, start_playing=True)
+    controller._sync_timeline_audio(1600, start_playing=True)
 
     assert fake_player.seek_count == 1
     assert fake_player.play_count == 0
@@ -493,20 +540,21 @@ def test_original_and_khmer_volumes_are_independent(qapp, tmp_path):
     clip_path = tmp_path / "0000.wav"
     make_wav(audio_path, seconds=2.0)
     make_wav(clip_path, seconds=1.0)
-    track = make_track(
-        track_id=0,
-        delay_ms=0,
-        generated_duration=1.0,
-        volume=0.25,
-        tts_path=clip_path,
-    )
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_sources(audio_path, [make_segment(0, 0.0, 1.0)], [track])
+    original = make_timeline_clip(
+        "original:0", ORIGINAL_AUDIO_TRACK_ID, audio_path, volume=1.0
+    )
+    khmer = make_timeline_clip(
+        "khmer:0", KHMER_TTS_TRACK_ID, clip_path, volume=0.25
+    )
+    controller.set_timeline(make_timeline(original, khmer))
 
     controller.seek(500)
 
-    assert controller._original_audio_output.volume() == 1.0
-    assert controller._khmer_audio_output.volume() == 0.25
+    assert {
+        clip_id: output.volume()
+        for clip_id, (_player, output) in controller._khmer_clip_players.items()
+    } == {"original:0": 1.0, "khmer:0": 0.25}
 
 
 def test_stop_stops_video_and_audio(qapp, tmp_path):
@@ -577,13 +625,15 @@ def test_resync_reseeks_original_audio_on_drift(qapp, tmp_path):
     make_wav(audio_path, seconds=10.0)
 
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_sources(audio_path, [make_segment(0, 0.0, 5.0)], [])
+    clip = make_timeline_clip("original:0", ORIGINAL_AUDIO_TRACK_ID, audio_path, end=5.0)
+    controller.set_timeline(make_timeline(clip))
     controller.seek(1000)
-    pump_until(lambda: controller._original_audio_player.mediaStatus() == _LOADED)
+    player, _output = controller._khmer_clip_players["original:0"]
+    pump_until(lambda: player.mediaStatus() == _LOADED)
 
-    controller._original_audio_player.setPosition(5000)
+    player.setPosition(5000)
     controller._maybe_resync(1000)
-    assert controller._original_audio_player.position() == 1000
+    assert player.position() == 1000
 
 
 def test_resync_ignores_small_original_audio_drift(qapp, tmp_path):
@@ -591,13 +641,15 @@ def test_resync_ignores_small_original_audio_drift(qapp, tmp_path):
     make_wav(audio_path, seconds=10.0)
 
     controller = PlaybackController(VideoPlayerWidget())
-    controller.set_sources(audio_path, [make_segment(0, 0.0, 5.0)], [])
+    clip = make_timeline_clip("original:0", ORIGINAL_AUDIO_TRACK_ID, audio_path, end=5.0)
+    controller.set_timeline(make_timeline(clip))
     controller.seek(1000)
-    pump_until(lambda: controller._original_audio_player.mediaStatus() == _LOADED)
+    player, _output = controller._khmer_clip_players["original:0"]
+    pump_until(lambda: player.mediaStatus() == _LOADED)
 
-    controller._original_audio_player.setPosition(1010)
+    player.setPosition(1010)
     controller._maybe_resync(1000)
-    assert controller._original_audio_player.position() == 1010
+    assert player.position() == 1010
 
 
 def test_make_wav_bytes_returns_valid_wav_bytes():

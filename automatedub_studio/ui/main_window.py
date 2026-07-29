@@ -360,7 +360,10 @@ class MainWindow(QMainWindow):
     def _on_timeline_clips_selected(self, clips: list) -> None:
         if not hasattr(self.inspector, "_stack"):
             return
-        self.inspector.set_timeline_clips(clips)
+        try:
+            self.inspector.set_timeline_clips(clips)
+        except RuntimeError:
+            return
 
     def _on_offset_live(self, _clip_id: str, offset_ms: int) -> None:
         selected = self.timeline.selected_timeline_clips
