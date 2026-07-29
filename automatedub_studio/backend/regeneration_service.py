@@ -107,7 +107,7 @@ def regenerate_timeline_clip(
                 effective_config, tts_speed=clip.speaking_rate
             )
         provider = provider_factory(effective_config)
-        speech = provider.generate(clip.khmer_text or clip.target_text)
+        speech = provider.generate(clip.khmer_text)
         validate_wav_audio(speech.audio, clip.segment_id if clip.segment_id is not None else 0)
         output_path.write_bytes(speech.audio)
         duration = probe_wav_duration_seconds(output_path)

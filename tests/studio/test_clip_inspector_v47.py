@@ -173,6 +173,32 @@ def test_regenerate_timeline_clip_writes_clip_specific_audio(tmp_path):
     assert calls == ["old khmer"]
 
 
+def test_regenerate_timeline_clip_uses_only_timeline_clip_khmer_text(tmp_path):
+    clip = _clip(tmp_path)
+    clip.khmer_text = "edited khmer"
+    clip.target_text = "old target"
+    clip.source_text = "original chinese"
+    calls: list[str] = []
+
+    class Provider:
+        def describe(self):
+            raise AssertionError("unused")
+
+        def generate(self, text: str) -> GeneratedSpeech:
+            calls.append(text)
+            return GeneratedSpeech(audio=_wav_bytes())
+
+    outcome = regenerate_timeline_clip(
+        clip,
+        tmp_path,
+        ToolConfig(),
+        provider_factory=lambda _config: Provider(),
+    )
+
+    assert outcome.success is True
+    assert calls == ["edited khmer"]
+
+
 def test_main_window_clip_regen_result_replaces_only_selected_clip_source(qapp, tmp_path):
     project_dir = make_valid_project(tmp_path, segment_count=1)
     window = MainWindow()
