@@ -94,6 +94,31 @@ class TimelineClipPropertyChangeCommand(QUndoCommand):
         self._apply_cb(self._clip_id, self._field, self._new)
 
 
+class MultiTimelineClipPropertyChangeCommand(QUndoCommand):
+    """Record property changes for multiple TimelineClips as one undo step."""
+
+    def __init__(
+        self,
+        field: str,
+        old_values: dict[str, Any],
+        new_values: dict[str, Any],
+        apply_cb: Callable[[str, str, Any], None],
+    ):
+        super().__init__(f"Change {field} for {len(new_values)} clips")
+        self._field = field
+        self._old = dict(old_values)
+        self._new = dict(new_values)
+        self._apply_cb = apply_cb
+
+    def undo(self) -> None:
+        for clip_id, value in self._old.items():
+            self._apply_cb(clip_id, self._field, value)
+
+    def redo(self) -> None:
+        for clip_id, value in self._new.items():
+            self._apply_cb(clip_id, self._field, value)
+
+
 class TimelineClipOffsetChangeCommand(QUndoCommand):
     """Record an offset change for one independent TimelineClip."""
 

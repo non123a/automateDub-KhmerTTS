@@ -90,6 +90,7 @@ class _TimelineView(QGraphicsView):
     # clip_id, old_start, old_end, new_start, new_end
     clipTrimEnded = Signal(str, float, float, float, float)
     clipPlayRequested = Signal(int)       # segment_id, from double-clicking a clip
+    clipMutePaintRequested = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -107,9 +108,13 @@ class _TimelineView(QGraphicsView):
         self._trimming: bool = False
         self._snap_enabled = False
         self._snap_interval_ms = DEFAULT_SNAP_INTERVAL_MS
+        self._mute_paint_mode = False
         self._last_clicked_clip: ClipItem | None = None
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.setRubberBandSelectionMode(Qt.ItemSelectionMode.IntersectsItemShape)
+
+    def set_mute_paint_mode(self, enabled: bool) -> None:
+        self._mute_paint_mode = enabled
 
     def set_snap_enabled(self, enabled: bool) -> None:
         self._snap_enabled = enabled
@@ -138,6 +143,10 @@ class _TimelineView(QGraphicsView):
             return
         scene_pos = self.mapToScene(event.position().toPoint())
         item = self.scene().itemAt(scene_pos, self.transform())
+        if self._mute_paint_mode and isinstance(item, ClipItem):
+            self.clipMutePaintRequested.emit(self._clip_key(item))
+            event.accept()
+            return
         if isinstance(item, ClipItem) and not item.locked:
             handle = item.trim_handle_at(item.mapFromScene(scene_pos))
             if handle is not None:
@@ -381,6 +390,7 @@ class TimelineWidget(QWidget):
     segmentTrimChanged = Signal(str, float, float)  # live trim
     segmentTrimCommitted = Signal(str, float, float, float, float)
     clipPlayRequested = Signal(int)  # segment_id, from double-clicking a clip
+    clipMutePaintRequested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -415,6 +425,7 @@ class TimelineWidget(QWidget):
         self._view.clipTrimMoved.connect(self._on_clip_trim_moved)
         self._view.clipTrimEnded.connect(self._on_clip_trim_ended)
         self._view.clipPlayRequested.connect(self.clipPlayRequested.emit)
+        self._view.clipMutePaintRequested.connect(self.clipMutePaintRequested.emit)
         self._view.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self._view.horizontalScrollBar().valueChanged.connect(self._ruler.set_scroll_value)
 
@@ -524,8 +535,14 @@ class TimelineWidget(QWidget):
 
     def set_timeline_clip_muted(self, clip_id: str, muted: bool) -> None:
         clip = self._find_timeline_clip(clip_id)
+        item = self._clips_by_clip_id.get(clip_id)
         if clip is not None:
             clip.muted = muted
+        if item is not None:
+            item.update()
+
+    def set_mute_paint_mode(self, enabled: bool) -> None:
+        self._view.set_mute_paint_mode(enabled)
 
     def set_timeline_clip_volume(self, clip_id: str, volume: float) -> None:
         clip = self._find_timeline_clip(clip_id)

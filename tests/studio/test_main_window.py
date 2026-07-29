@@ -229,6 +229,98 @@ def test_snap_toolbar_action_toggles_timeline_snapping(qapp):
     assert window.timeline._view._snap_enabled is True
 
 
+def test_mute_selected_original_only(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, segment_count=1)
+    window = MainWindow(settings=_memory_settings())
+    window.open_project_path(project_dir)
+    original = window.timeline._clips_by_clip_id["original:0"]
+    khmer = window.timeline._clips_by_clip_id["khmer:0"]
+
+    original.setSelected(True)
+    window.mute_selected_action.trigger()
+
+    assert original.timeline_clip.muted is True
+    assert khmer.timeline_clip.muted is False
+
+
+def test_mute_selected_khmer_only(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, segment_count=1)
+    window = MainWindow(settings=_memory_settings())
+    window.open_project_path(project_dir)
+    original = window.timeline._clips_by_clip_id["original:0"]
+    khmer = window.timeline._clips_by_clip_id["khmer:0"]
+
+    khmer.setSelected(True)
+    window.mute_selected_action.trigger()
+
+    assert khmer.timeline_clip.muted is True
+    assert original.timeline_clip.muted is False
+
+
+def test_mute_multiple_selected_clips(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, segment_count=2)
+    window = MainWindow(settings=_memory_settings())
+    window.open_project_path(project_dir)
+    original = window.timeline._clips_by_clip_id["original:0"]
+    khmer = window.timeline._clips_by_clip_id["khmer:1"]
+    untouched = window.timeline._clips_by_clip_id["khmer:0"]
+
+    original.setSelected(True)
+    khmer.setSelected(True)
+    window.mute_selected_action.trigger()
+
+    assert original.timeline_clip.muted is True
+    assert khmer.timeline_clip.muted is True
+    assert untouched.timeline_clip.muted is False
+
+
+def test_mute_paint_mode_toggles_clicked_clip_only(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, segment_count=1)
+    window = MainWindow(settings=_memory_settings())
+    window.open_project_path(project_dir)
+    original = window.timeline._clips_by_clip_id["original:0"]
+    khmer = window.timeline._clips_by_clip_id["khmer:0"]
+
+    window.mute_paint_action.trigger()
+    window.timeline.clipMutePaintRequested.emit("khmer:0")
+    window.timeline.clipMutePaintRequested.emit("khmer:0")
+    window.timeline.clipMutePaintRequested.emit("original:0")
+
+    assert window.timeline._view._mute_paint_mode is True
+    assert khmer.timeline_clip.muted is False
+    assert original.timeline_clip.muted is True
+
+
+def test_track_mute_original_does_not_mute_timeline_clips(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, segment_count=1)
+    window = MainWindow(settings=_memory_settings())
+    window.open_project_path(project_dir)
+    original = window.timeline._clips_by_clip_id["original:0"]
+    khmer = window.timeline._clips_by_clip_id["khmer:0"]
+
+    window.mute_original_track_action.trigger()
+
+    assert window.playback_controller._original_muted is True
+    assert window.playback_controller._khmer_muted is False
+    assert original.timeline_clip.muted is False
+    assert khmer.timeline_clip.muted is False
+
+
+def test_track_mute_khmer_does_not_mute_timeline_clips(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, segment_count=1)
+    window = MainWindow(settings=_memory_settings())
+    window.open_project_path(project_dir)
+    original = window.timeline._clips_by_clip_id["original:0"]
+    khmer = window.timeline._clips_by_clip_id["khmer:0"]
+
+    window.mute_khmer_track_action.trigger()
+
+    assert window.playback_controller._khmer_muted is True
+    assert window.playback_controller._original_muted is False
+    assert original.timeline_clip.muted is False
+    assert khmer.timeline_clip.muted is False
+
+
 def _write_valid_wav(path, seconds: float = 0.5, frame_rate: int = 16000) -> None:
     import wave
 

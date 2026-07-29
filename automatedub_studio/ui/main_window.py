@@ -35,6 +35,7 @@ from automatedub_studio.backend.regeneration_service import (
 from automatedub_studio.edit.commands import (
     ClipClipboard,
     MultiTimelineClipOffsetChangeCommand,
+    MultiTimelineClipPropertyChangeCommand,
     PasteSegmentsCommand,
     SplitSegmentCommand,
     TimelineClipOffsetChangeCommand,
@@ -195,6 +196,27 @@ class MainWindow(QMainWindow):
         self.snap_action.toggled.connect(self._on_snap_toggled)
         toolbar.addAction(self.snap_action)
 
+        toolbar.addSeparator()
+
+        self.mute_original_track_action = QAction("Mute Original Audio", self)
+        self.mute_original_track_action.setCheckable(True)
+        self.mute_original_track_action.toggled.connect(self._on_mute_original_track_toggled)
+        toolbar.addAction(self.mute_original_track_action)
+
+        self.mute_khmer_track_action = QAction("Mute Khmer TTS", self)
+        self.mute_khmer_track_action.setCheckable(True)
+        self.mute_khmer_track_action.toggled.connect(self._on_mute_khmer_track_toggled)
+        toolbar.addAction(self.mute_khmer_track_action)
+
+        self.mute_selected_action = QAction("Mute Selected", self)
+        self.mute_selected_action.triggered.connect(self._mute_selected_clips)
+        toolbar.addAction(self.mute_selected_action)
+
+        self.mute_paint_action = QAction("Mute Paint Mode", self)
+        self.mute_paint_action.setCheckable(True)
+        self.mute_paint_action.toggled.connect(self._on_mute_paint_toggled)
+        toolbar.addAction(self.mute_paint_action)
+
     def _build_status_bar(self) -> None:
         self.statusBar().showMessage("Ready")
 
@@ -225,6 +247,7 @@ class MainWindow(QMainWindow):
         self.timeline.segmentTrimChanged.connect(self._on_trim_live)
         self.timeline.segmentTrimCommitted.connect(self._on_trim_committed)
         self.timeline.clipPlayRequested.connect(self._on_clip_play_requested)
+        self.timeline.clipMutePaintRequested.connect(self._on_clip_mute_paint_requested)
 
         self.setCentralWidget(splitter)
 
@@ -262,6 +285,32 @@ class MainWindow(QMainWindow):
     def _on_snap_toggled(self, enabled: bool) -> None:
         self.snap_action.setText("Snap: ON" if enabled else "Snap: OFF")
         self.timeline.set_snap_enabled(enabled)
+
+    def _on_mute_original_track_toggled(self, muted: bool) -> None:
+        self.playback_controller.set_original_muted(muted)
+
+    def _on_mute_khmer_track_toggled(self, muted: bool) -> None:
+        self.playback_controller.set_khmer_muted(muted)
+
+    def _on_mute_paint_toggled(self, enabled: bool) -> None:
+        self.timeline.set_mute_paint_mode(enabled)
+
+    def _on_clip_mute_paint_requested(self, clip_id: str) -> None:
+        clip = next((item for item in self.timeline.timeline_clips if item.id == clip_id), None)
+        if clip is None:
+            return
+        self._push_clip_property_command(clip.id, "muted", clip.muted, not clip.muted)
+
+    def _mute_selected_clips(self) -> None:
+        selected = self.timeline.selected_timeline_clips
+        if not selected:
+            return
+        old_values = {clip.id: clip.muted for clip in selected}
+        new_values = {clip.id: not clip.muted for clip in selected}
+        cmd = MultiTimelineClipPropertyChangeCommand(
+            "muted", old_values, new_values, apply_cb=self._apply_clip_property
+        )
+        self._undo_stack.push(cmd)
 
     def _on_clip_play_requested(self, segment_id: int) -> None:
         """Timeline double-click: audition a single TTS clip in isolation."""
@@ -395,7 +444,9 @@ class MainWindow(QMainWindow):
         else:
             return
         selected = self.timeline.selected_timeline_clips
-        if len(selected) == 1 and selected[0].id == clip_id:
+        if len(selected) > 1 and any(clip.id == clip_id for clip in selected):
+            self.inspector.set_timeline_clips(selected)
+        elif len(selected) == 1 and selected[0].id == clip_id:
             self.inspector.refresh_timeline_clip_property(refresh_field, refresh_value)
         self._refresh_playback_sources()
 
