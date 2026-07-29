@@ -35,7 +35,13 @@ def _segments() -> list[Segment]:
 
 
 def test_timeline_displays_video_original_audio_and_khmer_tracks(qapp):
-    assert LANE_NAMES == ("Video", "Original Audio", "Khmer TTS")
+    assert LANE_NAMES == (
+        "Video",
+        "Original Audio",
+        "Khmer TTS",
+        "Audio Track 3",
+        "Audio Track 4",
+    )
     assert VIDEO_LANE == 0
     assert ORIGINAL_AUDIO_LANE == 1
     assert KHMER_TTS_LANE == 2

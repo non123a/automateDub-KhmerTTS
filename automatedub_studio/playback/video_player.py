@@ -81,8 +81,8 @@ class VideoPlayerWidget(QWidget):
         self._stack.addWidget(self._message_label)
         self._stack.setCurrentWidget(self._message_label)
 
-        self._play_button = QPushButton("Play")
-        self._pause_button = QPushButton("Pause")
+        self._play_button = QPushButton("Play/Pause")
+        self._pause_button = self._play_button
         self._stop_button = QPushButton("Stop")
         self._seek_slider = QSlider(Qt.Orientation.Horizontal)
         self._seek_slider.setRange(0, 0)
@@ -95,7 +95,6 @@ class VideoPlayerWidget(QWidget):
     def _build_layout(self) -> None:
         controls_layout = QHBoxLayout()
         controls_layout.addWidget(self._play_button)
-        controls_layout.addWidget(self._pause_button)
         controls_layout.addWidget(self._stop_button)
         controls_layout.addWidget(self._seek_slider, 1)
         controls_layout.addWidget(self._time_label)
@@ -105,8 +104,7 @@ class VideoPlayerWidget(QWidget):
         layout.addLayout(controls_layout)
 
     def _wire_signals(self) -> None:
-        self._play_button.clicked.connect(self.play)
-        self._pause_button.clicked.connect(self.pause)
+        self._play_button.clicked.connect(self.toggle_play_pause)
         self._stop_button.clicked.connect(self.stop)
 
         self._seek_slider.sliderPressed.connect(self._on_slider_pressed)
@@ -140,6 +138,12 @@ class VideoPlayerWidget(QWidget):
         self._time_label.setText(_DEFAULT_TIME_LABEL)
         self._media_player.setSource(QUrl.fromLocalFile(str(video_path)))
 
+    def toggle_play_pause(self) -> None:
+        if self.is_playing:
+            self.pause()
+        else:
+            self.play()
+
     def play(self) -> None:
         if self._has_video:
             self._media_player.play()
@@ -153,7 +157,11 @@ class VideoPlayerWidget(QWidget):
     def stop(self) -> None:
         if self._has_video:
             self._media_player.stop()
+            self._media_player.setPosition(0)
+            self._seek_slider.setValue(0)
+            self._update_time_label(0, self._media_player.duration())
         self.stopRequested.emit()
+        self.seekRequested.emit(0)
 
     def seek(self, position_ms: int) -> None:
         """Move the master clock. A companion `PlaybackController` reacts to

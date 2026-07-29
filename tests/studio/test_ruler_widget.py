@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from automatedub_studio.timeline.ruler_widget import (
     DEFAULT_SNAP_INTERVAL_MS,
+    TimelineRulerWidget,
     format_timestamp,
     generate_ruler_ticks,
     minor_tick_interval_ms,
@@ -57,6 +58,17 @@ def test_generate_ruler_ticks_uses_zoom_dependent_minor_spacing():
     normal_minor_count = len([tick for tick in normal_ticks if not tick.major])
     zoomed_out_minor_count = len([tick for tick in zoomed_out_ticks if not tick.major])
     assert zoomed_out_minor_count < normal_minor_count
+
+
+def test_ruler_position_to_time_accounts_for_origin_scroll_and_zoom(qapp):
+    ruler = TimelineRulerWidget(
+        pixels_per_second=BASE_PIXELS_PER_SECOND,
+        time_origin_x=100,
+    )
+    ruler.set_zoom(2.0)
+    ruler.set_scroll_value(50)
+
+    assert ruler._position_to_time_ms(350) == 1000
 
 
 def test_snap_offset_rounds_to_default_100ms_interval():

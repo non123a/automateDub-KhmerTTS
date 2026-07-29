@@ -1,9 +1,8 @@
 """Timeline widget: QGraphicsView-based visualization of segment timing.
 
-The timeline displays a video lane plus two permanent audio tracks:
-Original Audio and Khmer TTS. Ctrl+Wheel zooms horizontally; the playhead
-tracks the video player's position. Selected clips can be dragged
-horizontally to adjust offset_ms.
+The timeline displays generic tracks owned by a Timeline model. Ctrl+Wheel
+zooms horizontally; the playhead tracks the video player's position. Selected
+clips can be dragged horizontally to adjust offset_ms.
 """
 
 from __future__ import annotations
@@ -30,9 +29,14 @@ from automatedub_studio.timeline.ruler_widget import (
     TimelineRulerWidget,
     snap_offset,
 )
+from automatedub_studio.timeline.state import TimelineState
 from automatedub_studio.timeline.timeline_clip import (
+    AUDIO_TRACK_3_ID,
+    AUDIO_TRACK_4_ID,
+    AUDIO_TRACK_IDS,
     KHMER_TTS_TRACK_ID,
     ORIGINAL_AUDIO_TRACK_ID,
+    Timeline,
     TimelineClip,
 )
 from automatedub_studio.timeline.waveform_cache import WaveformCache
@@ -49,13 +53,26 @@ SCENE_MARGIN_V = 10
 VIDEO_LANE = 0
 ORIGINAL_AUDIO_LANE = 1
 KHMER_TTS_LANE = 2
-AUDIO_LANES = (ORIGINAL_AUDIO_LANE, KHMER_TTS_LANE)
-LANE_NAMES = ("Video", "Original Audio", "Khmer TTS")
+AUDIO_TRACK_3_LANE = 3
+AUDIO_TRACK_4_LANE = 4
+AUDIO_LANES = (
+    ORIGINAL_AUDIO_LANE,
+    KHMER_TTS_LANE,
+    AUDIO_TRACK_3_LANE,
+    AUDIO_TRACK_4_LANE,
+)
+LANE_NAMES = ("Video", "Original Audio", "Khmer TTS", "Audio Track 3", "Audio Track 4")
 LANE_COUNT = len(LANE_NAMES)
-AUDIO_TRACK_COUNT = len(AUDIO_LANES)
+AUDIO_TRACK_COUNT = 2
 
 HEADER_BG_COLOR = QColor("#2D2D2D")
-LANE_BG_COLORS = [QColor("#242832"), QColor("#1E2A3A"), QColor("#1A2E1A")]
+LANE_BG_COLORS = [
+    QColor("#242832"),
+    QColor("#1E2A3A"),
+    QColor("#1A2E1A"),
+    QColor("#2A2535"),
+    QColor("#302A24"),
+]
 PLAYHEAD_COLOR = QColor("#FF4444")
 PASTE_FLASH_MS = 650
 
@@ -79,6 +96,16 @@ def _scene_height() -> float:
     return SCENE_MARGIN_V * 2 + LANE_COUNT * LANE_HEIGHT + (LANE_COUNT - 1) * LANE_GAP
 
 
+TRACK_IDS_BY_LANE = (
+    "video",
+    ORIGINAL_AUDIO_TRACK_ID,
+    KHMER_TTS_TRACK_ID,
+    AUDIO_TRACK_3_ID,
+    AUDIO_TRACK_4_ID,
+)
+LANE_BY_TRACK_ID = {track_id: lane for lane, track_id in enumerate(TRACK_IDS_BY_LANE)}
+
+
 class _TimelineView(QGraphicsView):
     """QGraphicsView with Ctrl+Wheel zoom and horizontal clip dragging."""
 
@@ -91,6 +118,8 @@ class _TimelineView(QGraphicsView):
     clipTrimEnded = Signal(str, float, float, float, float)
     clipPlayRequested = Signal(int)       # segment_id, from double-clicking a clip
     clipMutePaintRequested = Signal(str)
+    clipTrackChangeRequested = Signal(str, float)
+    timelineSeekRequested = Signal(int)
 
     def __init__(self):
         super().__init__()
@@ -110,8 +139,13 @@ class _TimelineView(QGraphicsView):
         self._snap_interval_ms = DEFAULT_SNAP_INTERVAL_MS
         self._mute_paint_mode = False
         self._last_clicked_clip: ClipItem | None = None
+        self._playhead_ms = 0
+        self._playhead_dragging = False
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.setRubberBandSelectionMode(Qt.ItemSelectionMode.IntersectsItemShape)
+
+    def set_playhead_position(self, position_ms: int) -> None:
+        self._playhead_ms = max(0, position_ms)
 
     def set_mute_paint_mode(self, enabled: bool) -> None:
         self._mute_paint_mode = enabled
@@ -143,8 +177,17 @@ class _TimelineView(QGraphicsView):
             return
         scene_pos = self.mapToScene(event.position().toPoint())
         item = self.scene().itemAt(scene_pos, self.transform())
+        if self._is_over_playhead(scene_pos.x()):
+            self._playhead_dragging = True
+            self.timelineSeekRequested.emit(self._scene_x_to_time_ms(scene_pos.x()))
+            event.accept()
+            return
         if self._mute_paint_mode and isinstance(item, ClipItem):
             self.clipMutePaintRequested.emit(self._clip_key(item))
+            event.accept()
+            return
+        if item is None and scene_pos.x() >= LANE_LABEL_WIDTH + SCENE_MARGIN_H:
+            self.timelineSeekRequested.emit(self._scene_x_to_time_ms(scene_pos.x()))
             event.accept()
             return
         if isinstance(item, ClipItem) and not item.locked:
@@ -202,6 +245,11 @@ class _TimelineView(QGraphicsView):
             self.clipPlayRequested.emit(item.segment.id)
 
     def mouseMoveEvent(self, event) -> None:
+        if self._playhead_dragging and event.buttons() & Qt.MouseButton.LeftButton:
+            scene_pos = self.mapToScene(event.position().toPoint())
+            self.timelineSeekRequested.emit(self._scene_x_to_time_ms(scene_pos.x()))
+            event.accept()
+            return
         if self._trim_clip is not None and event.buttons() & Qt.MouseButton.LeftButton:
             scene_pos = self.mapToScene(event.position().toPoint())
             dx = scene_pos.x() - self._trim_press_scene_x
@@ -236,6 +284,12 @@ class _TimelineView(QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:
+        if self._playhead_dragging and event.button() == Qt.MouseButton.LeftButton:
+            scene_pos = self.mapToScene(event.position().toPoint())
+            self.timelineSeekRequested.emit(self._scene_x_to_time_ms(scene_pos.x()))
+            self._playhead_dragging = False
+            event.accept()
+            return
         super().mouseReleaseEvent(event)
         if self._trim_clip is not None and event.button() == Qt.MouseButton.LeftButton:
             if self._trimming:
@@ -283,6 +337,7 @@ class _TimelineView(QGraphicsView):
                         for segment_id in changed_new_offsets
                     }
                     self.clipsDragEnded.emit(old_offsets_ms, changed_new_offsets)
+                self.clipTrackChangeRequested.emit(self._clip_key(self._drag_clip), scene_pos.y())
             self._remove_drag_label()
         self._drag_clip = None
         self._drag_start_offsets_ms = {}
@@ -369,6 +424,17 @@ class _TimelineView(QGraphicsView):
     def _toggle_clip_selection(self, item: ClipItem) -> None:
         item.setSelected(not item.isSelected())
 
+    def _is_over_playhead(self, scene_x: float) -> bool:
+        playhead_x = LANE_LABEL_WIDTH + SCENE_MARGIN_H + (
+            self._playhead_ms / 1000.0 * BASE_PIXELS_PER_SECOND
+        )
+        return abs(scene_x - playhead_x) <= 6.0 / max(self.transform().m11(), 0.001)
+
+    @staticmethod
+    def _scene_x_to_time_ms(scene_x: float) -> int:
+        seconds = (scene_x - (LANE_LABEL_WIDTH + SCENE_MARGIN_H)) / BASE_PIXELS_PER_SECOND
+        return max(0, round(seconds * 1000))
+
 
 class TimelineWidget(QWidget):
     """Horizontal timeline showing segment clips across two lanes.
@@ -391,14 +457,18 @@ class TimelineWidget(QWidget):
     segmentTrimCommitted = Signal(str, float, float, float, float)
     clipPlayRequested = Signal(int)  # segment_id, from double-clicking a clip
     clipMutePaintRequested = Signal(str)
+    timelineSeekRequested = Signal(int)
+    timelineChanged = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self._zoom = 1.0
         self._duration_ms = 0
         self._playhead_ms = 0
+        self._state = TimelineState()
         self._segments: list[Segment] = []
         self._clips_by_segment: dict[int, list[ClipItem]] = {}
+        self._timeline = Timeline.default()
         self._timeline_clips: list[TimelineClip] = []
         self._clips_by_clip_id: dict[str, ClipItem] = {}
         self._waveform_cache = WaveformCache()
@@ -412,6 +482,7 @@ class TimelineWidget(QWidget):
             pixels_per_second=BASE_PIXELS_PER_SECOND,
             time_origin_x=LANE_LABEL_WIDTH + SCENE_MARGIN_H,
         )
+        self._ruler.seekRequested.connect(self._on_seek_requested)
 
         self._view = _TimelineView()
         self._view.setScene(self._scene)
@@ -426,6 +497,8 @@ class TimelineWidget(QWidget):
         self._view.clipTrimEnded.connect(self._on_clip_trim_ended)
         self._view.clipPlayRequested.connect(self.clipPlayRequested.emit)
         self._view.clipMutePaintRequested.connect(self.clipMutePaintRequested.emit)
+        self._view.clipTrackChangeRequested.connect(self._on_clip_track_change_requested)
+        self._view.timelineSeekRequested.connect(self._on_seek_requested)
         self._view.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self._view.horizontalScrollBar().valueChanged.connect(self._ruler.set_scroll_value)
 
@@ -456,13 +529,16 @@ class TimelineWidget(QWidget):
         self._segments = segments
         self._audio_path = audio_path
         self._tts_directory = tts_directory
-        self._timeline_clips = self._build_timeline_clips(segments)
+        self._timeline = self._build_timeline(segments)
+        self._timeline_clips = self._timeline.all_clips()
         self._rebuild_scene(segments)
         self._ruler.set_duration(self._duration_ms)
 
     def set_playhead_position(self, position_ms: int) -> None:
-        x = self._time_to_x(position_ms / 1000.0)
         self._playhead_ms = max(0, position_ms)
+        x = self._time_to_x(self._playhead_ms / 1000.0)
+        self._state.set_current_time(self._playhead_ms)
+        self._view.set_playhead_position(self._playhead_ms)
         if self._playhead is not None:
             self._playhead.setLine(x, 0, x, _scene_height())
         self._ensure_scene_rect_covers_time(position_ms / 1000.0)
@@ -499,7 +575,11 @@ class TimelineWidget(QWidget):
 
     @property
     def timeline_clips(self) -> list[TimelineClip]:
-        return list(self._timeline_clips)
+        return list(self._timeline.all_clips())
+
+    @property
+    def timeline(self) -> Timeline:
+        return self._timeline
 
     @property
     def _clips(self) -> list[ClipItem]:
@@ -525,6 +605,8 @@ class TimelineWidget(QWidget):
             return
         segment = item.segment
         timeline_clip = item.timeline_clip
+        if timeline_clip.locked or self._track_is_locked(timeline_clip.track_id):
+            return
         duration = timeline_clip.duration
         start_time = segment.start + offset_ms / 1000.0
         timeline_clip.start_time = start_time
@@ -565,7 +647,53 @@ class TimelineWidget(QWidget):
         if clip is not None:
             clip.locked = locked
         if item is not None:
-            item.set_locked(locked)
+            item.set_locked(locked or (clip is not None and self._track_is_locked(clip.track_id)))
+
+    def set_track_muted(self, track_id: str, muted: bool) -> None:
+        track = self._timeline.track_by_id(track_id)
+        if track is not None:
+            track.muted = muted
+            self.timelineChanged.emit()
+
+    def set_track_solo(self, track_id: str, solo: bool) -> None:
+        track = self._timeline.track_by_id(track_id)
+        if track is not None:
+            track.solo = solo
+            self.timelineChanged.emit()
+
+    def set_track_locked(self, track_id: str, locked: bool) -> None:
+        track = self._timeline.track_by_id(track_id)
+        if track is None:
+            return
+        track.locked = locked
+        for clip in track.clips:
+            item = self._clips_by_clip_id.get(clip.id)
+            if item is not None:
+                item.set_locked(locked or clip.locked)
+                item.update()
+        self.timelineChanged.emit()
+
+    def move_timeline_clip_to_track(self, clip_id: str, track_id: str) -> bool:
+        clip = self._find_timeline_clip(clip_id)
+        if clip is None:
+            return False
+        old_track_id = clip.track_id
+        moved = self._timeline.move_clip_to_track(clip_id, track_id)
+        if not moved:
+            return False
+        lane = self._lane_for_track_id(track_id)
+        item = self._clips_by_clip_id.get(clip_id)
+        if item is not None and lane is not None:
+            item.lane = lane
+            rect = item.rect()
+            item.setRect(rect.x(), _lane_y(lane) + 4, rect.width(), rect.height())
+            item.setX(0)
+            item.setY(0)
+            item.update()
+        if old_track_id != track_id:
+            self._timeline_clips = self._timeline.all_clips()
+            self.timelineChanged.emit()
+        return True
 
     def set_timeline_clip_status(self, clip_id: str, status: str | None) -> None:
         item = self._clips_by_clip_id.get(clip_id)
@@ -580,6 +708,8 @@ class TimelineWidget(QWidget):
         if item is None or item.timeline_clip is None:
             return
         timeline_clip = item.timeline_clip
+        if timeline_clip.locked or self._track_is_locked(timeline_clip.track_id):
+            return
         start_seconds, end_seconds = self.constrain_timeline_clip_trim(
             clip_id, start_seconds, end_seconds
         )
@@ -708,6 +838,10 @@ class TimelineWidget(QWidget):
     def playhead_ms(self) -> int:
         return self._playhead_ms
 
+    @property
+    def state(self) -> TimelineState:
+        return self._state
+
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
@@ -737,10 +871,11 @@ class TimelineWidget(QWidget):
         return None
 
     def _find_timeline_clip(self, clip_id: str) -> TimelineClip | None:
-        for clip in self._timeline_clips:
-            if clip.id == clip_id:
-                return clip
-        return None
+        return self._timeline.clip_by_id(clip_id)
+
+    def _track_is_locked(self, track_id: str) -> bool:
+        track = self._timeline.track_by_id(track_id)
+        return bool(track and track.locked)
 
     @staticmethod
     def _clear_flash(clips: list[ClipItem]) -> None:
@@ -764,10 +899,10 @@ class TimelineWidget(QWidget):
         scene_h = _scene_height()
         self._scene.setSceneRect(0, 0, scene_w, scene_h)
 
-        for lane in range(LANE_COUNT):
+        for lane, track in enumerate(self._timeline.tracks):
             y = _lane_y(lane)
             bg = QGraphicsRectItem(0, y, scene_w, LANE_HEIGHT)
-            bg.setBrush(QBrush(LANE_BG_COLORS[lane]))
+            bg.setBrush(QBrush(LANE_BG_COLORS[lane % len(LANE_BG_COLORS)]))
             bg.setPen(QPen(Qt.PenStyle.NoPen))
             self._scene.addItem(bg)
 
@@ -776,10 +911,19 @@ class TimelineWidget(QWidget):
             header.setPen(QPen(Qt.PenStyle.NoPen))
             self._scene.addItem(header)
 
-            label = QGraphicsTextItem(LANE_NAMES[lane])
+            label = QGraphicsTextItem(track.name)
             label.setDefaultTextColor(QColor("#CCCCCC"))
-            label.setPos(6, y + (LANE_HEIGHT - label.boundingRect().height()) / 2)
+            label.setPos(6, y + 8)
             self._scene.addItem(label)
+
+            controls = QGraphicsTextItem(
+                f"M:{'ON' if track.muted else 'OFF'}  "
+                f"S:{'ON' if track.solo else 'OFF'}  "
+                f"L:{'ON' if track.locked else 'OFF'}"
+            )
+            controls.setDefaultTextColor(QColor("#AAAAAA"))
+            controls.setPos(6, y + 29)
+            self._scene.addItem(controls)
 
     def _draw_clips(self, segments: list[Segment]) -> None:
         segment_by_id = {segment.id: segment for segment in segments}
@@ -813,7 +957,14 @@ class TimelineWidget(QWidget):
             self._clips_by_segment.setdefault(segment.id, []).append(clip)
             self._clips_by_clip_id[timeline_clip.id] = clip
 
-    def _build_timeline_clips(self, segments: list[Segment]) -> list[TimelineClip]:
+    def _build_timeline(self, segments: list[Segment]) -> Timeline:
+        timeline = Timeline.default()
+        original_track = timeline.track_by_id(ORIGINAL_AUDIO_TRACK_ID)
+        khmer_track = timeline.track_by_id(KHMER_TTS_TRACK_ID)
+        if original_track is None or khmer_track is None:
+            return timeline
+        original_track.clips = []
+        khmer_track.clips = []
         clips: list[TimelineClip] = []
         for segment in segments:
             duration = max(0.0, segment.end - segment.start)
@@ -848,14 +999,22 @@ class TimelineWidget(QWidget):
                     target_text=segment.target_text,
                 )
             )
-        return clips
+        original_track.clips = [
+            clip for clip in clips if clip.track_id == ORIGINAL_AUDIO_TRACK_ID
+        ]
+        khmer_track.clips = [clip for clip in clips if clip.track_id == KHMER_TTS_TRACK_ID]
+        return timeline
 
     @staticmethod
     def _lane_for_track_id(track_id: str) -> int | None:
-        if track_id == ORIGINAL_AUDIO_TRACK_ID:
-            return ORIGINAL_AUDIO_LANE
-        if track_id == KHMER_TTS_TRACK_ID:
-            return KHMER_TTS_LANE
+        return LANE_BY_TRACK_ID.get(track_id)
+
+    @staticmethod
+    def _track_id_for_scene_y(scene_y: float) -> str | None:
+        for lane, track_id in enumerate(TRACK_IDS_BY_LANE):
+            y = _lane_y(lane)
+            if y <= scene_y <= y + LANE_HEIGHT:
+                return track_id
         return None
 
     def _wav_context_for_timeline_clip(
@@ -900,10 +1059,15 @@ class TimelineWidget(QWidget):
             self._scene.setSceneRect(0, 0, needed_x, current_rect.height())
 
     def _on_selection_changed(self) -> None:
+        self._state.selected_clip_ids = {clip.id for clip in self.selected_timeline_clips}
         self.segmentSelected.emit(self.selected_segment)
         self.segmentsSelected.emit(self.selected_segments)
         self.timelineClipSelected.emit(self.selected_timeline_clip)
         self.timelineClipsSelected.emit(self.selected_timeline_clips)
+
+    def _on_seek_requested(self, position_ms: int) -> None:
+        self.set_playhead_position(position_ms)
+        self.timelineSeekRequested.emit(self._playhead_ms)
 
     def _on_clip_drag_moved(self, segment_id: str, offset_ms: int) -> None:
         self.apply_timeline_clip_offset(segment_id, offset_ms)
@@ -918,6 +1082,12 @@ class TimelineWidget(QWidget):
         self, old_offsets_ms: dict[str, int], new_offsets_ms: dict[str, int]
     ) -> None:
         self.segmentsOffsetCommitted.emit(old_offsets_ms, new_offsets_ms)
+
+    def _on_clip_track_change_requested(self, clip_id: str, scene_y: float) -> None:
+        track_id = self._track_id_for_scene_y(scene_y)
+        if track_id is None or track_id not in AUDIO_TRACK_IDS:
+            return
+        self.move_timeline_clip_to_track(clip_id, track_id)
 
     def _on_clip_trim_moved(
         self, segment_id: str, start_seconds: float, end_seconds: float

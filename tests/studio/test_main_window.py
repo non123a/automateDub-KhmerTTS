@@ -49,6 +49,21 @@ def test_help_menu_has_about(qapp):
     assert _action_texts(help_menu) == ["About"]
 
 
+def test_space_shortcut_action_toggles_playback(qapp):
+    window = MainWindow(settings=_memory_settings())
+    calls = []
+
+    class Controller:
+        def toggle_play_pause(self):
+            calls.append("toggle")
+
+    window.playback_controller = Controller()
+
+    window.play_pause_action.trigger()
+
+    assert calls == ["toggle"]
+
+
 def test_status_bar_shows_ready(qapp):
     window = MainWindow(settings=_memory_settings())
 

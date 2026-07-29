@@ -175,6 +175,46 @@ def test_set_playhead_position_zero(qapp):
     assert abs(widget._playhead.line().x1() - expected_x) < 0.1
 
 
+def test_set_playhead_position_updates_timeline_state(qapp):
+    widget = TimelineWidget()
+
+    widget.set_playhead_position(1234)
+
+    assert widget.state.current_time_ms == 1234
+
+
+def test_ruler_seek_request_updates_playhead(qapp):
+    widget = TimelineWidget()
+    widget.load_segments(_make_segments(1))
+
+    widget._on_seek_requested(2500)
+
+    assert widget.playhead_ms == 2500
+    assert widget.state.current_time_ms == 2500
+
+
+def test_empty_timeline_seek_does_not_change_selection(qapp):
+    widget = TimelineWidget()
+    widget.load_segments(_make_segments(2))
+    selected_clip = widget._clips[0]
+    selected_clip.setSelected(True)
+
+    widget._on_seek_requested(3000)
+
+    assert selected_clip.isSelected() is True
+    assert widget.playhead_ms == 3000
+
+
+def test_clip_selection_does_not_move_playhead(qapp):
+    widget = TimelineWidget()
+    widget.load_segments(_make_segments(2))
+    widget.set_playhead_position(1500)
+
+    widget._clips[0].setSelected(True)
+
+    assert widget.playhead_ms == 1500
+
+
 # ---------------------------------------------------------------------------
 # Selection
 # ---------------------------------------------------------------------------

@@ -62,7 +62,8 @@ from automatedub_studio.timeline.clip_item import (
     STATUS_NEEDS_REGENERATION,
 )
 from automatedub_studio.timeline.ruler_widget import DEFAULT_SNAP_INTERVAL_MS
-from automatedub_studio.timeline.timeline_clip import KHMER_TTS_TRACK_ID
+from automatedub_studio.timeline.state import TimelinePlaybackState
+from automatedub_studio.timeline.timeline_clip import KHMER_TTS_TRACK_ID, ORIGINAL_AUDIO_TRACK_ID
 from automatedub_studio.timeline.timeline_widget import TimelineWidget
 from automatedub_studio.ui.about_dialog import AboutDialog
 from automatedub_studio.ui.export_dialog import ExportProgressDialog
@@ -166,6 +167,13 @@ class MainWindow(QMainWindow):
         self.split_clip_action.triggered.connect(self._split_selected_clip)
         edit_menu.addAction(self.split_clip_action)
 
+        edit_menu.addSeparator()
+
+        self.play_pause_action = QAction("Play/Pause", self)
+        self.play_pause_action.setShortcut(QKeySequence(Qt.Key.Key_Space))
+        self.play_pause_action.triggered.connect(self._toggle_play_pause)
+        edit_menu.addAction(self.play_pause_action)
+
         help_menu = menu_bar.addMenu("&Help")
         self.about_action = QAction("About", self)
         self.about_action.triggered.connect(self._show_about_dialog)
@@ -226,7 +234,7 @@ class MainWindow(QMainWindow):
 
     def _build_central_widget(self) -> None:
         self.video_player = VideoPlayerWidget()
-        self.video_player.playbackStatusChanged.connect(self.statusBar().showMessage)
+        self.video_player.playbackStatusChanged.connect(self._on_playback_status_changed)
         self.playback_controller = PlaybackController(self.video_player, self)
 
         self.timeline = TimelineWidget()
@@ -242,6 +250,7 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(1, 1)
 
         self.video_player.videoPositionChanged.connect(self.timeline.set_playhead_position)
+        self.timeline.timelineSeekRequested.connect(self._on_timeline_seek_requested)
         self.timeline.segmentSelected.connect(self._on_segment_selected)
         self.timeline.segmentsSelected.connect(self._on_segments_selected)
         self.timeline.timelineClipsSelected.connect(self._on_timeline_clips_selected)
@@ -252,6 +261,7 @@ class MainWindow(QMainWindow):
         self.timeline.segmentTrimCommitted.connect(self._on_trim_committed)
         self.timeline.clipPlayRequested.connect(self._on_clip_play_requested)
         self.timeline.clipMutePaintRequested.connect(self._on_clip_mute_paint_requested)
+        self.timeline.timelineChanged.connect(self._refresh_playback_sources)
 
         self.setCentralWidget(splitter)
 
@@ -290,10 +300,27 @@ class MainWindow(QMainWindow):
         self.snap_action.setText("Snap: ON" if enabled else "Snap: OFF")
         self.timeline.set_snap_enabled(enabled)
 
+    def _toggle_play_pause(self) -> None:
+        self.playback_controller.toggle_play_pause()
+
+    def _on_timeline_seek_requested(self, position_ms: int) -> None:
+        self.playback_controller.seek(position_ms)
+
+    def _on_playback_status_changed(self, status: str) -> None:
+        if status == "Playing":
+            self.timeline.state.playback_state = TimelinePlaybackState.PLAYING
+        elif status == "Paused":
+            self.timeline.state.playback_state = TimelinePlaybackState.PAUSED
+        elif status == "Stopped":
+            self.timeline.state.playback_state = TimelinePlaybackState.STOPPED
+        self.statusBar().showMessage(status)
+
     def _on_mute_original_track_toggled(self, muted: bool) -> None:
+        self.timeline.set_track_muted(ORIGINAL_AUDIO_TRACK_ID, muted)
         self.playback_controller.set_original_muted(muted)
 
     def _on_mute_khmer_track_toggled(self, muted: bool) -> None:
+        self.timeline.set_track_muted(KHMER_TTS_TRACK_ID, muted)
         self.playback_controller.set_khmer_muted(muted)
 
     def _on_mute_paint_toggled(self, enabled: bool) -> None:
@@ -868,7 +895,7 @@ class MainWindow(QMainWindow):
         if self.project is None:
             self.playback_controller.set_timeline_clips([])
             return
-        self.playback_controller.set_timeline_clips(self.timeline.timeline_clips)
+        self.playback_controller.set_timeline(self.timeline.timeline)
 
     def _save_project(self) -> None:
         if self.project is None:

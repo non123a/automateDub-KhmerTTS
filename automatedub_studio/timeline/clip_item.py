@@ -23,6 +23,8 @@ LANE_COLORS = {
     0: QColor("#5094D9"),
     1: QColor("#60C080"),
     2: QColor("#C06A5F"),
+    3: QColor("#8E77D9"),
+    4: QColor("#D9A45C"),
 }
 LOCKED_COLOR = QColor("#8888AA")
 FLASH_COLOR = QColor("#F4D35E")

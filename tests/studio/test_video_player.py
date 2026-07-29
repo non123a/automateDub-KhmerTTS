@@ -117,6 +117,43 @@ def test_load_video_path_switches_to_video_surface(qapp):
     assert widget._stack.currentWidget() is widget._video_widget
 
 
+def test_play_button_is_play_pause_toggle(qapp):
+    widget = VideoPlayerWidget()
+    assert widget._play_button.text() == "Play/Pause"
+    assert widget._pause_button is widget._play_button
+
+
+def test_toggle_play_pause_emits_play_when_stopped(qapp):
+    widget = VideoPlayerWidget()
+    received = []
+    widget.playRequested.connect(lambda: received.append("play"))
+
+    widget.toggle_play_pause()
+
+    assert received == ["play"]
+
+
+def test_toggle_play_pause_emits_pause_when_playing(qapp, monkeypatch):
+    widget = VideoPlayerWidget()
+    received = []
+    widget.pauseRequested.connect(lambda: received.append("pause"))
+    monkeypatch.setattr(VideoPlayerWidget, "is_playing", property(lambda self: True))
+
+    widget.toggle_play_pause()
+
+    assert received == ["pause"]
+
+
+def test_stop_emits_seek_zero(qapp):
+    widget = VideoPlayerWidget()
+    received = []
+    widget.seekRequested.connect(received.append)
+
+    widget.stop()
+
+    assert received == [0]
+
+
 # ---------------------------------------------------------------------------
 # Playback status signal
 # ---------------------------------------------------------------------------

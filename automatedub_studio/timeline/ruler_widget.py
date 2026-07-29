@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import QWidget
 
@@ -97,6 +97,8 @@ def generate_ruler_ticks(
 class TimelineRulerWidget(QWidget):
     """Paints the time ruler above the timeline scene."""
 
+    seekRequested = Signal(int)
+
     def __init__(
         self,
         *,
@@ -128,6 +130,25 @@ class TimelineRulerWidget(QWidget):
     def set_playhead_position(self, position_ms: int) -> None:
         self._playhead_ms = max(0, position_ms)
         self.update()
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.seekRequested.emit(self._position_to_time_ms(event.position().x()))
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:
+        if event.buttons() & Qt.MouseButton.LeftButton:
+            self.seekRequested.emit(self._position_to_time_ms(event.position().x()))
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def _position_to_time_ms(self, x: float) -> int:
+        origin_x = self._time_origin_x * self._zoom - self._scroll_x
+        seconds = (x - origin_x) / (self._pixels_per_second * self._zoom)
+        return max(0, round(seconds * 1000))
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
