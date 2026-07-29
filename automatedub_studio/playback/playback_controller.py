@@ -98,16 +98,22 @@ class PlaybackController(QObject):
         original_segments: list[Segment],
         khmer_tracks: list[MixSpeechTrack],
     ) -> None:
-        """Configure the two permanent timeline audio tracks."""
-        self._video_player.set_audio_muted(True)
+        """Compatibility adapter from import/export artifacts to timeline clips."""
         self._original_audio_clips = build_original_audio_clips(
             original_audio_path, original_segments
         )
         self._khmer_tracks = khmer_tracks
-        self._timeline_clips = [
+        self.set_timeline_clips(
+            [
             *build_original_timeline_clips(original_audio_path, original_segments),
             *build_khmer_timeline_clips(khmer_tracks),
-        ]
+            ]
+        )
+
+    def set_timeline_clips(self, timeline_clips: list[TimelineClip]) -> None:
+        """Configure playback from the editor's TimelineClip source of truth."""
+        self._video_player.set_audio_muted(True)
+        self._timeline_clips = timeline_clips
         self._configure_khmer_clip_players()
         self._active_original_clip = None
         self._active_khmer_track = None
@@ -156,7 +162,8 @@ class PlaybackController(QObject):
         """Play one clip in isolation for double-click audition."""
         self._sync_timer.stop()
         self._pause_player(self._original_audio_player)
-        self._pause_player(self._khmer_audio_player)
+        for player, _output in self._khmer_clip_players.values():
+            self._pause_player(player)
         self._audition_output.setVolume(1.0)
         self._audition_output.setMuted(False)
         self._load_audio_source(self._audition_player, path, position_ms=0, play=True)
@@ -243,14 +250,17 @@ class PlaybackController(QObject):
 
     def _on_pause_requested(self) -> None:
         self._pause_player(self._original_audio_player)
-        self._pause_player(self._khmer_audio_player)
+        for player, _output in self._khmer_clip_players.values():
+            self._pause_player(player)
         self._sync_timer.stop()
 
     def _on_stop_requested(self) -> None:
         self._stop_player(self._original_audio_player)
-        self._stop_player(self._khmer_audio_player)
+        for player, _output in self._khmer_clip_players.values():
+            self._stop_player(player)
         self._active_original_clip = None
         self._active_khmer_track = None
+        self._active_khmer_clip_ids = set()
         self._sync_timer.stop()
 
     def _on_seek_requested(self, position_ms: int) -> None:

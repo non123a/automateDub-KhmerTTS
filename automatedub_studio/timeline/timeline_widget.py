@@ -83,12 +83,12 @@ class _TimelineView(QGraphicsView):
     """QGraphicsView with Ctrl+Wheel zoom and horizontal clip dragging."""
 
     zoomRequested = Signal(float)
-    clipDragMoved = Signal(int, int)  # (segment_id, live_offset_ms)
-    clipDragEnded = Signal(int, int, int)  # (segment_id, old_offset_ms, new_offset_ms)
+    clipDragMoved = Signal(str, int)  # (clip_id, live_offset_ms)
+    clipDragEnded = Signal(str, int, int)  # (clip_id, old_ms, new_ms)
     clipsDragEnded = Signal(dict, dict)  # old_offsets_by_segment_id, new_offsets_by_segment_id
-    clipTrimMoved = Signal(int, float, float)  # segment_id, start_seconds, end_seconds
-    # segment_id, old_start, old_end, new_start, new_end
-    clipTrimEnded = Signal(int, float, float, float, float)
+    clipTrimMoved = Signal(str, float, float)  # clip_id, start_seconds, end_seconds
+    # clip_id, old_start, old_end, new_start, new_end
+    clipTrimEnded = Signal(str, float, float, float, float)
     clipPlayRequested = Signal(int)       # segment_id, from double-clicking a clip
 
     def __init__(self):
@@ -96,7 +96,7 @@ class _TimelineView(QGraphicsView):
         self._drag_clip: ClipItem | None = None
         self._drag_press_scene_x: float = 0.0
         self._drag_start_offset_ms: int = 0
-        self._drag_start_offsets_ms: dict[int, int] = {}
+        self._drag_start_offsets_ms: dict[str, int] = {}
         self._dragging: bool = False
         self._drag_label: QGraphicsTextItem | None = None
         self._trim_clip: ClipItem | None = None
@@ -144,8 +144,12 @@ class _TimelineView(QGraphicsView):
                 self._trim_clip = item
                 self._trim_handle = handle
                 self._trim_press_scene_x = scene_pos.x()
-                self._trim_start_seconds = item.segment.start
-                self._trim_end_seconds = item.segment.end
+                self._trim_start_seconds = (
+                    item.timeline_clip.start_time if item.timeline_clip else item.segment.start
+                )
+                self._trim_end_seconds = (
+                    item.timeline_clip.end_time if item.timeline_clip else item.segment.end
+                )
                 self._trimming = False
                 item.setSelected(True)
                 event.accept()
@@ -172,8 +176,8 @@ class _TimelineView(QGraphicsView):
         ):
             self._drag_clip = item
             self._drag_press_scene_x = scene_pos.x()
-            self._drag_start_offset_ms = item.segment.offset_ms
-            self._drag_start_offsets_ms = self._selected_unlocked_segment_offsets()
+            self._drag_start_offset_ms = self._clip_offset_ms(item)
+            self._drag_start_offsets_ms = self._selected_unlocked_clip_offsets()
             self._dragging = False
             self._last_clicked_clip = item
         elif isinstance(item, ClipItem):
@@ -202,7 +206,7 @@ class _TimelineView(QGraphicsView):
                 else:
                     start = self._trim_start_seconds
                     end = self._trim_end_seconds + delta_seconds
-                self.clipTrimMoved.emit(self._trim_clip.segment.id, start, end)
+                self.clipTrimMoved.emit(self._clip_key(self._trim_clip), start, end)
                 event.accept()
                 return
         if self._drag_clip is not None and event.buttons() & Qt.MouseButton.LeftButton:
@@ -216,7 +220,7 @@ class _TimelineView(QGraphicsView):
                 for segment_id, offset_ms in moved_offsets.items():
                     self.clipDragMoved.emit(segment_id, offset_ms)
                 self._update_drag_label(
-                    self._drag_clip, moved_offsets[self._drag_clip.segment.id]
+                    self._drag_clip, moved_offsets[self._clip_key(self._drag_clip)]
                 )
                 event.accept()
                 return
@@ -235,8 +239,8 @@ class _TimelineView(QGraphicsView):
                 else:
                     start = self._trim_start_seconds
                     end = self._trim_end_seconds + delta_seconds
-                self.clipTrimEnded.emit(
-                    self._trim_clip.segment.id,
+                    self.clipTrimEnded.emit(
+                        self._clip_key(self._trim_clip),
                     self._trim_start_seconds,
                     self._trim_end_seconds,
                     start,
@@ -294,20 +298,32 @@ class _TimelineView(QGraphicsView):
             self.scene().removeItem(self._drag_label)
             self._drag_label = None
 
-    def _selected_unlocked_segment_offsets(self) -> dict[int, int]:
-        offsets: dict[int, int] = {}
+    def _selected_unlocked_clip_offsets(self) -> dict[str, int]:
+        offsets: dict[str, int] = {}
         for item in self.scene().selectedItems():
             if isinstance(item, ClipItem) and not item.locked:
-                offsets.setdefault(item.segment.id, item.segment.offset_ms)
+                offsets.setdefault(self._clip_key(item), self._clip_offset_ms(item))
         if self._drag_clip is not None and not self._drag_clip.locked:
-            offsets.setdefault(self._drag_clip.segment.id, self._drag_clip.segment.offset_ms)
+            offsets.setdefault(
+                self._clip_key(self._drag_clip), self._clip_offset_ms(self._drag_clip)
+            )
         return offsets
 
-    def _moved_offsets(self, delta_ms: int) -> dict[int, int]:
+    def _moved_offsets(self, delta_ms: int) -> dict[str, int]:
         return {
             segment_id: self._offset_for_drag_delta(delta_ms, start_offset)
             for segment_id, start_offset in self._drag_start_offsets_ms.items()
         }
+
+    @staticmethod
+    def _clip_key(item: ClipItem) -> str:
+        return item.timeline_clip.id if item.timeline_clip is not None else str(item.segment.id)
+
+    @staticmethod
+    def _clip_offset_ms(item: ClipItem) -> int:
+        if item.timeline_clip is None:
+            return item.segment.offset_ms
+        return round((item.timeline_clip.start_time - item.segment.start) * 1000)
 
     def _select_range(self, item: ClipItem) -> None:
         if self._last_clicked_clip is None or self._last_clicked_clip.lane != item.lane:
@@ -357,11 +373,13 @@ class TimelineWidget(QWidget):
 
     segmentSelected = Signal(object)  # emits Segment | None
     segmentsSelected = Signal(list)  # emits selected Segment list
-    segmentOffsetChanged = Signal(int, int)   # (segment_id, offset_ms) live during drag
-    segmentOffsetCommitted = Signal(int, int, int)  # (segment_id, old_ms, new_ms) on drag end
+    timelineClipSelected = Signal(object)  # emits TimelineClip | None
+    timelineClipsSelected = Signal(list)  # emits selected TimelineClip list
+    segmentOffsetChanged = Signal(str, int)   # (clip_id, offset_ms) live during drag
+    segmentOffsetCommitted = Signal(str, int, int)  # (clip_id, old_ms, new_ms) on drag end
     segmentsOffsetCommitted = Signal(dict, dict)  # old_offsets, new_offsets
-    segmentTrimChanged = Signal(int, float, float)  # live trim
-    segmentTrimCommitted = Signal(int, float, float, float, float)
+    segmentTrimChanged = Signal(str, float, float)  # live trim
+    segmentTrimCommitted = Signal(str, float, float, float, float)
     clipPlayRequested = Signal(int)  # segment_id, from double-clicking a clip
 
     def __init__(self, parent: QWidget | None = None):
@@ -445,6 +463,11 @@ class TimelineWidget(QWidget):
         return selected[0] if len(selected) == 1 else None
 
     @property
+    def selected_timeline_clip(self) -> TimelineClip | None:
+        selected = self.selected_timeline_clips
+        return selected[0] if len(selected) == 1 else None
+
+    @property
     def selected_segments(self) -> list[Segment]:
         by_id: dict[int, Segment] = {}
         for item in self._scene.selectedItems():
@@ -462,6 +485,10 @@ class TimelineWidget(QWidget):
         for clip in self._timeline_clips:
             clip.selected = clip in clips
         return sorted(clips, key=lambda clip: (clip.start_time, clip.track_id, clip.id))
+
+    @property
+    def timeline_clips(self) -> list[TimelineClip]:
+        return list(self._timeline_clips)
 
     @property
     def _clips(self) -> list[ClipItem]:
@@ -493,6 +520,7 @@ class TimelineWidget(QWidget):
         timeline_clip.end_time = start_time + duration
         new_x = self._time_to_x(start_time)
         item.setX(new_x - item.rect().x())
+        self._ensure_scene_rect_covers_time(timeline_clip.end_time)
 
     def set_timeline_clip_muted(self, clip_id: str, muted: bool) -> None:
         clip = self._find_timeline_clip(clip_id)
@@ -503,6 +531,79 @@ class TimelineWidget(QWidget):
         clip = self._find_timeline_clip(clip_id)
         if clip is not None:
             clip.volume = max(0.0, volume)
+
+    def set_timeline_clip_fade_in(self, clip_id: str, fade_in_ms: int) -> None:
+        clip = self._find_timeline_clip(clip_id)
+        if clip is not None:
+            clip.fade_in = max(0, fade_in_ms) / 1000.0
+
+    def set_timeline_clip_fade_out(self, clip_id: str, fade_out_ms: int) -> None:
+        clip = self._find_timeline_clip(clip_id)
+        if clip is not None:
+            clip.fade_out = max(0, fade_out_ms) / 1000.0
+
+    def set_timeline_clip_locked(self, clip_id: str, locked: bool) -> None:
+        clip = self._find_timeline_clip(clip_id)
+        item = self._clips_by_clip_id.get(clip_id)
+        if clip is not None:
+            clip.locked = locked
+        if item is not None:
+            item.set_locked(locked)
+
+    def set_timeline_clip_status(self, clip_id: str, status: str | None) -> None:
+        item = self._clips_by_clip_id.get(clip_id)
+        if item is not None:
+            item.set_status(status)
+
+    def apply_timeline_clip_trim(
+        self, clip_id: str, start_seconds: float, end_seconds: float
+    ) -> None:
+        """Apply trim to one independent timeline clip."""
+        item = self._clips_by_clip_id.get(clip_id)
+        if item is None or item.timeline_clip is None:
+            return
+        timeline_clip = item.timeline_clip
+        start_seconds, end_seconds = self.constrain_timeline_clip_trim(
+            clip_id, start_seconds, end_seconds
+        )
+        timeline_clip.start_time = start_seconds
+        timeline_clip.end_time = end_seconds
+        width = max(0.0, timeline_clip.duration * BASE_PIXELS_PER_SECOND)
+        x = self._time_to_x(timeline_clip.start_time)
+        rect = item.rect()
+        item.setRect(x, rect.y(), width, rect.height())
+        item.setX(0)
+        item.update()
+        self._ensure_scene_rect_covers_time(timeline_clip.end_time)
+
+    def constrain_timeline_clip_trim(
+        self, clip_id: str, start_seconds: float, end_seconds: float
+    ) -> tuple[float, float]:
+        clip = self._find_timeline_clip(clip_id)
+        if clip is None:
+            return start_seconds, end_seconds
+        track_clips = sorted(
+            [item for item in self._timeline_clips if item.track_id == clip.track_id],
+            key=lambda item: (item.start_time, item.id),
+        )
+        index = track_clips.index(clip)
+        previous_end = track_clips[index - 1].end_time if index > 0 else 0.0
+        source_end = self._duration_ms / 1000.0 if self._duration_ms > 0 else clip.end_time
+        next_start = (
+            track_clips[index + 1].start_time if index < len(track_clips) - 1 else source_end
+        )
+        constrained_start = max(0.0, previous_end, start_seconds)
+        constrained_end = min(source_end, next_start, end_seconds)
+        if constrained_end - constrained_start < MIN_CLIP_DURATION_SECONDS:
+            if abs(start_seconds - clip.start_time) > abs(end_seconds - clip.end_time):
+                constrained_start = constrained_end - MIN_CLIP_DURATION_SECONDS
+            else:
+                constrained_end = constrained_start + MIN_CLIP_DURATION_SECONDS
+        constrained_start = max(0.0, previous_end, constrained_start)
+        constrained_end = min(source_end, next_start, constrained_end)
+        if constrained_end <= constrained_start:
+            return clip.start_time, clip.end_time
+        return constrained_start, constrained_end
 
     def apply_locked(self, segment_id: int, locked: bool) -> None:
         """Update locked state on all clips for a segment."""
@@ -709,6 +810,8 @@ class TimelineWidget(QWidget):
                     source_path=self._audio_path,
                     source_offset=segment.start,
                     segment_id=segment.id,
+                    source_text=segment.source_text,
+                    target_text=segment.target_text,
                 )
             )
             clips.append(
@@ -724,6 +827,8 @@ class TimelineWidget(QWidget):
                     ),
                     source_offset=0.0,
                     segment_id=segment.id,
+                    source_text=segment.source_text,
+                    target_text=segment.target_text,
                 )
             )
         return clips
@@ -780,37 +885,43 @@ class TimelineWidget(QWidget):
     def _on_selection_changed(self) -> None:
         self.segmentSelected.emit(self.selected_segment)
         self.segmentsSelected.emit(self.selected_segments)
+        self.timelineClipSelected.emit(self.selected_timeline_clip)
+        self.timelineClipsSelected.emit(self.selected_timeline_clips)
 
-    def _on_clip_drag_moved(self, segment_id: int, offset_ms: int) -> None:
-        self.apply_offset(segment_id, offset_ms)
+    def _on_clip_drag_moved(self, segment_id: str, offset_ms: int) -> None:
+        self.apply_timeline_clip_offset(segment_id, offset_ms)
         self.segmentOffsetChanged.emit(segment_id, offset_ms)
 
-    def _on_clip_drag_ended(self, segment_id: int, old_offset_ms: int, new_offset_ms: int) -> None:
+    def _on_clip_drag_ended(
+        self, segment_id: str, old_offset_ms: int, new_offset_ms: int
+    ) -> None:
         self.segmentOffsetCommitted.emit(segment_id, old_offset_ms, new_offset_ms)
 
     def _on_clips_drag_ended(
-        self, old_offsets_ms: dict[int, int], new_offsets_ms: dict[int, int]
+        self, old_offsets_ms: dict[str, int], new_offsets_ms: dict[str, int]
     ) -> None:
         self.segmentsOffsetCommitted.emit(old_offsets_ms, new_offsets_ms)
 
     def _on_clip_trim_moved(
-        self, segment_id: int, start_seconds: float, end_seconds: float
+        self, segment_id: str, start_seconds: float, end_seconds: float
     ) -> None:
-        constrained_start, constrained_end = self.constrain_trim(
+        constrained_start, constrained_end = self.constrain_timeline_clip_trim(
             segment_id, start_seconds, end_seconds
         )
-        self.apply_trim(segment_id, constrained_start, constrained_end)
+        self.apply_timeline_clip_trim(segment_id, constrained_start, constrained_end)
         self.segmentTrimChanged.emit(segment_id, constrained_start, constrained_end)
 
     def _on_clip_trim_ended(
         self,
-        segment_id: int,
+        segment_id: str,
         old_start: float,
         old_end: float,
         new_start: float,
         new_end: float,
     ) -> None:
-        constrained_start, constrained_end = self.constrain_trim(segment_id, new_start, new_end)
+        constrained_start, constrained_end = self.constrain_timeline_clip_trim(
+            segment_id, new_start, new_end
+        )
         self.segmentTrimCommitted.emit(
             segment_id, old_start, old_end, constrained_start, constrained_end
         )

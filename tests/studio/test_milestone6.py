@@ -259,9 +259,9 @@ def test_timeline_segment_offset_committed_signal_fires(qapp):
 
     received = []
     tl.segmentOffsetCommitted.connect(lambda sid, old, new: received.append((sid, old, new)))
-    tl._view.clipDragEnded.emit(7, 0, 400)
+    tl._view.clipDragEnded.emit("khmer:7", 0, 400)
 
-    assert received == [(7, 0, 400)]
+    assert received == [("khmer:7", 0, 400)]
 
 
 # ===========================================================================

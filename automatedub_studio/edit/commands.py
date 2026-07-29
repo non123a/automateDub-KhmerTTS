@@ -69,6 +69,104 @@ class PropertyChangeCommand(QUndoCommand):
         self._apply_cb(self._segment_id, self._field, self._new)
 
 
+class TimelineClipPropertyChangeCommand(QUndoCommand):
+    """Record a property change on one independent TimelineClip."""
+
+    def __init__(
+        self,
+        clip_id: str,
+        field: str,
+        old_value: Any,
+        new_value: Any,
+        apply_cb: Callable[[str, str, Any], None],
+    ):
+        super().__init__(f"Change {field} for clip {clip_id}")
+        self._clip_id = clip_id
+        self._field = field
+        self._old = old_value
+        self._new = new_value
+        self._apply_cb = apply_cb
+
+    def undo(self) -> None:
+        self._apply_cb(self._clip_id, self._field, self._old)
+
+    def redo(self) -> None:
+        self._apply_cb(self._clip_id, self._field, self._new)
+
+
+class TimelineClipOffsetChangeCommand(QUndoCommand):
+    """Record an offset change for one independent TimelineClip."""
+
+    def __init__(
+        self,
+        clip_id: str,
+        old_offset_ms: int,
+        new_offset_ms: int,
+        apply_cb: Callable[[str, int], None],
+    ):
+        super().__init__(f"Move clip {clip_id}")
+        self._clip_id = clip_id
+        self._old = old_offset_ms
+        self._new = new_offset_ms
+        self._apply_cb = apply_cb
+
+    def undo(self) -> None:
+        self._apply_cb(self._clip_id, self._old)
+
+    def redo(self) -> None:
+        self._apply_cb(self._clip_id, self._new)
+
+
+class MultiTimelineClipOffsetChangeCommand(QUndoCommand):
+    """Record multiple TimelineClip offset changes as one undoable move."""
+
+    def __init__(
+        self,
+        old_offsets_ms: dict[str, int],
+        new_offsets_ms: dict[str, int],
+        apply_cb: Callable[[str, int], None],
+    ):
+        super().__init__(f"Move {len(new_offsets_ms)} clips")
+        self._old = dict(old_offsets_ms)
+        self._new = dict(new_offsets_ms)
+        self._apply_cb = apply_cb
+
+    def undo(self) -> None:
+        for clip_id, offset_ms in self._old.items():
+            self._apply_cb(clip_id, offset_ms)
+
+    def redo(self) -> None:
+        for clip_id, offset_ms in self._new.items():
+            self._apply_cb(clip_id, offset_ms)
+
+
+class TimelineClipTrimCommand(QUndoCommand):
+    """Record a trim change for one independent TimelineClip."""
+
+    def __init__(
+        self,
+        clip_id: str,
+        old_start: float,
+        old_end: float,
+        new_start: float,
+        new_end: float,
+        apply_cb: Callable[[str, float, float], None],
+    ):
+        super().__init__(f"Trim clip {clip_id}")
+        self._clip_id = clip_id
+        self._old_start = old_start
+        self._old_end = old_end
+        self._new_start = new_start
+        self._new_end = new_end
+        self._apply_cb = apply_cb
+
+    def undo(self) -> None:
+        self._apply_cb(self._clip_id, self._old_start, self._old_end)
+
+    def redo(self) -> None:
+        self._apply_cb(self._clip_id, self._new_start, self._new_end)
+
+
 class OffsetChangeCommand(QUndoCommand):
     """Record a single offset_ms change for undo/redo."""
 

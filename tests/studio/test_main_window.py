@@ -247,8 +247,11 @@ def test_open_project_populates_dual_audio_tracks(qapp, tmp_path):
 
     window.open_project_path(project_dir)
 
-    assert len(window.playback_controller._original_audio_clips) == 3
-    assert len(window.playback_controller._khmer_tracks) > 0
+    assert len(window.playback_controller._timeline_clips) == 6
+    assert {clip.track_id for clip in window.playback_controller._timeline_clips} == {
+        "original_audio",
+        "khmer_tts",
+    }
 
 
 def test_double_clicking_clip_plays_it_in_isolation(qapp, tmp_path):
@@ -275,17 +278,21 @@ def test_offset_edit_refreshes_dual_audio_tracks(qapp, tmp_path):
     window = MainWindow(settings=_memory_settings())
     window.open_project_path(project_dir)
 
-    baseline = next(t for t in window.playback_controller._khmer_tracks if t.id == 0)
-    baseline_delay_ms = baseline.delay_ms
+    baseline = next(
+        clip for clip in window.playback_controller._timeline_clips if clip.id == "khmer:0"
+    )
+    baseline_start = baseline.start_time
     original_baseline = next(
-        clip for clip in window.playback_controller._original_audio_clips if clip.id == 0
+        clip for clip in window.playback_controller._timeline_clips if clip.id == "original:0"
     )
 
-    window._on_offset_committed(0, 0, 250)
+    window._on_offset_committed("khmer:0", 0, 250)
 
-    track = next(t for t in window.playback_controller._khmer_tracks if t.id == 0)
+    track = next(
+        clip for clip in window.playback_controller._timeline_clips if clip.id == "khmer:0"
+    )
     original = next(
-        clip for clip in window.playback_controller._original_audio_clips if clip.id == 0
+        clip for clip in window.playback_controller._timeline_clips if clip.id == "original:0"
     )
-    assert track.delay_ms == baseline_delay_ms + 250
-    assert original.start_ms == original_baseline.start_ms + 250
+    assert track.start_time == baseline_start + 0.25
+    assert original.start_time == original_baseline.start_time

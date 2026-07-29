@@ -22,11 +22,7 @@ from PySide6.QtWidgets import (
 
 from automatedub.config import ToolConfig, load_tool_config
 from automatedub.vertical_slice.tts import tts_segment_output_path
-from automatedub_studio.backend.export_service import (
-    ExportError,
-    ExportOptions,
-    build_export_speech_tracks,
-)
+from automatedub_studio.backend.export_service import ExportOptions
 from automatedub_studio.backend.export_worker import ExportJob, ExportRunner
 from automatedub_studio.backend.jobs import JobRunner, RegenerationJob
 from automatedub_studio.backend.regeneration_service import (
@@ -38,12 +34,12 @@ from automatedub_studio.backend.regeneration_service import (
 )
 from automatedub_studio.edit.commands import (
     ClipClipboard,
-    MultiOffsetChangeCommand,
-    OffsetChangeCommand,
+    MultiTimelineClipOffsetChangeCommand,
     PasteSegmentsCommand,
-    PropertyChangeCommand,
     SplitSegmentCommand,
-    TrimSegmentCommand,
+    TimelineClipOffsetChangeCommand,
+    TimelineClipPropertyChangeCommand,
+    TimelineClipTrimCommand,
 )
 from automatedub_studio.inspector.segment_inspector import SegmentInspectorWidget
 from automatedub_studio.playback.playback_controller import PlaybackController
@@ -63,6 +59,7 @@ from automatedub_studio.timeline.clip_item import (
     STATUS_NEEDS_REGENERATION,
 )
 from automatedub_studio.timeline.ruler_widget import DEFAULT_SNAP_INTERVAL_MS
+from automatedub_studio.timeline.timeline_clip import KHMER_TTS_TRACK_ID
 from automatedub_studio.timeline.timeline_widget import TimelineWidget
 from automatedub_studio.ui.about_dialog import AboutDialog
 from automatedub_studio.ui.export_dialog import ExportProgressDialog
@@ -221,6 +218,7 @@ class MainWindow(QMainWindow):
         self.video_player.videoPositionChanged.connect(self.timeline.set_playhead_position)
         self.timeline.segmentSelected.connect(self._on_segment_selected)
         self.timeline.segmentsSelected.connect(self._on_segments_selected)
+        self.timeline.timelineClipsSelected.connect(self._on_timeline_clips_selected)
         self.timeline.segmentOffsetChanged.connect(self._on_offset_live)
         self.timeline.segmentOffsetCommitted.connect(self._on_offset_committed)
         self.timeline.segmentsOffsetCommitted.connect(self._on_offsets_committed)
@@ -242,12 +240,12 @@ class MainWindow(QMainWindow):
 
     def _build_inspector_dock(self) -> None:
         self.inspector = SegmentInspectorWidget()
-        self.inspector.speedChanged.connect(self._on_speed_changed)
-        self.inspector.volumeChanged.connect(self._on_volume_changed)
-        self.inspector.fadeInChanged.connect(self._on_fade_in_changed)
-        self.inspector.fadeOutChanged.connect(self._on_fade_out_changed)
-        self.inspector.lockedChanged.connect(self._on_locked_changed)
         self.inspector.regenerateRequested.connect(self._regenerate_ids)
+        self.inspector.clipVolumeChanged.connect(self._on_clip_volume_changed)
+        self.inspector.clipMutedChanged.connect(self._on_clip_muted_changed)
+        self.inspector.clipFadeInChanged.connect(self._on_clip_fade_in_changed)
+        self.inspector.clipFadeOutChanged.connect(self._on_clip_fade_out_changed)
+        self.inspector.clipLockedChanged.connect(self._on_clip_locked_changed)
 
         dock = QDockWidget("Segment Inspector", self)
         dock.setWidget(self.inspector)
@@ -277,55 +275,48 @@ class MainWindow(QMainWindow):
         self._update_regenerate_actions()
 
     def _on_segments_selected(self, segments: list) -> None:
-        self.inspector.set_segments(segments, self._editables)
         self._update_regenerate_actions()
 
-    def _on_offset_live(self, _segment_id: int, offset_ms: int) -> None:
-        selected = self.timeline.selected_segments
+    def _on_timeline_clips_selected(self, clips: list) -> None:
+        self.inspector.set_timeline_clips(clips)
+
+    def _on_offset_live(self, _clip_id: str, offset_ms: int) -> None:
+        selected = self.timeline.selected_timeline_clips
         if len(selected) > 1:
-            self.inspector.set_segments(selected, self._editables)
+            self.inspector.set_timeline_clips(selected)
         else:
             self.inspector.refresh_offset(offset_ms)
 
     def _on_offset_committed(
-        self, segment_id: int, old_offset_ms: int, new_offset_ms: int
+        self, segment_id: str, old_offset_ms: int, new_offset_ms: int
     ) -> None:
-        segment = self._find_segment(segment_id)
-        if segment is None:
-            return
-        cmd = OffsetChangeCommand(
-            segment, old_offset_ms, new_offset_ms, apply_cb=self._apply_offset
+        cmd = TimelineClipOffsetChangeCommand(
+            segment_id, old_offset_ms, new_offset_ms, apply_cb=self._apply_clip_offset
         )
         self._undo_stack.push(cmd)
 
     def _on_offsets_committed(
-        self, old_offsets_ms: dict[int, int], new_offsets_ms: dict[int, int]
+        self, old_offsets_ms: dict[str, int], new_offsets_ms: dict[str, int]
     ) -> None:
-        segments = [
-            segment
-            for segment_id in new_offsets_ms
-            if (segment := self._find_segment(segment_id)) is not None
-        ]
-        if not segments:
+        if not new_offsets_ms:
             return
-        cmd = MultiOffsetChangeCommand(
-            segments,
+        cmd = MultiTimelineClipOffsetChangeCommand(
             old_offsets_ms,
             new_offsets_ms,
-            apply_cb=self._apply_offset,
+            apply_cb=self._apply_clip_offset,
         )
         self._undo_stack.push(cmd)
 
     def _on_trim_live(
-        self, _segment_id: int, _start_seconds: float, _end_seconds: float
+        self, _clip_id: str, _start_seconds: float, _end_seconds: float
     ) -> None:
-        selected = self.timeline.selected_segments
+        selected = self.timeline.selected_timeline_clips
         if len(selected) == 1:
-            self.inspector.set_segment(selected[0], self._editables.get(selected[0].id))
+            self.inspector.set_timeline_clip(selected[0])
 
     def _on_trim_committed(
         self,
-        segment_id: int,
+        segment_id: str,
         old_start: float,
         old_end: float,
         new_start: float,
@@ -333,16 +324,13 @@ class MainWindow(QMainWindow):
     ) -> None:
         if abs(old_start - new_start) < 1e-9 and abs(old_end - new_end) < 1e-9:
             return
-        segment = self._find_segment(segment_id)
-        if segment is None:
-            return
-        cmd = TrimSegmentCommand(
-            segment,
+        cmd = TimelineClipTrimCommand(
+            segment_id,
             old_start,
             old_end,
             new_start,
             new_end,
-            apply_cb=self._apply_trim,
+            apply_cb=self._apply_clip_trim,
         )
         self._undo_stack.push(cmd)
 
@@ -350,27 +338,26 @@ class MainWindow(QMainWindow):
     # Signal handlers — inspector properties
     # ------------------------------------------------------------------
 
-    def _on_speed_changed(self, old_val: float, new_val: float) -> None:
-        self._push_property_command("speed", old_val, new_val)
+    def _on_clip_volume_changed(self, clip_id: str, old_val: float, new_val: float) -> None:
+        self._push_clip_property_command(clip_id, "volume", old_val, new_val)
 
-    def _on_volume_changed(self, old_val: float, new_val: float) -> None:
-        self._push_property_command("volume", old_val, new_val)
+    def _on_clip_muted_changed(self, clip_id: str, old_val: bool, new_val: bool) -> None:
+        self._push_clip_property_command(clip_id, "muted", old_val, new_val)
 
-    def _on_fade_in_changed(self, old_val: int, new_val: int) -> None:
-        self._push_property_command("fade_in_ms", old_val, new_val)
+    def _on_clip_fade_in_changed(self, clip_id: str, old_val: int, new_val: int) -> None:
+        self._push_clip_property_command(clip_id, "fade_in_ms", old_val, new_val)
 
-    def _on_fade_out_changed(self, old_val: int, new_val: int) -> None:
-        self._push_property_command("fade_out_ms", old_val, new_val)
+    def _on_clip_fade_out_changed(self, clip_id: str, old_val: int, new_val: int) -> None:
+        self._push_clip_property_command(clip_id, "fade_out_ms", old_val, new_val)
 
-    def _on_locked_changed(self, old_val: bool, new_val: bool) -> None:
-        self._push_property_command("locked", old_val, new_val)
+    def _on_clip_locked_changed(self, clip_id: str, old_val: bool, new_val: bool) -> None:
+        self._push_clip_property_command(clip_id, "locked", old_val, new_val)
 
-    def _push_property_command(self, field: str, old_val: Any, new_val: Any) -> None:
-        seg = self.timeline.selected_segment
-        if seg is None:
-            return
-        cmd = PropertyChangeCommand(
-            seg.id, field, old_val, new_val, apply_cb=self._apply_property
+    def _push_clip_property_command(
+        self, clip_id: str, field: str, old_val: Any, new_val: Any
+    ) -> None:
+        cmd = TimelineClipPropertyChangeCommand(
+            clip_id, field, old_val, new_val, apply_cb=self._apply_clip_property
         )
         self._undo_stack.push(cmd)
 
@@ -378,31 +365,45 @@ class MainWindow(QMainWindow):
     # Apply callbacks
     # ------------------------------------------------------------------
 
-    def _apply_offset(self, segment_id: int, offset_ms: int) -> None:
-        self.timeline.apply_offset(segment_id, offset_ms)
-        selected = self.timeline.selected_segments
-        if len(selected) > 1 and any(segment.id == segment_id for segment in selected):
-            self.inspector.set_segments(selected, self._editables)
-        elif selected and selected[0].id == segment_id:
+    def _apply_clip_offset(self, clip_id: str, offset_ms: int) -> None:
+        self.timeline.apply_timeline_clip_offset(clip_id, offset_ms)
+        selected = self.timeline.selected_timeline_clips
+        if len(selected) > 1 and any(clip.id == clip_id for clip in selected):
+            self.inspector.set_timeline_clips(selected)
+        elif selected and selected[0].id == clip_id:
             self.inspector.refresh_offset(offset_ms)
         self._refresh_playback_sources()
 
-    def _apply_property(self, segment_id: int, field: str, value: Any) -> None:
-        es = self._editables.setdefault(segment_id, EditableSegment(id=segment_id))
-        setattr(es, field, value)
-        if field == "locked":
-            self.timeline.apply_locked(segment_id, value)
+    def _apply_clip_property(self, clip_id: str, field: str, value: Any) -> None:
+        refresh_field = field
+        refresh_value = value
+        if field == "volume":
+            self.timeline.set_timeline_clip_volume(clip_id, value)
+        elif field == "muted":
+            self.timeline.set_timeline_clip_muted(clip_id, value)
+        elif field == "fade_in_ms":
+            self.timeline.set_timeline_clip_fade_in(clip_id, value)
+            refresh_field = "fade_in"
+            refresh_value = value / 1000.0
+        elif field == "fade_out_ms":
+            self.timeline.set_timeline_clip_fade_out(clip_id, value)
+            refresh_field = "fade_out"
+            refresh_value = value / 1000.0
+        elif field == "locked":
+            self.timeline.set_timeline_clip_locked(clip_id, value)
             self._update_regenerate_actions()
-        seg = self.timeline.selected_segment
-        if seg is not None and seg.id == segment_id:
-            self.inspector.refresh_property(field, value)
+        else:
+            return
+        selected = self.timeline.selected_timeline_clips
+        if len(selected) == 1 and selected[0].id == clip_id:
+            self.inspector.refresh_timeline_clip_property(refresh_field, refresh_value)
         self._refresh_playback_sources()
 
-    def _apply_trim(self, segment_id: int, start_seconds: float, end_seconds: float) -> None:
-        self.timeline.apply_trim(segment_id, start_seconds, end_seconds)
-        selected = self.timeline.selected_segments
-        if len(selected) == 1 and selected[0].id == segment_id:
-            self.inspector.set_segment(selected[0], self._editables.get(segment_id))
+    def _apply_clip_trim(self, clip_id: str, start_seconds: float, end_seconds: float) -> None:
+        self.timeline.apply_timeline_clip_trim(clip_id, start_seconds, end_seconds)
+        selected = self.timeline.selected_timeline_clips
+        if len(selected) == 1 and selected[0].id == clip_id:
+            self.inspector.set_timeline_clip(selected[0])
         self._refresh_playback_sources()
 
     def _apply_structural_timeline_edit(
@@ -415,20 +416,14 @@ class MainWindow(QMainWindow):
             audio_path=self.project.audio_path,
             tts_directory=self.project.tts_directory,
         )
-        for seg_id, es in self._editables.items():
-            if es.locked:
-                self.timeline.apply_locked(seg_id, True)
-            elif es.last_error is not None:
-                self.timeline.apply_status(seg_id, STATUS_FAILED)
-            elif es.needs_regeneration:
-                self.timeline.apply_status(seg_id, STATUS_NEEDS_REGENERATION)
+        self._seed_timeline_clips_from_import_editables()
         selected_ids = selected_ids or []
         if selected_ids:
             self.timeline.select_segment_ids(selected_ids)
             if flash:
                 self.timeline.flash_segment_ids(selected_ids)
         else:
-            self.inspector.set_segment(None)
+            self.inspector.set_timeline_clip(None)
         self._update_regenerate_actions()
         self._refresh_playback_sources()
 
@@ -466,8 +461,13 @@ class MainWindow(QMainWindow):
         self.regenerate_all_action.setEnabled(not busy and bool(all_ids))
 
     def _selected_segment_ids(self) -> list[int]:
+        selected_ids = [
+            clip.segment_id
+            for clip in self.timeline.selected_timeline_clips
+            if clip.segment_id is not None
+        ]
         return select_selected_ids(
-            [segment.id for segment in self.timeline.selected_segments], self._editables
+            list(dict.fromkeys(selected_ids)), self._editables
         )
 
     def _regenerate_selected(self) -> None:
@@ -504,7 +504,7 @@ class MainWindow(QMainWindow):
         self._start_regeneration(list(segment_ids))
 
     def _copy_selected_clips(self) -> None:
-        selected = self.timeline.selected_segments
+        selected = self._selected_segments_from_timeline_clips()
         if not selected:
             return
         self._clipboard.replace(selected, self._editables)
@@ -521,7 +521,7 @@ class MainWindow(QMainWindow):
     def _duplicate_selected_clips(self) -> None:
         if self.project is None:
             return
-        selected = self.timeline.selected_segments
+        selected = self._selected_segments_from_timeline_clips()
         if not selected:
             return
         source_editables = {
@@ -556,7 +556,7 @@ class MainWindow(QMainWindow):
     def _split_selected_clip(self) -> None:
         if self.project is None:
             return
-        selected = self.timeline.selected_segments
+        selected = self._selected_segments_from_timeline_clips()
         if len(selected) != 1:
             return
         segment = selected[0]
@@ -580,12 +580,26 @@ class MainWindow(QMainWindow):
         start = max((item.id for item in self.project.segments), default=-1) + 1
         return list(range(start, start + count))
 
+    def _selected_segments_from_timeline_clips(self) -> list:
+        if self.project is None:
+            return []
+        selected_ids = [
+            clip.segment_id
+            for clip in self.timeline.selected_timeline_clips
+            if clip.segment_id is not None
+        ]
+        unique_ids = set(selected_ids)
+        return [
+            segment for segment in self.project.segments
+            if segment.id in unique_ids
+        ]
+
     def _start_regeneration(self, segment_ids: list[int]) -> None:
         if self.project is None or not segment_ids or self._job_runner.is_running:
             return
 
         for seg_id in segment_ids:
-            self.timeline.apply_status(seg_id, STATUS_GENERATING)
+            self.timeline.set_timeline_clip_status(f"khmer:{seg_id}", STATUS_GENERATING)
 
         self._regen_completed = 0
         self._regen_total = len(segment_ids)
@@ -621,8 +635,8 @@ class MainWindow(QMainWindow):
                 f"Regenerating segment {segment_id}...  "
                 f"Completed: {self._regen_completed}  Remaining: {remaining}"
             )
-        seg = self.timeline.selected_segment
-        if seg is not None and seg.id == segment_id:
+        clip = self.timeline.selected_timeline_clip
+        if clip is not None and clip.segment_id == segment_id:
             self.inspector.set_generating(True)
 
     def _on_regen_result(self, outcome: RegenerationOutcome) -> None:
@@ -631,18 +645,20 @@ class MainWindow(QMainWindow):
             es.needs_regeneration = False
             es.last_error = None
             es.generated_duration = outcome.duration_seconds
-            self.timeline.apply_status(outcome.segment_id, None)
+            self.timeline.set_timeline_clip_status(f"khmer:{outcome.segment_id}", None)
         else:
             es.last_error = outcome.error
             self._regen_errors.append(f"Segment {outcome.segment_id}: {outcome.error}")
-            self.timeline.apply_status(outcome.segment_id, STATUS_FAILED)
+            self.timeline.set_timeline_clip_status(
+                f"khmer:{outcome.segment_id}", STATUS_FAILED
+            )
 
         self._regen_completed += 1
         if self._progress_dialog is not None:
             self._progress_dialog.setValue(self._regen_completed)
 
-        seg = self.timeline.selected_segment
-        if seg is not None and seg.id == outcome.segment_id:
+        clip = self.timeline.selected_timeline_clip
+        if clip is not None and clip.segment_id == outcome.segment_id:
             self.inspector.set_generating(False)
             self.inspector.refresh_status()
 
@@ -714,40 +730,36 @@ class MainWindow(QMainWindow):
             audio_path=project.audio_path,
             tts_directory=project.tts_directory,
         )
-        for seg_id, es in self._editables.items():
-            if es.locked:
-                self.timeline.apply_locked(seg_id, True)
-            elif es.last_error is not None:
-                self.timeline.apply_status(seg_id, STATUS_FAILED)
-            elif es.needs_regeneration:
-                self.timeline.apply_status(seg_id, STATUS_NEEDS_REGENERATION)
-        self.inspector.set_segment(None)
+        self._seed_timeline_clips_from_import_editables()
+        self.inspector.set_timeline_clip(None)
         self.statusBar().showMessage(self._status_message(project))
         self._update_regenerate_actions()
         self._refresh_playback_sources()
 
-    def _refresh_playback_sources(self) -> None:
-        """Recompute Timeline Preview tracks and mixed/Khmer sources.
+    def _seed_timeline_clips_from_import_editables(self) -> None:
+        """Seed TimelineClip state from legacy import/export metadata."""
+        for clip in self.timeline.timeline_clips:
+            if clip.track_id != KHMER_TTS_TRACK_ID or clip.segment_id is None:
+                continue
+            es = self._editables.get(clip.segment_id)
+            if es is None:
+                continue
+            clip.volume = es.volume
+            clip.fade_in = es.fade_in_ms / 1000.0
+            clip.fade_out = es.fade_out_ms / 1000.0
+            clip.locked = es.locked
+            self.timeline.set_timeline_clip_locked(clip.id, es.locked)
+            if es.last_error is not None:
+                self.timeline.set_timeline_clip_status(clip.id, STATUS_FAILED)
+            elif es.needs_regeneration:
+                self.timeline.set_timeline_clip_status(clip.id, STATUS_NEEDS_REGENERATION)
 
-        Called after loading a project and after any edit (offset/speed/
-        volume/fade/regeneration) so Timeline Preview always reflects the
-        current `EditableSegment` state without ever re-mixing or exporting.
-        """
+    def _refresh_playback_sources(self) -> None:
+        """Publish the editor TimelineClip model to playback."""
         if self.project is None:
-            self.playback_controller.set_sources(None, [], [])
+            self.playback_controller.set_timeline_clips([])
             return
-        try:
-            timeline_tracks = build_export_speech_tracks(
-                self.project.segments,
-                self._editables,
-                self.project.tts_directory,
-                self._tool_config,
-            )
-        except ExportError:
-            timeline_tracks = []
-        self.playback_controller.set_sources(
-            self.project.audio_path, self.project.segments, timeline_tracks
-        )
+        self.playback_controller.set_timeline_clips(self.timeline.timeline_clips)
 
     def _save_project(self) -> None:
         if self.project is None:

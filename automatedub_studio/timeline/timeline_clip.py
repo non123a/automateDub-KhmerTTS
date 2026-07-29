@@ -27,6 +27,8 @@ class TimelineClip:
     fade_in: float = 0.0
     fade_out: float = 0.0
     segment_id: int | None = None
+    source_text: str = ""
+    target_text: str = ""
 
     @property
     def duration(self) -> float:

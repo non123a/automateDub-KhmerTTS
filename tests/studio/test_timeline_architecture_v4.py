@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QUrl
+import pytest
+from PySide6.QtCore import QSettings, QUrl
 
 from automatedub.vertical_slice.mix import MixSpeechTrack
 from automatedub_studio.playback.playback_controller import PlaybackController
@@ -19,6 +20,7 @@ from automatedub_studio.timeline.timeline_clip import (
     active_clips,
 )
 from automatedub_studio.timeline.timeline_widget import TimelineWidget
+from automatedub_studio.ui.main_window import MainWindow
 
 
 def _segment(segment_id: int = 10) -> Segment:
@@ -41,6 +43,10 @@ def _track(track_id: int, path: Path, delay_ms: int = 1000) -> MixSpeechTrack:
         generated_duration=1.0,
         tts_path=path,
     )
+
+
+def _settings(path: Path) -> QSettings:
+    return QSettings(str(path / "settings.ini"), QSettings.Format.IniFormat)
 
 
 def test_original_and_khmer_timeline_clips_have_independent_ids_and_state(tmp_path):
@@ -130,3 +136,79 @@ def test_playback_preloads_khmer_sources_without_boundary_set_source(qapp, tmp_p
     assert second_player.source() == QUrl.fromLocalFile(str(second_path))
     controller._sync_khmer_audio(1200, start_playing=False)
     assert second_player.source() == QUrl.fromLocalFile(str(second_path))
+
+
+def test_inspector_volume_changes_selected_original_clip_only(qapp, tmp_path):
+    window = MainWindow(settings=_settings(tmp_path))
+    window.timeline.load_segments(
+        [_segment()], audio_path=tmp_path / "audio.wav", tts_directory=tmp_path
+    )
+    original = window.timeline._clips_by_clip_id["original:10"]
+    khmer = window.timeline._clips_by_clip_id["khmer:10"]
+
+    original.setSelected(True)
+    window.inspector._volume_slider.setValue(25)
+
+    assert original.timeline_clip.volume == 0.25
+    assert khmer.timeline_clip.volume == 1.0
+
+
+def test_inspector_volume_changes_selected_khmer_clip_only(qapp, tmp_path):
+    window = MainWindow(settings=_settings(tmp_path))
+    window.timeline.load_segments(
+        [_segment()], audio_path=tmp_path / "audio.wav", tts_directory=tmp_path
+    )
+    original = window.timeline._clips_by_clip_id["original:10"]
+    khmer = window.timeline._clips_by_clip_id["khmer:10"]
+
+    khmer.setSelected(True)
+    window.inspector._volume_slider.setValue(40)
+
+    assert khmer.timeline_clip.volume == 0.4
+    assert original.timeline_clip.volume == 1.0
+
+
+def test_inspector_mute_changes_selected_original_clip_only(qapp, tmp_path):
+    window = MainWindow(settings=_settings(tmp_path))
+    window.timeline.load_segments(
+        [_segment()], audio_path=tmp_path / "audio.wav", tts_directory=tmp_path
+    )
+    original = window.timeline._clips_by_clip_id["original:10"]
+    khmer = window.timeline._clips_by_clip_id["khmer:10"]
+
+    original.setSelected(True)
+    window.inspector._muted_check.setChecked(True)
+
+    assert original.timeline_clip.muted is True
+    assert khmer.timeline_clip.muted is False
+
+
+def test_playback_reads_muted_volume_and_timing_from_timeline_clip(qapp, tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    tts_path = tmp_path / "0000.wav"
+    audio_path.write_bytes(b"placeholder")
+    tts_path.write_bytes(b"placeholder")
+    original = TimelineClip(
+        id="original:1",
+        track_id=ORIGINAL_AUDIO_TRACK_ID,
+        start_time=0.0,
+        end_time=1.0,
+        source_path=audio_path,
+        volume=0.3,
+        muted=True,
+    )
+    khmer = TimelineClip(
+        id="khmer:1",
+        track_id=KHMER_TTS_TRACK_ID,
+        start_time=0.5,
+        end_time=1.5,
+        source_path=tts_path,
+        volume=0.7,
+    )
+    controller = PlaybackController(VideoPlayerWidget())
+    controller.set_timeline_clips([original, khmer])
+
+    controller._sync_audio_to_position(750, start_playing=False)
+
+    assert controller._active_original_timeline_clip is None
+    assert controller._khmer_clip_players["khmer:1"][1].volume() == pytest.approx(0.7)

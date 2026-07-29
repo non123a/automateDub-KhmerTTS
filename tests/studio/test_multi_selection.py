@@ -133,7 +133,7 @@ def test_marquee_selects_clips_intersecting_drag_rectangle(qapp):
     assert _selected_ids(widget) == [0, 1]
 
 
-def test_multi_drag_moves_all_selected_segments_preserving_relative_offsets(qapp):
+def test_multi_drag_moves_selected_timeline_clips_preserving_relative_offsets(qapp):
     widget = TimelineWidget()
     segments = _segments(3)
     segments[0].offset_ms = 100
@@ -142,15 +142,20 @@ def test_multi_drag_moves_all_selected_segments_preserving_relative_offsets(qapp
     widget._clips_by_segment[0][1].setSelected(True)
     widget._clips_by_segment[1][1].setSelected(True)
     widget._view._drag_clip = widget._clips_by_segment[0][1]
-    widget._view._drag_start_offsets_ms = widget._view._selected_unlocked_segment_offsets()
+    widget._view._drag_start_offsets_ms = widget._view._selected_unlocked_clip_offsets()
 
     moved = widget._view._moved_offsets(333)
-    for segment_id, offset_ms in moved.items():
-        widget.apply_offset(segment_id, offset_ms)
+    for clip_id, offset_ms in moved.items():
+        widget.apply_timeline_clip_offset(clip_id, offset_ms)
 
-    assert segments[0].offset_ms == 433
-    assert segments[1].offset_ms == 583
-    assert segments[1].offset_ms - segments[0].offset_ms == 150
+    moved_clips = {clip.id: clip for clip in widget.selected_timeline_clips}
+    assert moved_clips["khmer:0"].start_time == 0.433
+    assert moved_clips["khmer:1"].start_time == 1.583
+    spacing_ms = round(
+        (moved_clips["khmer:1"].start_time - moved_clips["khmer:0"].start_time) * 1000
+    )
+    assert spacing_ms == 1150
+    assert widget._clips_by_clip_id["original:0"].timeline_clip.start_time == 0.1
 
 
 def test_multi_offset_command_undo_redo_moves_selection_as_one_command(qapp):

@@ -119,6 +119,8 @@ def build_original_timeline_clips(
                 source_path=audio_path,
                 source_offset=segment.start,
                 segment_id=segment.id,
+                source_text=segment.source_text,
+                target_text=segment.target_text,
             )
         )
     return clips
