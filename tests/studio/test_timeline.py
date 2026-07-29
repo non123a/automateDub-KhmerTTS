@@ -7,6 +7,11 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
+from unittest.mock import MagicMock
+
+from PySide6.QtGui import QImage, QPainter
+from PySide6.QtWidgets import QGraphicsScene
+
 from automatedub_studio.project.models import Segment
 from automatedub_studio.timeline.clip_item import ClipItem
 from automatedub_studio.timeline.timeline_widget import (
@@ -16,6 +21,21 @@ from automatedub_studio.timeline.timeline_widget import (
     SCENE_MARGIN_H,
     TimelineWidget,
 )
+from automatedub_studio.timeline.waveform_cache import WaveformError, WaveformPeaks
+
+
+def _render_clip(clip: ClipItem) -> None:
+    """Trigger a real paint() call via QGraphicsScene, matching actual usage.
+
+    Calling item.paint() directly with a hand-built QStyleOptionGraphicsItem
+    segfaults in this Qt/PySide combo, so we go through the scene instead.
+    """
+    scene = QGraphicsScene()
+    scene.addItem(clip)
+    image = QImage(100, 50, QImage.Format.Format_ARGB32)
+    painter = QPainter(image)
+    scene.render(painter)
+    painter.end()
 
 
 def _make_segments(count: int = 3) -> list[Segment]:
@@ -281,3 +301,81 @@ def test_clip_tooltip_omits_source_label_when_empty(qapp):
     widget = TimelineWidget()
     widget.load_segments([seg])
     assert "Source:" not in widget._clips[0].toolTip()
+
+
+# ---------------------------------------------------------------------------
+# Waveform integration
+# ---------------------------------------------------------------------------
+
+
+def _make_clip(qapp, wav_path=None, waveform_cache=None):
+    seg = Segment(id=0, start=0.0, end=1.0, source_text="s", target_text="t")
+    return ClipItem(
+        seg,
+        0,
+        0,
+        100,
+        50,
+        lane=1,
+        wav_path=wav_path,
+        waveform_cache=waveform_cache,
+    )
+
+
+def test_paint_skips_waveform_when_no_wav_path(qapp):
+    cache = MagicMock()
+    clip = _make_clip(qapp, wav_path=None, waveform_cache=cache)
+
+    _render_clip(clip)
+
+    cache.get_or_compute.assert_not_called()
+
+
+def test_paint_skips_waveform_when_no_cache(qapp):
+    clip = _make_clip(qapp, wav_path="fake.wav", waveform_cache=None)
+
+    _render_clip(clip)  # should not raise
+
+
+def test_paint_calls_get_or_compute_with_wav_path(qapp):
+    cache = MagicMock()
+    cache.get_or_compute.return_value = WaveformPeaks(peaks=())
+    clip = _make_clip(qapp, wav_path="fake.wav", waveform_cache=cache)
+
+    _render_clip(clip)
+
+    cache.get_or_compute.assert_called_once()
+    assert cache.get_or_compute.call_args.args[0] == "fake.wav"
+
+
+def test_paint_swallows_waveform_error(qapp):
+    cache = MagicMock()
+    cache.get_or_compute.side_effect = WaveformError("bad wav")
+    clip = _make_clip(qapp, wav_path="fake.wav", waveform_cache=cache)
+
+    _render_clip(clip)  # should not raise
+
+
+def test_set_wav_path_updates_path(qapp):
+    clip = _make_clip(qapp, wav_path="old.wav", waveform_cache=None)
+    clip.set_wav_path("new.wav")
+    assert clip._wav_path == "new.wav"
+
+
+def test_set_wav_path_invalidates_cache_for_new_path(qapp):
+    cache = MagicMock()
+    clip = _make_clip(qapp, wav_path="old.wav", waveform_cache=cache)
+
+    clip.set_wav_path("new.wav")
+
+    cache.invalidate.assert_called_once_with("new.wav")
+
+
+def test_set_wav_path_with_none_does_not_invalidate(qapp):
+    cache = MagicMock()
+    clip = _make_clip(qapp, wav_path="old.wav", waveform_cache=cache)
+
+    clip.set_wav_path(None)
+
+    cache.invalidate.assert_not_called()
+    assert clip._wav_path is None
