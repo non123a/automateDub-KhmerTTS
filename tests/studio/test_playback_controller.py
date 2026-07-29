@@ -14,6 +14,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PySide6.QtCore import QCoreApplication, QUrl
+from PySide6.QtMultimedia import QMediaPlayer
 
 from automatedub.vertical_slice.mix import MixSpeechTrack
 from automatedub_studio.playback.playback_controller import _LOADED, PlaybackController
@@ -140,7 +141,7 @@ def test_track_window_ms_no_speed_change():
 
 def test_track_window_ms_sped_up():
     track = make_track(delay_ms=0, generated_duration=2.0, atempo=2.0)
-    assert track_window_ms(track) == (0, 1000)
+    assert track_window_ms(track) == (0, 2000)
 
 
 def test_find_active_track_matches_containing_window():
@@ -175,10 +176,10 @@ def test_compute_playback_volume_fade_out_ramps_down():
     assert compute_playback_volume(track, 1500) == 1.0
 
 
-def test_position_within_track_ms_scales_by_atempo():
+def test_position_within_track_ms_uses_natural_tts_position():
     track = make_track(delay_ms=1000, generated_duration=2.0, atempo=2.0)
     assert position_within_track_ms(track, 1000) == 0
-    assert position_within_track_ms(track, 1500) == 1000
+    assert position_within_track_ms(track, 1500) == 500
 
 
 def test_position_within_track_ms_clamps_before_start():
@@ -329,6 +330,136 @@ def test_khmer_volume_applies_fade(qapp, tmp_path):
 
     controller.seek(500)
     assert controller._khmer_audio_output.volume() == 1.0
+
+
+def test_khmer_timeline_playback_uses_same_natural_position_as_audition(qapp, tmp_path):
+    clip_path = tmp_path / "0000.wav"
+    make_wav(clip_path, seconds=2.0)
+    track = make_track(
+        track_id=0,
+        delay_ms=0,
+        generated_duration=2.0,
+        atempo=2.0,
+        tts_path=clip_path,
+    )
+    controller = PlaybackController(VideoPlayerWidget())
+    controller.set_sources(None, [], [track])
+
+    controller.seek(500)
+
+    assert controller._pending_seek_ms[controller._khmer_audio_player] == 500
+
+
+def test_khmer_playback_marked_pending_when_play_starts_during_load(qapp, tmp_path):
+    clip_path = tmp_path / "0000.wav"
+    make_wav(clip_path, seconds=1.0)
+    track = make_track(track_id=0, delay_ms=0, generated_duration=1.0, tts_path=clip_path)
+    controller = PlaybackController(VideoPlayerWidget())
+    controller.set_sources(None, [], [track])
+
+    controller._on_play_requested()
+
+    assert controller._khmer_audio_player in controller._pending_play
+
+
+def test_sync_reuses_existing_audio_players(qapp, tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    clip_path = tmp_path / "0000.wav"
+    make_wav(audio_path, seconds=2.0)
+    make_wav(clip_path, seconds=1.0)
+    track = make_track(track_id=0, delay_ms=0, generated_duration=1.0, tts_path=clip_path)
+    controller = PlaybackController(VideoPlayerWidget())
+    controller.set_sources(audio_path, [make_segment(0, 0.0, 1.0)], [track])
+    original_player = controller._original_audio_player
+    khmer_player = controller._khmer_audio_player
+
+    for position_ms in (100, 200, 300):
+        controller._maybe_resync(position_ms)
+
+    assert controller._original_audio_player is original_player
+    assert controller._khmer_audio_player is khmer_player
+
+
+class _CountingPlayer:
+    def __init__(self, source: QUrl, position: int):
+        self._source = source
+        self._position = position
+        self.play_count = 0
+        self.seek_count = 0
+        self.stop_count = 0
+
+    def source(self):
+        return self._source
+
+    def setSource(self, source):
+        self._source = source
+
+    def position(self):
+        return self._position
+
+    def setPosition(self, position):
+        self.seek_count += 1
+        self._position = position
+
+    def playbackState(self):
+        return QMediaPlayer.PlaybackState.PlayingState
+
+    def play(self):
+        self.play_count += 1
+
+    def stop(self):
+        self.stop_count += 1
+
+
+class _CountingOutput:
+    def __init__(self):
+        self.volume = 1.0
+        self.muted = False
+
+    def setMuted(self, muted):
+        self.muted = muted
+
+    def setVolume(self, volume):
+        self.volume = volume
+
+
+def test_stable_active_khmer_clip_is_not_replayed_or_reseeked_each_tick(qapp, tmp_path):
+    clip_path = tmp_path / "0000.wav"
+    make_wav(clip_path, seconds=2.0)
+    track = make_track(track_id=0, delay_ms=0, generated_duration=2.0, tts_path=clip_path)
+    controller = PlaybackController(VideoPlayerWidget())
+    fake_player = _CountingPlayer(QUrl.fromLocalFile(str(clip_path)), position=500)
+    fake_output = _CountingOutput()
+    controller._khmer_tracks = [track]
+    controller._active_khmer_track = track
+    controller._khmer_audio_player = fake_player
+    controller._khmer_audio_output = fake_output
+
+    controller._sync_khmer_audio(520, start_playing=True)
+
+    assert fake_player.play_count == 0
+    assert fake_player.seek_count == 0
+
+
+def test_original_and_khmer_volumes_are_independent(qapp, tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    clip_path = tmp_path / "0000.wav"
+    make_wav(audio_path, seconds=2.0)
+    make_wav(clip_path, seconds=1.0)
+    track = make_track(
+        track_id=0,
+        delay_ms=0,
+        generated_duration=1.0,
+        volume=0.25,
+        tts_path=clip_path,
+    )
+    controller = PlaybackController(VideoPlayerWidget())
+    controller.set_sources(audio_path, [make_segment(0, 0.0, 1.0)], [track])
+
+    controller.seek(500)
+
+    assert controller._original_audio_output.volume() == 1.0
+    assert controller._khmer_audio_output.volume() == 0.25
 
 
 def test_stop_stops_video_and_audio(qapp, tmp_path):

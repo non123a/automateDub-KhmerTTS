@@ -1,10 +1,4 @@
-"""Pure timing logic for Timeline Preview playback.
-
-No export, no rebuild, no FFmpeg: these functions only compute where each
-already-generated TTS clip sits on the master (video) timeline given the
-same per-segment offset/speed/volume/fade metadata the mix/export backend
-uses, so switching to Timeline Preview never regenerates or remixes audio.
-"""
+"""Pure timing logic for Studio timeline playback."""
 
 from __future__ import annotations
 
@@ -61,13 +55,8 @@ def position_within_original_clip_ms(clip: OriginalAudioClip, position_ms: int) 
 
 def track_window_ms(track: MixSpeechTrack) -> tuple[int, int]:
     """Return (start_ms, end_ms) of a track's playback window on the master timeline."""
-    playback_duration_ms = (
-        track.generated_duration / track.atempo * 1000.0
-        if track.atempo > 0
-        else track.generated_duration * 1000.0
-    )
     start_ms = track.delay_ms
-    return start_ms, start_ms + round(playback_duration_ms)
+    return start_ms, start_ms + round(track.generated_duration * 1000.0)
 
 
 def find_active_track(
@@ -100,12 +89,7 @@ def compute_playback_volume(track: MixSpeechTrack, position_ms: int) -> float:
 
 
 def position_within_track_ms(track: MixSpeechTrack, position_ms: int) -> int:
-    """Map a master-timeline position to a position within the source WAV.
-
-    `atempo` speeds up (or slows down) the source clip, so one second of
-    master-timeline elapsed time corresponds to `atempo` seconds of source
-    audio.
-    """
+    """Map a master-timeline position to a position within the source WAV."""
     start_ms, _ = track_window_ms(track)
     elapsed_master_ms = max(0, position_ms - start_ms)
-    return round(elapsed_master_ms * track.atempo)
+    return elapsed_master_ms

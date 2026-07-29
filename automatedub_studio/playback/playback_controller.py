@@ -99,7 +99,7 @@ class PlaybackController(QObject):
     def set_original_muted(self, muted: bool) -> None:
         self._original_muted = muted
         if muted:
-            self._original_audio_player.stop()
+            self._stop_player(self._original_audio_player)
             self._original_audio_player.setSource(QUrl())
             self._active_original_clip = None
         else:
@@ -110,7 +110,7 @@ class PlaybackController(QObject):
     def set_khmer_muted(self, muted: bool) -> None:
         self._khmer_muted = muted
         if muted:
-            self._khmer_audio_player.stop()
+            self._stop_player(self._khmer_audio_player)
             self._khmer_audio_player.setSource(QUrl())
             self._active_khmer_track = None
         else:
@@ -133,8 +133,8 @@ class PlaybackController(QObject):
     def play_clip(self, path: Path) -> None:
         """Play one clip in isolation for double-click audition."""
         self._sync_timer.stop()
-        self._original_audio_player.pause()
-        self._khmer_audio_player.pause()
+        self._pause_player(self._original_audio_player)
+        self._pause_player(self._khmer_audio_player)
         self._audition_output.setVolume(1.0)
         self._audition_output.setMuted(False)
         self._load_audio_source(self._audition_player, path, position_ms=0, play=True)
@@ -146,16 +146,22 @@ class PlaybackController(QObject):
         return player, output
 
     def _load_audio_source(
-        self, player: QMediaPlayer, path: Path, position_ms: int, *, play: bool
+        self,
+        player: QMediaPlayer,
+        path: Path,
+        position_ms: int,
+        *,
+        play: bool,
+        force_seek: bool = False,
     ) -> None:
         url = QUrl.fromLocalFile(str(path))
         if player.source() == url:
-            player.setPosition(position_ms)
+            self._seek_if_needed(player, position_ms, force=force_seek)
             if play:
-                player.play()
+                self._request_play(player)
             return
 
-        player.stop()
+        self._stop_player(player)
         self._pending_seek_ms[player] = position_ms
         if play:
             self._pending_play.add(player)
@@ -173,27 +179,31 @@ class PlaybackController(QObject):
         self._pending_play.discard(player)
         player.setPosition(position_ms)
         if play:
-            player.play()
+            self._play_if_needed(player)
 
     def _on_play_requested(self) -> None:
         self._video_player.set_audio_muted(True)
-        self._sync_audio_to_position(self._video_player.position_ms, start_playing=True)
+        self._sync_audio_to_position(
+            self._video_player.position_ms, start_playing=True, force_seek=False
+        )
         self._sync_timer.start()
 
     def _on_pause_requested(self) -> None:
-        self._original_audio_player.pause()
-        self._khmer_audio_player.pause()
+        self._pause_player(self._original_audio_player)
+        self._pause_player(self._khmer_audio_player)
         self._sync_timer.stop()
 
     def _on_stop_requested(self) -> None:
-        self._original_audio_player.stop()
-        self._khmer_audio_player.stop()
+        self._stop_player(self._original_audio_player)
+        self._stop_player(self._khmer_audio_player)
         self._active_original_clip = None
         self._active_khmer_track = None
         self._sync_timer.stop()
 
     def _on_seek_requested(self, position_ms: int) -> None:
-        self._sync_audio_to_position(position_ms, start_playing=self._video_player.is_playing)
+        self._sync_audio_to_position(
+            position_ms, start_playing=self._video_player.is_playing, force_seek=True
+        )
 
     def _on_video_position_changed(self, position_ms: int) -> None:
         if self._video_player.is_playing:
@@ -205,21 +215,27 @@ class PlaybackController(QObject):
     def _maybe_resync(self, position_ms: int) -> None:
         self._sync_audio_to_position(position_ms, start_playing=self._video_player.is_playing)
 
-    def _sync_audio_to_position(self, position_ms: int, *, start_playing: bool) -> None:
+    def _sync_audio_to_position(
+        self, position_ms: int, *, start_playing: bool, force_seek: bool = False
+    ) -> None:
         self._video_player.set_audio_muted(True)
-        self._sync_original_audio(position_ms, start_playing=start_playing)
-        self._sync_khmer_audio(position_ms, start_playing=start_playing)
+        self._sync_original_audio(
+            position_ms, start_playing=start_playing, force_seek=force_seek
+        )
+        self._sync_khmer_audio(position_ms, start_playing=start_playing, force_seek=force_seek)
 
-    def _sync_original_audio(self, position_ms: int, *, start_playing: bool) -> None:
+    def _sync_original_audio(
+        self, position_ms: int, *, start_playing: bool, force_seek: bool = False
+    ) -> None:
         if self._original_muted:
-            self._original_audio_player.stop()
+            self._stop_player(self._original_audio_player)
             self._active_original_clip = None
             return
 
         active_clips = find_active_original_clips(self._original_audio_clips, position_ms)
         clip = active_clips[0] if active_clips else None
         if clip is None:
-            self._original_audio_player.stop()
+            self._stop_player(self._original_audio_player)
             self._active_original_clip = None
             return
 
@@ -233,24 +249,27 @@ class PlaybackController(QObject):
                 clip.path,
                 source_position_ms,
                 play=start_playing,
+                force_seek=True,
             )
             return
 
-        drift_ms = abs(self._original_audio_player.position() - source_position_ms)
-        if drift_ms > _DRIFT_THRESHOLD_MS:
-            self._original_audio_player.setPosition(source_position_ms)
+        self._seek_if_needed(
+            self._original_audio_player, source_position_ms, force=force_seek
+        )
         if start_playing:
-            self._original_audio_player.play()
+            self._request_play(self._original_audio_player)
 
-    def _sync_khmer_audio(self, position_ms: int, *, start_playing: bool) -> None:
+    def _sync_khmer_audio(
+        self, position_ms: int, *, start_playing: bool, force_seek: bool = False
+    ) -> None:
         if self._khmer_muted:
-            self._khmer_audio_player.stop()
+            self._stop_player(self._khmer_audio_player)
             self._active_khmer_track = None
             return
 
         track = find_active_track(self._khmer_tracks, position_ms)
         if track is None:
-            self._khmer_audio_player.stop()
+            self._stop_player(self._khmer_audio_player)
             self._active_khmer_track = None
             return
 
@@ -264,11 +283,39 @@ class PlaybackController(QObject):
                 track.tts_path,
                 source_position_ms,
                 play=start_playing,
+                force_seek=True,
             )
             return
 
-        drift_ms = abs(self._khmer_audio_player.position() - source_position_ms)
-        if drift_ms > _DRIFT_THRESHOLD_MS:
-            self._khmer_audio_player.setPosition(source_position_ms)
+        self._seek_if_needed(self._khmer_audio_player, source_position_ms, force=force_seek)
         if start_playing:
-            self._khmer_audio_player.play()
+            self._request_play(self._khmer_audio_player)
+
+    def _seek_if_needed(self, player: QMediaPlayer, position_ms: int, *, force: bool) -> None:
+        if player in self._pending_seek_ms:
+            if force or abs(self._pending_seek_ms[player] - position_ms) > _DRIFT_THRESHOLD_MS:
+                self._pending_seek_ms[player] = position_ms
+            return
+        if force or abs(player.position() - position_ms) > _DRIFT_THRESHOLD_MS:
+            player.setPosition(position_ms)
+
+    def _request_play(self, player: QMediaPlayer) -> None:
+        if player in self._pending_seek_ms:
+            self._pending_play.add(player)
+            return
+        self._play_if_needed(player)
+
+    @staticmethod
+    def _play_if_needed(player: QMediaPlayer) -> None:
+        if player.playbackState() != QMediaPlayer.PlaybackState.PlayingState:
+            player.play()
+
+    @staticmethod
+    def _pause_player(player: QMediaPlayer) -> None:
+        if player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+            player.pause()
+
+    @staticmethod
+    def _stop_player(player: QMediaPlayer) -> None:
+        if player.playbackState() != QMediaPlayer.PlaybackState.StoppedState:
+            player.stop()
