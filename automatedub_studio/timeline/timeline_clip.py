@@ -8,12 +8,14 @@ from pathlib import Path
 VIDEO_TRACK_ID = "video"
 ORIGINAL_AUDIO_TRACK_ID = "original_audio"
 KHMER_TTS_TRACK_ID = "khmer_tts"
+DRAFT_REGENERATION_TRACK_ID = "draft_regeneration"
 AUDIO_TRACK_3_ID = "audio_track_3"
 AUDIO_TRACK_4_ID = "audio_track_4"
 
 AUDIO_TRACK_IDS = (
     ORIGINAL_AUDIO_TRACK_ID,
     KHMER_TTS_TRACK_ID,
+    DRAFT_REGENERATION_TRACK_ID,
     AUDIO_TRACK_3_ID,
     AUDIO_TRACK_4_ID,
 )
@@ -181,6 +183,7 @@ class Timeline:
                 TimelineTrack(VIDEO_TRACK_ID, "Video", kind="video"),
                 TimelineTrack(ORIGINAL_AUDIO_TRACK_ID, "Original Audio"),
                 TimelineTrack(KHMER_TTS_TRACK_ID, "Khmer TTS"),
+                TimelineTrack(DRAFT_REGENERATION_TRACK_ID, "Draft Regeneration"),
                 TimelineTrack(AUDIO_TRACK_3_ID, "Audio Track 3"),
                 TimelineTrack(AUDIO_TRACK_4_ID, "Audio Track 4"),
             ]
@@ -202,6 +205,25 @@ class Timeline:
 
     def track_by_id(self, track_id: str) -> TimelineTrack | None:
         return next((track for track in self.tracks if track.id == track_id), None)
+
+    def ensure_track(self, track_id: str, name: str, *, kind: str = "audio") -> TimelineTrack:
+        track = self.track_by_id(track_id)
+        if track is not None:
+            return track
+        track = TimelineTrack(track_id, name, kind=kind)
+        if kind == "video":
+            self.tracks.append(track)
+            return track
+        insert_at = next(
+            (
+                index + 1
+                for index, existing in enumerate(self.tracks)
+                if existing.id == KHMER_TTS_TRACK_ID
+            ),
+            len(self.tracks),
+        )
+        self.tracks.insert(insert_at, track)
+        return track
 
     def clip_by_id(self, clip_id: str) -> TimelineClip | None:
         return next((clip for clip in self.all_clips() if clip.id == clip_id), None)
@@ -237,6 +259,15 @@ class Timeline:
         target_track.clips.append(clip)
         target_track.clips.sort(key=lambda item: (item.start_time, item.id))
         return True
+
+    def add_clip(self, clip: TimelineClip) -> None:
+        track = self.ensure_track(
+            clip.track_id,
+            clip.track_id.replace("_", " ").title(),
+            kind="video" if clip.track_id == VIDEO_TRACK_ID else "audio",
+        )
+        track.clips.append(clip)
+        track.clips.sort(key=lambda item: (item.start_time, item.id))
 
     def active_audio_clips(self, position_ms: int) -> list[TimelineClip]:
         position_seconds = position_ms / 1000.0

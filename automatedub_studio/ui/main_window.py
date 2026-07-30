@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -68,7 +69,11 @@ from automatedub_studio.timeline.clip_item import (
 )
 from automatedub_studio.timeline.ruler_widget import DEFAULT_SNAP_INTERVAL_MS
 from automatedub_studio.timeline.state import TimelinePlaybackState
-from automatedub_studio.timeline.timeline_clip import KHMER_TTS_TRACK_ID, ORIGINAL_AUDIO_TRACK_ID
+from automatedub_studio.timeline.timeline_clip import (
+    DRAFT_REGENERATION_TRACK_ID,
+    KHMER_TTS_TRACK_ID,
+    ORIGINAL_AUDIO_TRACK_ID,
+)
 from automatedub_studio.timeline.timeline_widget import TimelineWidget
 from automatedub_studio.ui.about_dialog import AboutDialog
 from automatedub_studio.ui.export_dialog import ExportProgressDialog
@@ -825,12 +830,19 @@ class MainWindow(QMainWindow):
 
     def _on_clip_regen_result(self, outcome: ClipRegenerationOutcome) -> None:
         if outcome.success and outcome.wav_path is not None:
-            self.timeline.set_timeline_clip_source_path(outcome.clip_id, outcome.wav_path)
+            source_clip = next(
+                (item for item in self.timeline.timeline_clips if item.id == outcome.clip_id),
+                None,
+            )
+            if source_clip is not None:
+                draft_clip = self._build_draft_regeneration_clip(source_clip, outcome.wav_path)
+                self.timeline.add_timeline_clip(draft_clip)
             if self.project is not None:
                 save_timeline_edits(self.timeline.timeline, self.project.project_path)
-            self.timeline.set_timeline_clip_status(outcome.clip_id, None)
             self.inspector.show_regeneration_completed()
-            self.statusBar().showMessage(f"Regeneration completed: {outcome.clip_id}")
+            self.statusBar().showMessage(
+                f"Regeneration completed: draft created for {outcome.clip_id}"
+            )
         else:
             self.timeline.set_timeline_clip_status(outcome.clip_id, STATUS_FAILED)
             self.inspector.show_regeneration_error(outcome.error or "Unknown error")
@@ -1052,6 +1064,16 @@ class MainWindow(QMainWindow):
             f"TTS Files: {project.tts_file_count}  |  "
             "Audio: ✓  |  "
             f"Video: {video_status}"
+        )
+
+    @staticmethod
+    def _build_draft_regeneration_clip(source_clip, wav_path: Path):
+        return replace(
+            source_clip,
+            id=f"draft:{source_clip.id}:{wav_path.stem}",
+            track_id=DRAFT_REGENERATION_TRACK_ID,
+            source_path=wav_path,
+            selected=False,
         )
 
     def _restore_geometry(self) -> None:

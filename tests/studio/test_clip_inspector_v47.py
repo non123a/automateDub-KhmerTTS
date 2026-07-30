@@ -24,6 +24,7 @@ from automatedub_studio.project.timeline_edits import (
     save_timeline_edits,
 )
 from automatedub_studio.timeline.timeline_clip import (
+    DRAFT_REGENERATION_TRACK_ID,
     KHMER_TTS_TRACK_ID,
     Timeline,
     TimelineClip,
@@ -317,7 +318,9 @@ def test_regenerate_timeline_clip_uses_clip_speaking_rate(tmp_path):
     assert speeds == [1.55]
 
 
-def test_main_window_clip_regen_result_replaces_only_selected_clip_source(qapp, tmp_path):
+def test_main_window_clip_regen_result_creates_draft_clip_without_touching_original(
+    qapp, tmp_path
+):
     project_dir = make_valid_project(tmp_path, segment_count=1)
     window = MainWindow()
     window.open_project_path(project_dir)
@@ -334,9 +337,46 @@ def test_main_window_clip_regen_result_replaces_only_selected_clip_source(qapp, 
         ClipRegenerationOutcome(clip_id="khmer:0", success=True, wav_path=new_path)
     )
 
-    assert khmer.source_path == new_path
+    draft = next(
+        clip
+        for clip in window.timeline.timeline_clips
+        if clip.track_id == DRAFT_REGENERATION_TRACK_ID and clip.source_path == new_path
+    )
+
+    assert khmer.source_path != new_path
     assert original.source_path == old_original_path
-    assert window.playback_controller._timeline.clip_by_id("khmer:0").source_path == new_path
+    assert draft.khmer_text == khmer.khmer_text
+    assert draft.voice_model == khmer.voice_model
+    assert draft.speaking_rate == khmer.speaking_rate
+    assert draft.source_offset == khmer.source_offset
+    assert draft.segment_id == khmer.segment_id
+    assert window.playback_controller._timeline.clip_by_id(draft.id).source_path == new_path
+
+
+def test_multiple_regenerations_create_multiple_draft_clips(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, segment_count=1)
+    window = MainWindow()
+    window.open_project_path(project_dir)
+    new_path_1 = project_dir / "tts" / "clips" / "khmer_0_v1.wav"
+    new_path_1.parent.mkdir()
+    new_path_1.write_bytes(_wav_bytes())
+    new_path_2 = project_dir / "tts" / "clips" / "khmer_0_v2.wav"
+    new_path_2.write_bytes(_wav_bytes())
+
+    window._on_clip_regen_result(
+        ClipRegenerationOutcome(clip_id="khmer:0", success=True, wav_path=new_path_1)
+    )
+    window._on_clip_regen_result(
+        ClipRegenerationOutcome(clip_id="khmer:0", success=True, wav_path=new_path_2)
+    )
+
+    drafts = [
+        clip
+        for clip in window.timeline.timeline_clips
+        if clip.track_id == DRAFT_REGENERATION_TRACK_ID
+    ]
+
+    assert [clip.source_path for clip in drafts] == [new_path_1, new_path_2]
 
 
 def test_reopen_restores_edited_text_rate_regenerated_source_and_playback(qapp, tmp_path):
@@ -359,11 +399,22 @@ def test_reopen_restores_edited_text_rate_regenerated_source_and_playback(qapp, 
     reloaded = MainWindow()
     reloaded.open_project_path(project_dir)
     reloaded_clip = reloaded.timeline.timeline.clip_by_id("khmer:0")
+    reloaded_draft = next(
+        clip
+        for clip in reloaded.timeline.timeline_clips
+        if clip.track_id == DRAFT_REGENERATION_TRACK_ID and clip.source_path == new_path
+    )
 
     assert reloaded_clip.khmer_text == "reopened khmer"
     assert reloaded_clip.speaking_rate == 1.65
-    assert reloaded_clip.source_path == new_path
-    assert reloaded.playback_controller._timeline.clip_by_id("khmer:0").source_path == new_path
+    assert reloaded_clip.source_path != new_path
+    assert reloaded_draft.khmer_text == "reopened khmer"
+    assert reloaded_draft.speaking_rate == 1.65
+    assert reloaded_draft.source_path == new_path
+    assert (
+        reloaded.playback_controller._timeline.clip_by_id(reloaded_draft.id).source_path
+        == new_path
+    )
 
 
 def test_main_window_clip_regen_completion_updates_inspector_status(qapp, tmp_path):

@@ -34,6 +34,7 @@ from automatedub_studio.timeline.timeline_clip import (
     AUDIO_TRACK_3_ID,
     AUDIO_TRACK_4_ID,
     AUDIO_TRACK_IDS,
+    DRAFT_REGENERATION_TRACK_ID,
     KHMER_TTS_TRACK_ID,
     ORIGINAL_AUDIO_TRACK_ID,
     Timeline,
@@ -61,7 +62,14 @@ AUDIO_LANES = (
     AUDIO_TRACK_3_LANE,
     AUDIO_TRACK_4_LANE,
 )
-LANE_NAMES = ("Video", "Original Audio", "Khmer TTS", "Audio Track 3", "Audio Track 4")
+LANE_NAMES = (
+    "Video",
+    "Original Audio",
+    "Khmer TTS",
+    "Draft Regeneration",
+    "Audio Track 3",
+    "Audio Track 4",
+)
 LANE_COUNT = len(LANE_NAMES)
 AUDIO_TRACK_COUNT = 2
 
@@ -105,6 +113,7 @@ TRACK_IDS_BY_LANE = (
     "video",
     ORIGINAL_AUDIO_TRACK_ID,
     KHMER_TTS_TRACK_ID,
+    DRAFT_REGENERATION_TRACK_ID,
     AUDIO_TRACK_3_ID,
     AUDIO_TRACK_4_ID,
 )
@@ -750,6 +759,12 @@ class TimelineWidget(QWidget):
         if item is not None:
             item.set_wav_path(source_path)
             item.update()
+        self.timelineChanged.emit()
+
+    def add_timeline_clip(self, clip: TimelineClip) -> None:
+        self._timeline.add_clip(clip)
+        self._timeline_clips = self._timeline.all_clips()
+        self._rebuild_scene(self._segments)
         self.timelineChanged.emit()
 
     def set_timeline_clip_fade_in(self, clip_id: str, fade_in_ms: int) -> None:

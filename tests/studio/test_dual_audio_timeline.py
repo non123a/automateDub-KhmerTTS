@@ -39,6 +39,7 @@ def test_timeline_displays_video_original_audio_and_khmer_tracks(qapp):
         "Video",
         "Original Audio",
         "Khmer TTS",
+        "Draft Regeneration",
         "Audio Track 3",
         "Audio Track 4",
     )
