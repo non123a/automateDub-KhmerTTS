@@ -22,8 +22,8 @@ from PySide6.QtWidgets import (
 from automatedub_studio.project.editable_project import EditableSegment
 from automatedub_studio.project.models import Segment
 from automatedub_studio.timeline.timeline_clip import (
-    DRAFT_REGENERATION_TRACK_ID,
     KHMER_TTS_TRACK_ID,
+    REFERENCE_TRACK_IDS,
     TimelineClip,
 )
 
@@ -38,6 +38,12 @@ _STATUS_SAVED = "✓ Saved"
 _STATUS_REGENERATION_COMPLETED = "Regeneration completed"
 _SAVED_CONFIRMATION_MS = 2500
 _NO_SELECTION_TEXT = "No clip selected."
+_REFERENCE_MESSAGE = (
+    "\U0001f512 Reference Clip\n\n"
+    "This clip belongs to the original source material.\n"
+    "It is read-only and cannot be edited.\n"
+    "Use the Khmer TTS track to modify dialogue."
+)
 
 
 class SegmentInspectorWidget(QWidget):
@@ -95,6 +101,13 @@ class SegmentInspectorWidget(QWidget):
 
         self._id_label = QLabel()
         self._status_label = QLabel()
+        self._reference_message_label = QLabel(_REFERENCE_MESSAGE)
+        self._reference_message_label.setWordWrap(True)
+        self._reference_message_label.setStyleSheet(
+            "QLabel { background: #2b2b2b; color: #d8d8d8; "
+            "border: 1px solid #555555; padding: 8px; }"
+        )
+        self._reference_message_label.setVisible(False)
         self._original_text_label = QTextEdit()
         self._original_text_label.setAcceptRichText(False)
         self._original_text_label.setReadOnly(True)
@@ -169,6 +182,7 @@ class SegmentInspectorWidget(QWidget):
         form.addRow("Clip ID:", self._id_label)
         form.addRow("Track:", self._track_label)
         form.addRow("Status:", self._status_label)
+        form.addRow("", self._reference_message_label)
         form.addRow("Start:", self._start_label)
         form.addRow("End:", self._end_label)
         form.addRow("Duration:", self._duration_label)
@@ -271,6 +285,7 @@ class SegmentInspectorWidget(QWidget):
         self, segment: Segment | None, editable: EditableSegment | None = None
     ) -> None:
         self._timeline_clip = None
+        self._set_reference_mode(False)
         self._set_dirty(False)
         self._status_override = None
         if segment is None:
@@ -288,13 +303,11 @@ class SegmentInspectorWidget(QWidget):
         self._stack.setCurrentWidget(self._detail_widget)
 
     def set_timeline_clip(self, clip: TimelineClip | None) -> None:
-        if clip is None or clip.is_background or clip.track_id not in (
-            KHMER_TTS_TRACK_ID,
-            DRAFT_REGENERATION_TRACK_ID,
-        ):
+        if clip is None or clip.is_background:
             self._segment = None
             self._editable = None
             self._timeline_clip = None
+            self._set_reference_mode(False)
             self._set_dirty(False)
             self._status_override = None
             self._stack.setCurrentWidget(self._empty_label)
@@ -308,12 +321,7 @@ class SegmentInspectorWidget(QWidget):
         self._stack.setCurrentWidget(self._detail_widget)
 
     def set_timeline_clips(self, clips: list[TimelineClip]) -> None:
-        clips = [
-            clip
-            for clip in clips
-            if not clip.is_background
-            and clip.track_id in (KHMER_TTS_TRACK_ID, DRAFT_REGENERATION_TRACK_ID)
-        ]
+        clips = [clip for clip in clips if not clip.is_background]
         if not clips:
             self.set_timeline_clip(None)
             return
@@ -324,6 +332,7 @@ class SegmentInspectorWidget(QWidget):
         self._editable = None
         self._timeline_clip = None
         self._is_generating = False
+        self._set_reference_mode(False)
         self._set_dirty(False)
         self._status_override = None
         count = len(clips)
@@ -353,6 +362,8 @@ class SegmentInspectorWidget(QWidget):
 
     def save_translation(self) -> None:
         if self._timeline_clip is None:
+            return
+        if self._timeline_clip_is_reference():
             return
         text = self._khmer_text_edit.toPlainText()
         self._saved_khmer_text = text
@@ -576,6 +587,7 @@ class SegmentInspectorWidget(QWidget):
             ctrl.blockSignals(False)
 
         self._set_dirty(False)
+        self._set_reference_mode(False)
         self._update_regenerate_enabled()
         self._update_status()
 
@@ -632,6 +644,7 @@ class SegmentInspectorWidget(QWidget):
         ):
             ctrl.blockSignals(False)
         self._set_dirty(False)
+        self._set_reference_mode(clip.track_id in REFERENCE_TRACK_IDS)
         self._update_regenerate_enabled()
         self._update_status()
 
@@ -641,6 +654,9 @@ class SegmentInspectorWidget(QWidget):
             return
         if self._status_override is not None:
             self._status_label.setText(self._status_override)
+            return
+        if self._timeline_clip is not None and self._timeline_clip.track_id in REFERENCE_TRACK_IDS:
+            self._status_label.setText("Reference Clip")
             return
         if self._dirty:
             self._status_label.setText(_STATUS_MODIFIED)
@@ -693,6 +709,8 @@ class SegmentInspectorWidget(QWidget):
         self._volume_display.setText(f"{slider_val}%")
         new_vol = slider_val / 100.0
         if self._timeline_clip is not None:
+            if self._timeline_clip_is_reference():
+                return
             old_vol = self._timeline_clip.volume
             if abs(new_vol - old_vol) < 1e-9:
                 return
@@ -708,6 +726,8 @@ class SegmentInspectorWidget(QWidget):
     def _on_muted_changed(self, new_val: bool) -> None:
         if self._timeline_clip is None:
             return
+        if self._timeline_clip_is_reference():
+            return
         old_val = self._timeline_clip.muted
         if new_val == old_val:
             return
@@ -716,6 +736,8 @@ class SegmentInspectorWidget(QWidget):
 
     def _on_fade_in_changed(self, new_val: int) -> None:
         if self._timeline_clip is not None:
+            if self._timeline_clip_is_reference():
+                return
             old_val = round(self._timeline_clip.fade_in * 1000)
             if new_val == old_val:
                 return
@@ -730,6 +752,8 @@ class SegmentInspectorWidget(QWidget):
 
     def _on_fade_out_changed(self, new_val: int) -> None:
         if self._timeline_clip is not None:
+            if self._timeline_clip_is_reference():
+                return
             old_val = round(self._timeline_clip.fade_out * 1000)
             if new_val == old_val:
                 return
@@ -744,6 +768,8 @@ class SegmentInspectorWidget(QWidget):
 
     def _on_locked_changed(self, new_val: bool) -> None:
         if self._timeline_clip is not None:
+            if self._timeline_clip_is_reference():
+                return
             old_val = self._timeline_clip.locked
             if new_val == old_val:
                 return
@@ -758,6 +784,8 @@ class SegmentInspectorWidget(QWidget):
 
     def _on_regenerate_clicked(self) -> None:
         if self._timeline_clip is not None:
+            if self._timeline_clip_is_reference():
+                return
             self.clipRegenerateRequested.emit(self._timeline_clip.id)
             return
         if self._segment is not None:
@@ -765,6 +793,8 @@ class SegmentInspectorWidget(QWidget):
 
     def _on_khmer_text_changed(self) -> None:
         if self._timeline_clip is None:
+            return
+        if self._timeline_clip_is_reference():
             return
         text = self._khmer_text_edit.toPlainText()
         self._khmer_text_label.setText(text or _PLACEHOLDER)
@@ -774,6 +804,8 @@ class SegmentInspectorWidget(QWidget):
 
     def _on_speaking_rate_changed(self, _new_val: float) -> None:
         if self._timeline_clip is None:
+            return
+        if self._timeline_clip_is_reference():
             return
         self._status_override = None
         self._set_dirty(self._has_draft_changes())
@@ -801,10 +833,55 @@ class SegmentInspectorWidget(QWidget):
             return
         self._regenerate_button.setEnabled(not self._is_generating and self._segment is not None)
 
+    def _set_reference_mode(self, enabled: bool) -> None:
+        if not hasattr(self, "_reference_message_label"):
+            return
+        self._reference_message_label.setVisible(enabled)
+        if enabled:
+            for ctrl in (
+                self._khmer_text_edit,
+                self._speaking_rate_spin,
+                self._speed_spin,
+                self._volume_slider,
+                self._muted_check,
+                self._fade_in_spin,
+                self._fade_out_spin,
+                self._locked_check,
+                self._save_translation_button,
+                self._regenerate_button,
+                self._revert_button,
+                self._duplicate_button,
+                self._delete_button,
+            ):
+                ctrl.setEnabled(False)
+            return
+        for ctrl in (
+            self._khmer_text_edit,
+            self._speaking_rate_spin,
+            self._volume_slider,
+            self._muted_check,
+            self._fade_in_spin,
+            self._fade_out_spin,
+            self._locked_check,
+        ):
+            ctrl.setEnabled(True)
+        self._speed_spin.setEnabled(False)
+        self._duplicate_button.setEnabled(False)
+        self._delete_button.setEnabled(False)
+        if not self._dirty:
+            self._save_translation_button.setEnabled(False)
+            self._revert_button.setEnabled(False)
+
     def _has_draft_changes(self) -> bool:
         return (
             self._khmer_text_edit.toPlainText() != self._saved_khmer_text
             or abs(self._speaking_rate_spin.value() - self._saved_speaking_rate) > 1e-9
+        )
+
+    def _timeline_clip_is_reference(self) -> bool:
+        return bool(
+            self._timeline_clip is not None
+            and self._timeline_clip.track_id in REFERENCE_TRACK_IDS
         )
 
     def _schedule_saved_status_clear(self, clip_id: str) -> None:

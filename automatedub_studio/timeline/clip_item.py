@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsTextItem
 from automatedub_studio.project.models import Segment
 from automatedub_studio.timeline.timeline_clip import (
     ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+    REFERENCE_TRACK_IDS,
     TimelineClip,
 )
 from automatedub_studio.timeline.waveform_cache import (
@@ -92,7 +93,7 @@ class ClipItem(QGraphicsRectItem):
 
         is_background = bool(timeline_clip and timeline_clip.is_background)
         is_reference = bool(
-            timeline_clip and timeline_clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
+            timeline_clip and timeline_clip.track_id in REFERENCE_TRACK_IDS
         )
         self.setFlag(
             QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable,
@@ -163,7 +164,9 @@ class ClipItem(QGraphicsRectItem):
 
     def trim_handle_at(self, pos) -> str | None:
         """Return 'left'/'right' when a local item position is over a trim handle."""
-        if self.timeline_clip is not None and self.timeline_clip.is_background:
+        if self.locked or (
+            self.timeline_clip is not None and self.timeline_clip.is_background
+        ):
             return None
         rect = self.rect()
         if not rect.contains(pos):

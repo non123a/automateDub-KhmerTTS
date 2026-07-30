@@ -91,6 +91,41 @@ def test_timeline_selection_is_clip_id_based_not_segment_deduped(qapp, tmp_path)
     assert khmer.isSelected() is False
 
 
+def test_reference_clips_show_lock_icon_and_remain_selectable(qapp, tmp_path):
+    widget = TimelineWidget()
+    _write_tts_file(tmp_path, 10)
+    widget.load_segments([_segment()], audio_path=tmp_path / "audio.wav", tts_directory=tmp_path)
+    movie = widget._clips_by_clip_id["original_movie:0"]
+    original = widget._clips_by_clip_id["original:10"]
+
+    movie.setSelected(True)
+    original.setSelected(True)
+
+    assert movie.locked is True
+    assert original.locked is True
+    assert movie._lock_label is not None
+    assert original._lock_label is not None
+    assert movie.isSelected() is True
+    assert original.isSelected() is True
+
+
+def test_reference_drag_and_trim_emit_read_only_feedback(qapp, tmp_path):
+    widget = TimelineWidget()
+    _write_tts_file(tmp_path, 10)
+    widget.load_segments([_segment()], audio_path=tmp_path / "audio.wav", tts_directory=tmp_path)
+    original = widget._clips_by_clip_id["original:10"].timeline_clip
+    assert original is not None
+    messages = []
+    widget.referenceClipActionBlocked.connect(lambda: messages.append("blocked"))
+
+    widget.apply_timeline_clip_offset("original:10", 500)
+    widget.apply_timeline_clip_trim("original:10", 1.1, 1.8)
+
+    assert original.start_time == 1.0
+    assert original.end_time == 2.0
+    assert messages == ["blocked", "blocked"]
+
+
 def test_moving_one_timeline_clip_does_not_move_sibling_track_clip(qapp, tmp_path):
     widget = TimelineWidget()
     _write_tts_file(tmp_path, 10)
@@ -172,6 +207,26 @@ def test_inspector_does_not_edit_read_only_original_clip(qapp, tmp_path):
 
     assert original.timeline_clip.volume == 1.0
     assert khmer.timeline_clip.volume == 1.0
+
+
+def test_inspector_opens_reference_clip_in_read_only_mode(qapp, tmp_path):
+    window = MainWindow(settings=_settings(tmp_path))
+    _write_tts_file(tmp_path, 10)
+    window.timeline.load_segments(
+        [_segment()], audio_path=tmp_path / "audio.wav", tts_directory=tmp_path
+    )
+    original = window.timeline._clips_by_clip_id["original:10"]
+
+    original.setSelected(True)
+
+    assert window.inspector._timeline_clip is original.timeline_clip
+    assert "Reference Clip" in window.inspector._reference_message_label.text()
+    assert window.inspector._reference_message_label.isHidden() is False
+    assert window.inspector._khmer_text_edit.isEnabled() is False
+    assert window.inspector._save_translation_button.isEnabled() is False
+    assert window.inspector._regenerate_button.isEnabled() is False
+    assert window.inspector._delete_button.isEnabled() is False
+    assert window.inspector._original_text_label.toPlainText() == "source"
 
 
 def test_inspector_volume_changes_selected_khmer_clip_only(qapp, tmp_path):

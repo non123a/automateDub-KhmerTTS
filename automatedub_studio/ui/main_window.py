@@ -73,6 +73,7 @@ from automatedub_studio.timeline.timeline_clip import (
     DRAFT_REGENERATION_TRACK_ID,
     KHMER_TTS_TRACK_ID,
     ORIGINAL_AUDIO_TRACK_ID,
+    REFERENCE_TRACK_IDS,
     TimelineClip,
 )
 from automatedub_studio.timeline.timeline_widget import TimelineWidget
@@ -273,6 +274,7 @@ class MainWindow(QMainWindow):
         self.timeline.segmentTrimCommitted.connect(self._on_trim_committed)
         self.timeline.clipPlayRequested.connect(self._on_clip_play_requested)
         self.timeline.clipMutePaintRequested.connect(self._on_clip_mute_paint_requested)
+        self.timeline.referenceClipActionBlocked.connect(self._show_reference_read_only_message)
         self.timeline.timelineChanged.connect(self._refresh_playback_sources)
 
         self.setCentralWidget(splitter)
@@ -463,6 +465,9 @@ class MainWindow(QMainWindow):
     def _on_clip_locked_changed(self, clip_id: str, old_val: bool, new_val: bool) -> None:
         self._push_clip_property_command(clip_id, "locked", old_val, new_val)
 
+    def _show_reference_read_only_message(self) -> None:
+        self.statusBar().showMessage("Reference clips are read-only.", 2500)
+
     def _on_clip_translation_save_requested(self, clip_id: str, khmer_text: str) -> None:
         self.timeline.set_timeline_clip_translation(clip_id, khmer_text)
         self._refresh_playback_sources()
@@ -591,7 +596,7 @@ class MainWindow(QMainWindow):
         selected_ids = [
             clip.segment_id
             for clip in self.timeline.selected_timeline_clips
-            if clip.segment_id is not None
+            if clip.segment_id is not None and clip.track_id not in REFERENCE_TRACK_IDS
         ]
         return select_selected_ids(
             list(dict.fromkeys(selected_ids)), self._editables
@@ -599,6 +604,9 @@ class MainWindow(QMainWindow):
 
     def _regenerate_selected(self) -> None:
         selected_clips = self.timeline.selected_timeline_clips
+        if selected_clips and all(clip.track_id in REFERENCE_TRACK_IDS for clip in selected_clips):
+            self._show_reference_read_only_message()
+            return
         if len(selected_clips) == 1 and selected_clips[0].track_id == KHMER_TTS_TRACK_ID:
             self._regenerate_timeline_clip(selected_clips[0].id)
             return
@@ -703,6 +711,10 @@ class MainWindow(QMainWindow):
     def _split_selected_clip(self) -> None:
         if self.project is None:
             return
+        selected_clips = self.timeline.selected_timeline_clips
+        if selected_clips and all(clip.track_id in REFERENCE_TRACK_IDS for clip in selected_clips):
+            self._show_reference_read_only_message()
+            return
         selected = self._selected_segments_from_timeline_clips()
         if len(selected) != 1:
             return
@@ -733,7 +745,7 @@ class MainWindow(QMainWindow):
         selected_ids = [
             clip.segment_id
             for clip in self.timeline.selected_timeline_clips
-            if clip.segment_id is not None
+            if clip.segment_id is not None and clip.track_id not in REFERENCE_TRACK_IDS
         ]
         unique_ids = set(selected_ids)
         return [

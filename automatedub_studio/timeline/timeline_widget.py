@@ -38,6 +38,7 @@ from automatedub_studio.timeline.timeline_clip import (
     KHMER_TTS_TRACK_ID,
     ORIGINAL_AUDIO_TRACK_ID,
     ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+    REFERENCE_TRACK_IDS,
     Timeline,
     TimelineClip,
     TimelineTrack,
@@ -139,6 +140,7 @@ class _TimelineView(QGraphicsView):
     clipTrimEnded = Signal(str, float, float, float, float)
     clipPlayRequested = Signal(int)       # segment_id, from double-clicking a clip
     clipMutePaintRequested = Signal(str)
+    referenceClipActionBlocked = Signal()
     clipTrackChangeRequested = Signal(str, str)
     clipMoveRequested = Signal(str, str, float)
     timelineSeekRequested = Signal(int)
@@ -165,6 +167,8 @@ class _TimelineView(QGraphicsView):
         self._snap_interval_ms = DEFAULT_SNAP_INTERVAL_MS
         self._mute_paint_mode = False
         self._last_clicked_clip: ClipItem | None = None
+        self._reference_press_item: ClipItem | None = None
+        self._reference_press_scene_pos = None
         self._playhead_ms = 0
         self._playhead_dragging = False
         self.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
@@ -204,6 +208,8 @@ class _TimelineView(QGraphicsView):
         scene_pos = self.mapToScene(event.position().toPoint())
         raw_item = self.scene().itemAt(scene_pos, self.transform())
         item = self._clip_from_item(raw_item)
+        self._reference_press_item = None
+        self._reference_press_scene_pos = None
         if self._is_over_playhead(scene_pos.x()):
             self._playhead_dragging = True
             self.timelineSeekRequested.emit(self._scene_x_to_time_ms(scene_pos.x()))
@@ -221,6 +227,13 @@ class _TimelineView(QGraphicsView):
             self.timelineSeekRequested.emit(self._scene_x_to_time_ms(scene_pos.x()))
             event.accept()
             return
+        if (
+            isinstance(item, ClipItem)
+            and item.timeline_clip is not None
+            and item.timeline_clip.track_id in REFERENCE_TRACK_IDS
+        ):
+            self._reference_press_item = item
+            self._reference_press_scene_pos = scene_pos
         if isinstance(item, ClipItem) and not item.locked:
             handle = item.trim_handle_at(item.mapFromScene(scene_pos))
             if handle is not None:
@@ -287,6 +300,20 @@ class _TimelineView(QGraphicsView):
             self.timelineSeekRequested.emit(self._scene_x_to_time_ms(scene_pos.x()))
             event.accept()
             return
+        if (
+            self._reference_press_item is not None
+            and self._reference_press_scene_pos is not None
+            and event.buttons() & Qt.MouseButton.LeftButton
+        ):
+            scene_pos = self.mapToScene(event.position().toPoint())
+            if (
+                scene_pos - self._reference_press_scene_pos
+            ).manhattanLength() > _DRAG_THRESHOLD_PX:
+                self.referenceClipActionBlocked.emit()
+                self._reference_press_item = None
+                self._reference_press_scene_pos = None
+                event.accept()
+                return
         if self._trim_clip is not None and event.buttons() & Qt.MouseButton.LeftButton:
             scene_pos = self.mapToScene(event.position().toPoint())
             dx = scene_pos.x() - self._trim_press_scene_x
@@ -361,6 +388,8 @@ class _TimelineView(QGraphicsView):
             if self._drag_clip is not None:
                 self._drag_clip.setZValue(0)
         self._drag_clip = None
+        self._reference_press_item = None
+        self._reference_press_scene_pos = None
         self._drag_start_offsets_ms = {}
         self._dragging = False
 
@@ -572,6 +601,7 @@ class TimelineWidget(QWidget):
     clipMutePaintRequested = Signal(str)
     timelineSeekRequested = Signal(int)
     timelineChanged = Signal()
+    referenceClipActionBlocked = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -611,6 +641,7 @@ class TimelineWidget(QWidget):
         self._view.clipTrimEnded.connect(self._on_clip_trim_ended)
         self._view.clipPlayRequested.connect(self.clipPlayRequested.emit)
         self._view.clipMutePaintRequested.connect(self.clipMutePaintRequested.emit)
+        self._view.referenceClipActionBlocked.connect(self.referenceClipActionBlocked.emit)
         self._view.clipTrackChangeRequested.connect(self._on_clip_track_change_requested)
         self._view.clipMoveRequested.connect(self._on_clip_move_requested)
         self._view.timelineSeekRequested.connect(self._on_seek_requested)
@@ -777,6 +808,7 @@ class TimelineWidget(QWidget):
         segment = item.segment
         timeline_clip = item.timeline_clip
         if timeline_clip.locked or self._track_is_locked(timeline_clip.track_id):
+            self._notify_reference_clip_blocked(timeline_clip)
             return
         duration = timeline_clip.duration
         start_time = segment.start + offset_ms / 1000.0
@@ -942,6 +974,7 @@ class TimelineWidget(QWidget):
             return
         timeline_clip = item.timeline_clip
         if timeline_clip.locked or self._track_is_locked(timeline_clip.track_id):
+            self._notify_reference_clip_blocked(timeline_clip)
             return
         start_seconds, end_seconds = self.constrain_timeline_clip_trim(
             clip_id, start_seconds, end_seconds
@@ -1130,9 +1163,13 @@ class TimelineWidget(QWidget):
         track = self._timeline.track_by_id(clip.track_id)
         return bool(
             clip.is_background
-            or clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
+            or clip.track_id in REFERENCE_TRACK_IDS
             or (track and track.locked)
         )
+
+    def _notify_reference_clip_blocked(self, clip: TimelineClip) -> None:
+        if clip.track_id in REFERENCE_TRACK_IDS:
+            self.referenceClipActionBlocked.emit()
 
     @staticmethod
     def _clear_flash(clips: list[ClipItem]) -> None:
