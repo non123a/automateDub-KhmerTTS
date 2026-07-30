@@ -9,7 +9,10 @@ from PySide6.QtGui import QBrush, QColor, QPen
 from PySide6.QtWidgets import QGraphicsRectItem, QGraphicsTextItem
 
 from automatedub_studio.project.models import Segment
-from automatedub_studio.timeline.timeline_clip import TimelineClip
+from automatedub_studio.timeline.timeline_clip import (
+    ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+    TimelineClip,
+)
 from automatedub_studio.timeline.waveform_cache import (
     DEFAULT_BUCKET_COUNT,
     WaveformCache,
@@ -27,6 +30,8 @@ LANE_COLORS = {
     4: QColor("#D9A45C"),
 }
 LOCKED_COLOR = QColor("#8888AA")
+BACKGROUND_COLOR = QColor("#68727D")
+REFERENCE_COLOR = QColor("#536170")
 FLASH_COLOR = QColor("#F4D35E")
 
 SELECTED_PEN_COLOR = QColor("#FF8800")
@@ -58,7 +63,7 @@ class ClipItem(QGraphicsRectItem):
 
     def __init__(
         self,
-        segment: Segment,
+        segment: Segment | None,
         x: float,
         y: float,
         width: float,
@@ -85,18 +90,31 @@ class ClipItem(QGraphicsRectItem):
         self._wav_end_seconds = wav_end_seconds
         self._waveform_bucket_count = waveform_bucket_count
 
-        self.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable)
+        is_background = bool(timeline_clip and timeline_clip.is_background)
+        is_reference = bool(
+            timeline_clip and timeline_clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
+        )
+        self.setFlag(
+            QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable,
+            not is_background,
+        )
         self.setAcceptHoverEvents(True)
-        self.setBrush(QBrush(LANE_COLORS.get(lane, QColor("#888888"))))
-        self.setPen(QPen(QColor("#333333"), NORMAL_PEN_WIDTH))
+        if is_background or is_reference:
+            self.setBrush(QBrush(REFERENCE_COLOR if is_reference else BACKGROUND_COLOR))
+            self.setPen(QPen(QColor("#AAB4BE"), NORMAL_PEN_WIDTH, Qt.PenStyle.DashLine))
+        else:
+            self.setBrush(QBrush(LANE_COLORS.get(lane, QColor("#888888"))))
+            self.setPen(QPen(QColor("#333333"), NORMAL_PEN_WIDTH))
 
-        self._id_label = QGraphicsTextItem(str(segment.id), self)
-        self._id_label.setDefaultTextColor(Qt.GlobalColor.white)
-        self._center_label()
+        self._id_label: QGraphicsTextItem | None = None
+        if not is_background and not is_reference and segment is not None:
+            self._id_label = QGraphicsTextItem(str(segment.id), self)
+            self._id_label.setDefaultTextColor(Qt.GlobalColor.white)
+            self._center_label()
 
         self._lock_label: QGraphicsTextItem | None = None
 
-        self.setToolTip(self._build_tooltip(segment))
+        self.setToolTip(self._build_tooltip(segment, timeline_clip))
 
     def set_locked(self, locked: bool) -> None:
         self.locked = locked
@@ -145,6 +163,8 @@ class ClipItem(QGraphicsRectItem):
 
     def trim_handle_at(self, pos) -> str | None:
         """Return 'left'/'right' when a local item position is over a trim handle."""
+        if self.timeline_clip is not None and self.timeline_clip.is_background:
+            return None
         rect = self.rect()
         if not rect.contains(pos):
             return None
@@ -180,6 +200,9 @@ class ClipItem(QGraphicsRectItem):
         elif self.status == STATUS_GENERATING:
             color = STATUS_COLORS[STATUS_GENERATING]
             icon = STATUS_ICONS[STATUS_GENERATING]
+        elif self.timeline_clip is not None and self.timeline_clip.is_background:
+            color = BACKGROUND_COLOR
+            icon = "BG"
         elif self.locked:
             color = LOCKED_COLOR
             icon = "\U0001f512"
@@ -207,6 +230,8 @@ class ClipItem(QGraphicsRectItem):
             self._lock_label = None
 
     def _paint_trim_handles(self, painter) -> None:
+        if self.timeline_clip is not None and self.timeline_clip.is_background:
+            return
         if not self._hovered and not self.isSelected():
             return
         painter.setPen(QPen(Qt.PenStyle.NoPen))
@@ -226,6 +251,8 @@ class ClipItem(QGraphicsRectItem):
 
     def _center_label(self) -> None:
         rect = self.rect()
+        if self._id_label is None:
+            return
         label_rect = self._id_label.boundingRect()
         self._id_label.setPos(
             rect.x() + (rect.width() - label_rect.width()) / 2,
@@ -233,7 +260,29 @@ class ClipItem(QGraphicsRectItem):
         )
 
     @staticmethod
-    def _build_tooltip(segment: Segment) -> str:
+    def _build_tooltip(
+        segment: Segment | None, timeline_clip: TimelineClip | None = None
+    ) -> str:
+        if timeline_clip is not None and timeline_clip.is_background:
+            return (
+                "Background Original Audio\n"
+                f"Start: {timeline_clip.start_time:.3f}s\n"
+                f"End: {timeline_clip.end_time:.3f}s\n"
+                f"Duration: {timeline_clip.duration:.3f}s\n"
+                "Read-only source audio"
+            )
+        if (
+            timeline_clip is not None
+            and timeline_clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
+        ):
+            return (
+                "Original Movie Audio\n"
+                f"Start: {timeline_clip.start_time:.3f}s\n"
+                f"End: {timeline_clip.end_time:.3f}s\n"
+                "Read-only reference audio"
+            )
+        if segment is None:
+            return ""
         duration = segment.end - segment.start
         lines = [
             f"ID: {segment.id}",

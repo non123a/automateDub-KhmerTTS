@@ -379,8 +379,9 @@ def test_open_project_populates_dual_audio_tracks(qapp, tmp_path):
 
     window.open_project_path(project_dir)
 
-    assert len(window.playback_controller._timeline_clips) == 6
+    assert len(window.playback_controller._timeline_clips) == 7
     assert {clip.track_id for clip in window.playback_controller._timeline_clips} == {
+        "original_movie_audio",
         "original_audio",
         "khmer_tts",
     }

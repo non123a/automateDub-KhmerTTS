@@ -73,6 +73,7 @@ from automatedub_studio.timeline.timeline_clip import (
     DRAFT_REGENERATION_TRACK_ID,
     KHMER_TTS_TRACK_ID,
     ORIGINAL_AUDIO_TRACK_ID,
+    TimelineClip,
 )
 from automatedub_studio.timeline.timeline_widget import TimelineWidget
 from automatedub_studio.ui.about_dialog import AboutDialog
@@ -791,6 +792,10 @@ class MainWindow(QMainWindow):
             es.needs_regeneration = False
             es.last_error = None
             es.generated_duration = outcome.duration_seconds
+            if outcome.wav_path is not None:
+                self._ensure_khmer_clip_for_regenerated_segment(
+                    outcome.segment_id, outcome.wav_path
+                )
             self.timeline.set_timeline_clip_status(f"khmer:{outcome.segment_id}", None)
         else:
             es.last_error = outcome.error
@@ -1065,6 +1070,43 @@ class MainWindow(QMainWindow):
             "Audio: ✓  |  "
             f"Video: {video_status}"
         )
+
+    def _ensure_khmer_clip_for_regenerated_segment(
+        self, segment_id: int, wav_path: Path
+    ) -> None:
+        if self.timeline.timeline.clip_by_id(f"khmer:{segment_id}") is not None:
+            return
+        if self.project is None:
+            return
+        segment = next((item for item in self.project.segments if item.id == segment_id), None)
+        if segment is None:
+            return
+        original_clip = self.timeline.timeline.clip_by_id(f"original:{segment_id}")
+        start_time = (
+            original_clip.start_time
+            if original_clip is not None
+            else segment.start + segment.offset_ms / 1000.0
+        )
+        duration = (
+            original_clip.duration
+            if original_clip is not None
+            else max(0.0, segment.end - segment.start)
+        )
+        clip = TimelineClip(
+            id=f"khmer:{segment.id}",
+            track_id=KHMER_TTS_TRACK_ID,
+            start_time=start_time,
+            end_time=start_time + duration,
+            source_path=wav_path,
+            source_offset=0.0,
+            segment_id=segment.id,
+            source_text=segment.source_text,
+            target_text=segment.target_text,
+            chinese_text=segment.source_text,
+            khmer_text=segment.target_text,
+        )
+        self.timeline.add_timeline_clip(clip)
+        save_timeline_edits(self.timeline.timeline, self.project.project_path)
 
     @staticmethod
     def _build_draft_regeneration_clip(source_clip, wav_path: Path):

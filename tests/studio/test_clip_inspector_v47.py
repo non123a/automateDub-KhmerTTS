@@ -11,6 +11,7 @@ from automatedub.config import ToolConfig
 from automatedub.vertical_slice.tts import GeneratedSpeech
 from automatedub_studio.backend.regeneration_service import (
     ClipRegenerationOutcome,
+    RegenerationOutcome,
     clip_tts_output_path,
     regenerate_timeline_clip,
 )
@@ -454,3 +455,30 @@ def test_regenerate_selected_single_khmer_clip_uses_clip_regeneration_path(
 
     assert clip_calls == ["khmer:0"]
     assert legacy_calls == []
+
+
+def test_generating_missing_khmer_clip_later_does_not_modify_original(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, segment_count=1)
+    original_tts = project_dir / "tts" / "0000.wav"
+    original_tts.unlink()
+    window = MainWindow()
+    window.open_project_path(project_dir)
+    original = window.timeline.timeline.clip_by_id("original:0")
+    old_original_source = original.source_path
+    assert window.timeline.timeline.clip_by_id("khmer:0") is None
+    generated_path = project_dir / "tts" / "0000.wav"
+    generated_path.write_bytes(_wav_bytes())
+
+    window._on_regen_result(
+        RegenerationOutcome(
+            segment_id=0,
+            success=True,
+            duration_seconds=1.0,
+            wav_path=generated_path,
+        )
+    )
+
+    khmer = window.timeline.timeline.clip_by_id("khmer:0")
+    assert original.source_path == old_original_source
+    assert khmer is not None
+    assert khmer.source_path == generated_path

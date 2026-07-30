@@ -33,7 +33,11 @@ def _segments(count: int = 4) -> list[Segment]:
     ]
 
 
-def _clip_center(widget: TimelineWidget, segment_id: int, lane: int = 1) -> QPoint:
+def _clip_center(
+    widget: TimelineWidget,
+    segment_id: int,
+    lane: int = ORIGINAL_AUDIO_LANE,
+) -> QPoint:
     clip = next(clip for clip in widget._clips_by_segment[segment_id] if clip.lane == lane)
     return widget._view.mapFromScene(clip.sceneBoundingRect().center())
 
@@ -86,15 +90,15 @@ def test_cmd_click_uses_additive_selection_modifier(qapp):
 def test_shift_click_selects_range_on_same_track(qapp):
     widget = TimelineWidget()
     widget.load_segments(_segments(4))
-    first = next(clip for clip in widget._clips_by_segment[0] if clip.lane == 1)
-    last = next(clip for clip in widget._clips_by_segment[2] if clip.lane == 1)
+    first = next(clip for clip in widget._clips_by_segment[0] if clip.lane == ORIGINAL_AUDIO_LANE)
+    last = next(clip for clip in widget._clips_by_segment[2] if clip.lane == ORIGINAL_AUDIO_LANE)
 
     widget._view._last_clicked_clip = first
     widget._view._select_range(last)
 
     assert _selected_ids(widget) == [0, 1, 2]
     assert all(
-        clip.lane == 1
+        clip.lane == ORIGINAL_AUDIO_LANE
         for clip in widget._scene.selectedItems()
         if isinstance(clip, ClipItem)
     )
@@ -122,10 +126,12 @@ def test_marquee_selects_clips_intersecting_drag_rectangle(qapp):
     widget.show()
     widget.load_segments(_segments(3))
 
-    lane_one_clip = next(clip for clip in widget._clips_by_segment[0] if clip.lane == 1)
+    lane_one_clip = next(
+        clip for clip in widget._clips_by_segment[0] if clip.lane == ORIGINAL_AUDIO_LANE
+    )
     empty_scene_pos = QPointF(lane_one_clip.sceneBoundingRect().left() - 20, lane_one_clip.y() + 4)
     start = widget._view.mapFromScene(empty_scene_pos)
-    end = _clip_center(widget, 1, lane=1) + QPoint(20, 10)
+    end = _clip_center(widget, 1, lane=ORIGINAL_AUDIO_LANE) + QPoint(20, 10)
     QTest.mousePress(widget._view.viewport(), Qt.MouseButton.LeftButton, pos=start)
     QTest.mouseMove(widget._view.viewport(), end)
     QTest.mouseRelease(widget._view.viewport(), Qt.MouseButton.LeftButton, pos=end)

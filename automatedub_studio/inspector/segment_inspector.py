@@ -21,7 +21,11 @@ from PySide6.QtWidgets import (
 
 from automatedub_studio.project.editable_project import EditableSegment
 from automatedub_studio.project.models import Segment
-from automatedub_studio.timeline.timeline_clip import KHMER_TTS_TRACK_ID, TimelineClip
+from automatedub_studio.timeline.timeline_clip import (
+    DRAFT_REGENERATION_TRACK_ID,
+    KHMER_TTS_TRACK_ID,
+    TimelineClip,
+)
 
 _PLACEHOLDER = "—"
 _STATUS_GENERATED = "Generated"
@@ -284,7 +288,10 @@ class SegmentInspectorWidget(QWidget):
         self._stack.setCurrentWidget(self._detail_widget)
 
     def set_timeline_clip(self, clip: TimelineClip | None) -> None:
-        if clip is None:
+        if clip is None or clip.is_background or clip.track_id not in (
+            KHMER_TTS_TRACK_ID,
+            DRAFT_REGENERATION_TRACK_ID,
+        ):
             self._segment = None
             self._editable = None
             self._timeline_clip = None
@@ -301,6 +308,12 @@ class SegmentInspectorWidget(QWidget):
         self._stack.setCurrentWidget(self._detail_widget)
 
     def set_timeline_clips(self, clips: list[TimelineClip]) -> None:
+        clips = [
+            clip
+            for clip in clips
+            if not clip.is_background
+            and clip.track_id in (KHMER_TTS_TRACK_ID, DRAFT_REGENERATION_TRACK_ID)
+        ]
         if not clips:
             self.set_timeline_clip(None)
             return

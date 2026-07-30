@@ -145,6 +145,7 @@ def make_timeline_clip(
     volume: float = 1.0,
     fade_in: float = 0.0,
     fade_out: float = 0.0,
+    segment_id: int | None = None,
 ) -> TimelineClip:
     return TimelineClip(
         id=clip_id,
@@ -156,6 +157,7 @@ def make_timeline_clip(
         volume=volume,
         fade_in=fade_in,
         fade_out=fade_out,
+        segment_id=segment_id,
     )
 
 
@@ -368,6 +370,72 @@ def test_both_unmuted_both_tracks_are_mixed_by_parallel_players(qapp, tmp_path):
         QUrl.fromLocalFile(str(audio_path)),
         QUrl.fromLocalFile(str(clip_path)),
     }
+
+
+def test_same_segment_khmer_suppresses_original_fallback(qapp, tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    clip_path = tmp_path / "0000.wav"
+    make_wav(audio_path, seconds=2.0)
+    make_wav(clip_path, seconds=1.0)
+    controller = PlaybackController(VideoPlayerWidget())
+    original = make_timeline_clip(
+        "original:0",
+        ORIGINAL_AUDIO_TRACK_ID,
+        audio_path,
+        start=0.0,
+        end=1.0,
+        segment_id=0,
+    )
+    khmer = make_timeline_clip(
+        "khmer:0", KHMER_TTS_TRACK_ID, clip_path, start=0.0, end=1.0, segment_id=0
+    )
+    controller.set_timeline(make_timeline(original, khmer))
+
+    controller.seek(500)
+
+    assert controller._active_khmer_clip_ids == {"khmer:0"}
+
+
+def test_missing_khmer_uses_original_fallback(qapp, tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    make_wav(audio_path, seconds=2.0)
+    controller = PlaybackController(VideoPlayerWidget())
+    original = make_timeline_clip(
+        "original:0",
+        ORIGINAL_AUDIO_TRACK_ID,
+        audio_path,
+        start=0.0,
+        end=1.0,
+        segment_id=0,
+    )
+    controller.set_timeline(make_timeline(original))
+
+    controller.seek(500)
+
+    assert controller._active_khmer_clip_ids == {"original:0"}
+
+
+def test_background_original_clip_plays_original_audio(qapp, tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    make_wav(audio_path, seconds=3.0)
+    controller = PlaybackController(VideoPlayerWidget())
+    background = TimelineClip(
+        id="background:original:0",
+        track_id=ORIGINAL_AUDIO_TRACK_ID,
+        start_time=1.0,
+        end_time=2.0,
+        source_path=audio_path,
+        source_offset=1.0,
+        locked=True,
+        is_background=True,
+    )
+    controller.set_timeline(Timeline.from_clips([background]))
+
+    controller.seek(1500)
+
+    assert controller._active_khmer_clip_ids == {"background:original:0"}
+    player, _output = controller._khmer_clip_players["background:original:0"]
+    assert player.source() == QUrl.fromLocalFile(str(audio_path))
 
 
 def test_khmer_volume_applies_fade(qapp, tmp_path):

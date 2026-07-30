@@ -288,7 +288,7 @@ def test_locked_clip_does_not_start_drag(qapp):
     tl.apply_locked(seg.id, True)
 
     clips = tl._clips_by_segment[seg.id]
-    lane1_clip = next(c for c in clips if c.lane == 1)
+    lane1_clip = next(c for c in clips if c.lane == 2)
     assert lane1_clip.locked is True
 
 
@@ -311,8 +311,10 @@ def test_apply_locked_false_clears_lock(qapp):
     tl.apply_locked(seg.id, False)
 
     clips = tl._clips_by_segment[seg.id]
-    for clip in clips:
-        assert clip.locked is False
+    original_clip = next(clip for clip in clips if clip.lane == 2)
+    khmer_clip = next(clip for clip in clips if clip.lane == 3)
+    assert original_clip.locked is True
+    assert khmer_clip.locked is False
 
 
 # ===========================================================================

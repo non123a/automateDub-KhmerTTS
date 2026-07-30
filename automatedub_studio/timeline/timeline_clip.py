@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 VIDEO_TRACK_ID = "video"
+ORIGINAL_MOVIE_AUDIO_TRACK_ID = "original_movie_audio"
 ORIGINAL_AUDIO_TRACK_ID = "original_audio"
 KHMER_TTS_TRACK_ID = "khmer_tts"
 DRAFT_REGENERATION_TRACK_ID = "draft_regeneration"
@@ -46,6 +47,7 @@ class TimelineClip:
     speaking_rate: float = 1.0
     pitch: float = 0.0
     gain: float = 1.0
+    is_background: bool = False
 
     def __post_init__(self) -> None:
         if not self.chinese_text:
@@ -104,6 +106,7 @@ class TimelineClip:
             "speaking_rate": self.speaking_rate,
             "pitch": self.pitch,
             "gain": self.gain,
+            "is_background": self.is_background,
         }
 
     @classmethod
@@ -131,6 +134,7 @@ class TimelineClip:
             speaking_rate=float(data.get("speaking_rate", 1.0)),
             pitch=float(data.get("pitch", 0.0)),
             gain=float(data.get("gain", 1.0)),
+            is_background=bool(data.get("is_background", False)),
         )
 
 
@@ -142,6 +146,8 @@ class TimelineTrack:
     muted: bool = False
     solo: bool = False
     locked: bool = False
+    visible: bool = True
+    reference_only: bool = False
     clips: list[TimelineClip] = field(default_factory=list)
 
     @property
@@ -156,6 +162,8 @@ class TimelineTrack:
             "muted": self.muted,
             "solo": self.solo,
             "locked": self.locked,
+            "visible": self.visible,
+            "reference_only": self.reference_only,
             "clips": [clip.to_dict() for clip in self.clips],
         }
 
@@ -168,6 +176,8 @@ class TimelineTrack:
             muted=bool(data.get("muted", False)),
             solo=bool(data.get("solo", False)),
             locked=bool(data.get("locked", False)),
+            visible=bool(data.get("visible", True)),
+            reference_only=bool(data.get("reference_only", False)),
             clips=[TimelineClip.from_dict(item) for item in data.get("clips", [])],
         )
 
@@ -181,7 +191,17 @@ class Timeline:
         return cls(
             tracks=[
                 TimelineTrack(VIDEO_TRACK_ID, "Video", kind="video"),
-                TimelineTrack(ORIGINAL_AUDIO_TRACK_ID, "Original Audio"),
+                TimelineTrack(
+                    ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+                    "Original Movie Audio",
+                    locked=True,
+                    reference_only=True,
+                ),
+                TimelineTrack(
+                    ORIGINAL_AUDIO_TRACK_ID,
+                    "Original Speech Segments",
+                    locked=True,
+                ),
                 TimelineTrack(KHMER_TTS_TRACK_ID, "Khmer TTS"),
                 TimelineTrack(DRAFT_REGENERATION_TRACK_ID, "Draft Regeneration"),
                 TimelineTrack(AUDIO_TRACK_3_ID, "Audio Track 3"),
@@ -206,11 +226,25 @@ class Timeline:
     def track_by_id(self, track_id: str) -> TimelineTrack | None:
         return next((track for track in self.tracks if track.id == track_id), None)
 
-    def ensure_track(self, track_id: str, name: str, *, kind: str = "audio") -> TimelineTrack:
+    def ensure_track(
+        self,
+        track_id: str,
+        name: str,
+        *,
+        kind: str = "audio",
+        locked: bool = False,
+        reference_only: bool = False,
+    ) -> TimelineTrack:
         track = self.track_by_id(track_id)
         if track is not None:
             return track
-        track = TimelineTrack(track_id, name, kind=kind)
+        track = TimelineTrack(
+            track_id,
+            name,
+            kind=kind,
+            locked=locked,
+            reference_only=reference_only,
+        )
         if kind == "video":
             self.tracks.append(track)
             return track
@@ -271,7 +305,9 @@ class Timeline:
 
     def active_audio_clips(self, position_ms: int) -> list[TimelineClip]:
         position_seconds = position_ms / 1000.0
-        audio_tracks = [track for track in self.tracks if track.is_audio]
+        audio_tracks = [
+            track for track in self.tracks if track.is_audio and not track.reference_only
+        ]
         soloed_track_ids = {track.id for track in audio_tracks if track.solo}
         clips: list[TimelineClip] = []
         for track in audio_tracks:
@@ -286,7 +322,19 @@ class Timeline:
                 and clip.source_path is not None
                 and clip.contains(position_seconds)
             )
-        return sorted(clips, key=lambda clip: (clip.start_time, clip.track_id, clip.id))
+        replacement_segment_ids = {
+            clip.segment_id
+            for clip in clips
+            if clip.segment_id is not None and clip.track_id != ORIGINAL_AUDIO_TRACK_ID
+        }
+        fallback_clips = [
+            clip
+            for clip in clips
+            if clip.track_id != ORIGINAL_AUDIO_TRACK_ID
+            or clip.segment_id is None
+            or clip.segment_id not in replacement_segment_ids
+        ]
+        return sorted(fallback_clips, key=lambda clip: (clip.start_time, clip.track_id, clip.id))
 
     def to_dict(self) -> dict:
         return {"tracks": [track.to_dict() for track in self.tracks]}

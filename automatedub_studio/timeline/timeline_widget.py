@@ -37,8 +37,10 @@ from automatedub_studio.timeline.timeline_clip import (
     DRAFT_REGENERATION_TRACK_ID,
     KHMER_TTS_TRACK_ID,
     ORIGINAL_AUDIO_TRACK_ID,
+    ORIGINAL_MOVIE_AUDIO_TRACK_ID,
     Timeline,
     TimelineClip,
+    TimelineTrack,
 )
 from automatedub_studio.timeline.waveform_cache import WaveformCache
 
@@ -52,11 +54,13 @@ LANE_LABEL_WIDTH = 140
 SCENE_MARGIN_H = 8
 SCENE_MARGIN_V = 10
 VIDEO_LANE = 0
-ORIGINAL_AUDIO_LANE = 1
-KHMER_TTS_LANE = 2
-AUDIO_TRACK_3_LANE = 3
-AUDIO_TRACK_4_LANE = 4
+ORIGINAL_MOVIE_AUDIO_LANE = 1
+ORIGINAL_AUDIO_LANE = 2
+KHMER_TTS_LANE = 3
+AUDIO_TRACK_3_LANE = 5
+AUDIO_TRACK_4_LANE = 6
 AUDIO_LANES = (
+    ORIGINAL_MOVIE_AUDIO_LANE,
     ORIGINAL_AUDIO_LANE,
     KHMER_TTS_LANE,
     AUDIO_TRACK_3_LANE,
@@ -64,7 +68,8 @@ AUDIO_LANES = (
 )
 LANE_NAMES = (
     "Video",
-    "Original Audio",
+    "Original Movie Audio",
+    "Original Speech Segments",
     "Khmer TTS",
     "Draft Regeneration",
     "Audio Track 3",
@@ -90,6 +95,7 @@ _ZOOM_STEP = 1.18
 _DRAG_THRESHOLD_PX = 3
 _SNAP_MS = 10
 MIN_CLIP_DURATION_SECONDS = 0.001
+BACKGROUND_GAP_THRESHOLD_SECONDS = 0.1
 
 
 def _snap(offset_ms: int) -> int:
@@ -111,6 +117,7 @@ def _scene_height() -> float:
 
 TRACK_IDS_BY_LANE = (
     "video",
+    ORIGINAL_MOVIE_AUDIO_TRACK_ID,
     ORIGINAL_AUDIO_TRACK_ID,
     KHMER_TTS_TRACK_ID,
     DRAFT_REGENERATION_TRACK_ID,
@@ -202,7 +209,11 @@ class _TimelineView(QGraphicsView):
             self.timelineSeekRequested.emit(self._scene_x_to_time_ms(scene_pos.x()))
             event.accept()
             return
-        if self._mute_paint_mode and isinstance(item, ClipItem):
+        if (
+            self._mute_paint_mode
+            and isinstance(item, ClipItem)
+            and not item.locked
+        ):
             self.clipMutePaintRequested.emit(self._clip_key(item))
             event.accept()
             return
@@ -492,9 +503,17 @@ class _TimelineView(QGraphicsView):
             (
                 scene_item
                 for scene_item in self.scene().items()
-                if isinstance(scene_item, ClipItem) and scene_item.lane == item.lane
+                if (
+                    isinstance(scene_item, ClipItem)
+                    and scene_item.lane == item.lane
+                    and scene_item.timeline_clip is not None
+                    and not scene_item.timeline_clip.is_background
+                )
             ),
-            key=lambda clip: (clip.segment.start, clip.segment.id),
+            key=lambda clip: (
+                clip.timeline_clip.start_time,
+                clip.timeline_clip.id,
+            ),
         )
         try:
             start_index = lane_items.index(self._last_clicked_clip)
@@ -565,6 +584,7 @@ class TimelineWidget(QWidget):
         self._timeline = Timeline.default()
         self._timeline_clips: list[TimelineClip] = []
         self._clips_by_clip_id: dict[str, ClipItem] = {}
+        self._lane_items_by_track: dict[str, list[object]] = {}
         self._waveform_cache = WaveformCache()
         self._audio_path: Path | None = None
         self._tts_directory: Path | None = None
@@ -630,10 +650,46 @@ class TimelineWidget(QWidget):
         self._ruler.set_duration(self._duration_ms)
 
     def load_timeline(self, timeline: Timeline) -> None:
+        self._migrate_loaded_timeline(timeline)
         self._timeline = timeline
         self._timeline_clips = self._timeline.all_clips()
         self._rebuild_scene(self._segments)
         self.timelineChanged.emit()
+
+    def _migrate_loaded_timeline(self, timeline: Timeline) -> None:
+        """Keep older edited timelines compatible with the reference lane."""
+        reference = timeline.track_by_id(ORIGINAL_MOVIE_AUDIO_TRACK_ID)
+        if reference is None:
+            reference = TimelineTrack(
+                ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+                "Original Movie Audio",
+                locked=True,
+                reference_only=True,
+            )
+            timeline.tracks.insert(1, reference)
+        reference.locked = True
+        reference.reference_only = True
+        reference.clips = [
+            clip for clip in reference.clips if clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
+        ]
+        speech = timeline.track_by_id(ORIGINAL_AUDIO_TRACK_ID)
+        if speech is not None:
+            speech.locked = True
+            speech.clips = [clip for clip in speech.clips if not clip.is_background]
+        video_end = self._duration_ms / 1000.0
+        if video_end <= 0:
+            video_end = max((segment.end for segment in self._segments), default=0.0)
+        if not reference.clips and video_end > 0:
+            reference.clips.append(
+                TimelineClip(
+                    id="original_movie:0",
+                    track_id=ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+                    start_time=0.0,
+                    end_time=video_end,
+                    source_path=self._audio_path,
+                    locked=True,
+                )
+            )
 
     def set_playhead_position(self, position_ms: int) -> None:
         self._playhead_ms = max(0, position_ms)
@@ -690,7 +746,15 @@ class TimelineWidget(QWidget):
 
     @property
     def _clips(self) -> list[ClipItem]:
-        return [clip for clips in self._clips_by_segment.values() for clip in clips]
+        return sorted(
+            self._clips_by_clip_id.values(),
+            key=lambda item: (
+                item.timeline_clip is not None
+                and item.timeline_clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+                item.timeline_clip.start_time if item.timeline_clip is not None else 0.0,
+                item.timeline_clip.id if item.timeline_clip is not None else "",
+            ),
+        )
 
     def apply_offset(self, segment_id: int, offset_ms: int) -> None:
         """Reposition all clips for the given segment to reflect new offset_ms."""
@@ -725,6 +789,10 @@ class TimelineWidget(QWidget):
     def set_timeline_clip_muted(self, clip_id: str, muted: bool) -> None:
         clip = self._find_timeline_clip(clip_id)
         item = self._clips_by_clip_id.get(clip_id)
+        if clip is not None and (
+            clip.is_background or clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
+        ):
+            return
         if clip is not None:
             clip.muted = muted
         if item is not None:
@@ -735,19 +803,19 @@ class TimelineWidget(QWidget):
 
     def set_timeline_clip_volume(self, clip_id: str, volume: float) -> None:
         clip = self._find_timeline_clip(clip_id)
-        if clip is not None:
+        if clip is not None and not self._clip_is_read_only(clip):
             clip.volume = max(0.0, volume)
 
     def set_timeline_clip_translation(self, clip_id: str, khmer_text: str) -> None:
         clip = self._find_timeline_clip(clip_id)
-        if clip is None:
+        if clip is None or self._clip_is_read_only(clip):
             return
         clip.khmer_text = khmer_text
         clip.target_text = khmer_text
 
     def set_timeline_clip_speaking_rate(self, clip_id: str, speaking_rate: float) -> None:
         clip = self._find_timeline_clip(clip_id)
-        if clip is not None:
+        if clip is not None and not self._clip_is_read_only(clip):
             clip.speaking_rate = max(0.5, min(2.0, speaking_rate))
 
     def set_timeline_clip_source_path(self, clip_id: str, source_path: Path) -> None:
@@ -769,12 +837,12 @@ class TimelineWidget(QWidget):
 
     def set_timeline_clip_fade_in(self, clip_id: str, fade_in_ms: int) -> None:
         clip = self._find_timeline_clip(clip_id)
-        if clip is not None:
+        if clip is not None and not self._clip_is_read_only(clip):
             clip.fade_in = max(0, fade_in_ms) / 1000.0
 
     def set_timeline_clip_fade_out(self, clip_id: str, fade_out_ms: int) -> None:
         clip = self._find_timeline_clip(clip_id)
-        if clip is not None:
+        if clip is not None and not self._clip_is_read_only(clip):
             clip.fade_out = max(0, fade_out_ms) / 1000.0
 
     def set_timeline_clip_locked(self, clip_id: str, locked: bool) -> None:
@@ -807,6 +875,20 @@ class TimelineWidget(QWidget):
             if item is not None:
                 item.set_locked(locked or clip.locked)
                 item.update()
+        self.timelineChanged.emit()
+
+    def set_track_visible(self, track_id: str, visible: bool) -> None:
+        """Change visibility only through an explicit track action."""
+        track = self._timeline.track_by_id(track_id)
+        if track is None:
+            return
+        track.visible = visible
+        for item in self._lane_items_by_track.get(track_id, []):
+            item.setVisible(visible)
+        for clip in track.clips:
+            item = self._clips_by_clip_id.get(clip.id)
+            if item is not None:
+                item.setVisible(visible)
         self.timelineChanged.emit()
 
     def move_timeline_clip_to_track(self, clip_id: str, track_id: str) -> bool:
@@ -906,7 +988,11 @@ class TimelineWidget(QWidget):
     def apply_locked(self, segment_id: int, locked: bool) -> None:
         """Update locked state on all clips for a segment."""
         for clip in self._clips_by_segment.get(segment_id, []):
-            clip.set_locked(locked)
+            timeline_clip = clip.timeline_clip
+            track_locked = bool(
+                timeline_clip and self._track_is_locked(timeline_clip.track_id)
+            )
+            clip.set_locked(locked or track_locked)
 
     def apply_status(self, segment_id: int, status: str | None) -> None:
         """Update the regeneration status badge on all clips for a segment."""
@@ -1021,6 +1107,7 @@ class TimelineWidget(QWidget):
         self._scene.clear()
         self._clips_by_segment = {}
         self._clips_by_clip_id = {}
+        self._lane_items_by_track = {}
         self._playhead = None
         self._draw_static_lanes(self._duration_ms)
         self._draw_clips(segments)
@@ -1038,6 +1125,14 @@ class TimelineWidget(QWidget):
     def _track_is_locked(self, track_id: str) -> bool:
         track = self._timeline.track_by_id(track_id)
         return bool(track and track.locked)
+
+    def _clip_is_read_only(self, clip: TimelineClip) -> bool:
+        track = self._timeline.track_by_id(clip.track_id)
+        return bool(
+            clip.is_background
+            or clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
+            or (track and track.locked)
+        )
 
     @staticmethod
     def _clear_flash(clips: list[ClipItem]) -> None:
@@ -1067,16 +1162,19 @@ class TimelineWidget(QWidget):
             bg.setBrush(QBrush(LANE_BG_COLORS[lane % len(LANE_BG_COLORS)]))
             bg.setPen(QPen(Qt.PenStyle.NoPen))
             self._scene.addItem(bg)
+            self._lane_items_by_track.setdefault(track.id, []).append(bg)
 
             header = QGraphicsRectItem(0, y, LANE_LABEL_WIDTH, LANE_HEIGHT)
             header.setBrush(QBrush(HEADER_BG_COLOR))
             header.setPen(QPen(Qt.PenStyle.NoPen))
             self._scene.addItem(header)
+            self._lane_items_by_track.setdefault(track.id, []).append(header)
 
             label = QGraphicsTextItem(track.name)
             label.setDefaultTextColor(QColor("#CCCCCC"))
             label.setPos(6, y + 8)
             self._scene.addItem(label)
+            self._lane_items_by_track.setdefault(track.id, []).append(label)
 
             controls = QGraphicsTextItem(
                 f"M:{'ON' if track.muted else 'OFF'}  "
@@ -1086,14 +1184,20 @@ class TimelineWidget(QWidget):
             controls.setDefaultTextColor(QColor("#AAAAAA"))
             controls.setPos(6, y + 29)
             self._scene.addItem(controls)
+            self._lane_items_by_track.setdefault(track.id, []).append(controls)
+            for item in self._lane_items_by_track[track.id]:
+                item.setVisible(track.visible)
 
     def _draw_clips(self, segments: list[Segment]) -> None:
         segment_by_id = {segment.id: segment for segment in segments}
         for timeline_clip in self._timeline_clips:
-            if timeline_clip.segment_id is None:
-                continue
-            segment = segment_by_id.get(timeline_clip.segment_id)
-            if segment is None:
+            segment = (
+                segment_by_id.get(timeline_clip.segment_id)
+                if timeline_clip.segment_id is not None
+                else None
+            )
+            is_reference = timeline_clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
+            if segment is None and not (timeline_clip.is_background or is_reference):
                 continue
             lane = self._lane_for_track_id(timeline_clip.track_id)
             if lane is None:
@@ -1116,19 +1220,45 @@ class TimelineWidget(QWidget):
                 timeline_clip=timeline_clip,
             )
             self._scene.addItem(clip)
-            self._clips_by_segment.setdefault(segment.id, []).append(clip)
+            track = self._timeline.track_by_id(timeline_clip.track_id)
+            clip.set_locked(
+                timeline_clip.locked
+                or is_reference
+                or bool(track and track.locked)
+            )
+            clip.setVisible(bool(track and track.visible))
+            if segment is not None:
+                self._clips_by_segment.setdefault(segment.id, []).append(clip)
             self._clips_by_clip_id[timeline_clip.id] = clip
 
     def _build_timeline(self, segments: list[Segment]) -> Timeline:
         timeline = Timeline.default()
+        original_movie_track = timeline.track_by_id(ORIGINAL_MOVIE_AUDIO_TRACK_ID)
         original_track = timeline.track_by_id(ORIGINAL_AUDIO_TRACK_ID)
         khmer_track = timeline.track_by_id(KHMER_TTS_TRACK_ID)
-        if original_track is None or khmer_track is None:
+        if original_movie_track is None or original_track is None or khmer_track is None:
             return timeline
+        original_movie_track.clips = []
         original_track.clips = []
         khmer_track.clips = []
         clips: list[TimelineClip] = []
-        for segment in segments:
+        ordered_segments = sorted(segments, key=lambda item: (item.start, item.id))
+        video_end = self._duration_ms / 1000.0
+        if video_end <= 0:
+            video_end = max((segment.end for segment in ordered_segments), default=0.0)
+        if video_end > 0:
+            clips.append(
+                TimelineClip(
+                    id="original_movie:0",
+                    track_id=ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+                    start_time=0.0,
+                    end_time=video_end,
+                    source_path=self._audio_path,
+                    source_offset=0.0,
+                    locked=True,
+                )
+            )
+        for segment in ordered_segments:
             duration = max(0.0, segment.end - segment.start)
             start_time = segment.start + segment.offset_ms / 1000.0
             clips.append(
@@ -1146,29 +1276,34 @@ class TimelineWidget(QWidget):
                     khmer_text=segment.target_text,
                 )
             )
-            clips.append(
-                TimelineClip(
-                    id=f"khmer:{segment.id}",
-                    track_id=KHMER_TTS_TRACK_ID,
-                    start_time=start_time,
-                    end_time=start_time + duration,
-                    source_path=(
-                        tts_segment_output_path(self._tts_directory, segment.id)
-                        if self._tts_directory is not None
-                        else None
-                    ),
-                    source_offset=0.0,
-                    segment_id=segment.id,
-                    source_text=segment.source_text,
-                    target_text=segment.target_text,
-                    chinese_text=segment.source_text,
-                    khmer_text=segment.target_text,
-                )
+            tts_path = (
+                tts_segment_output_path(self._tts_directory, segment.id)
+                if self._tts_directory is not None
+                else None
             )
+            if self._tts_directory is None or (tts_path is not None and tts_path.is_file()):
+                clips.append(
+                    TimelineClip(
+                        id=f"khmer:{segment.id}",
+                        track_id=KHMER_TTS_TRACK_ID,
+                        start_time=start_time,
+                        end_time=start_time + duration,
+                        source_path=tts_path,
+                        source_offset=0.0,
+                        segment_id=segment.id,
+                        source_text=segment.source_text,
+                        target_text=segment.target_text,
+                        chinese_text=segment.source_text,
+                        khmer_text=segment.target_text,
+                    )
+                )
         original_track.clips = [
             clip for clip in clips if clip.track_id == ORIGINAL_AUDIO_TRACK_ID
         ]
         khmer_track.clips = [clip for clip in clips if clip.track_id == KHMER_TTS_TRACK_ID]
+        original_movie_track.clips = [
+            clip for clip in clips if clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
+        ]
         return timeline
 
     @staticmethod
@@ -1186,11 +1321,14 @@ class TimelineWidget(QWidget):
     def _wav_context_for_timeline_clip(
         self, timeline_clip: TimelineClip
     ) -> tuple[Path | None, float, float | None]:
-        if timeline_clip.track_id == ORIGINAL_AUDIO_TRACK_ID:
+        if timeline_clip.track_id in (
+            ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+            ORIGINAL_AUDIO_TRACK_ID,
+        ):
             return timeline_clip.source_path, timeline_clip.source_offset, (
                 timeline_clip.source_offset + timeline_clip.duration
             )
-        if timeline_clip.track_id == KHMER_TTS_TRACK_ID:
+        if timeline_clip.track_id != ORIGINAL_AUDIO_TRACK_ID:
             return timeline_clip.source_path, timeline_clip.source_offset, None
         return None, 0.0, None
 
@@ -1225,11 +1363,24 @@ class TimelineWidget(QWidget):
             self._scene.setSceneRect(0, 0, needed_x, current_rect.height())
 
     def _on_selection_changed(self) -> None:
+        self._restore_track_visibility()
         self._state.selected_clip_ids = {clip.id for clip in self.selected_timeline_clips}
         self.segmentSelected.emit(self.selected_segment)
         self.segmentsSelected.emit(self.selected_segments)
         self.timelineClipSelected.emit(self.selected_timeline_clip)
         self.timelineClipsSelected.emit(self.selected_timeline_clips)
+
+    def _restore_track_visibility(self) -> None:
+        """Selection changes cannot alter explicit track visibility state."""
+        for track in self._timeline.tracks:
+            visible = track.visible
+            for item in self._lane_items_by_track.get(track.id, []):
+                if item.isVisible() != visible:
+                    item.setVisible(visible)
+            for clip in track.clips:
+                item = self._clips_by_clip_id.get(clip.id)
+                if item is not None and item.isVisible() != visible:
+                    item.setVisible(visible)
 
     def _on_seek_requested(self, position_ms: int) -> None:
         self.set_playhead_position(position_ms)

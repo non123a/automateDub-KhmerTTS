@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from unittest.mock import MagicMock
 
 from PySide6.QtGui import QImage, QPainter
-from PySide6.QtWidgets import QGraphicsScene
+from PySide6.QtWidgets import QGraphicsItem, QGraphicsScene
 
 from automatedub_studio.project.models import Segment
 from automatedub_studio.timeline.clip_item import ClipItem
@@ -87,8 +87,8 @@ def test_load_segments_creates_clips(qapp):
 
     widget.load_segments(segments)
 
-    # AUDIO_TRACK_COUNT clips per segment; the video lane is a timeline lane, not per-segment audio.
-    assert len(widget._clips) == 5 * AUDIO_TRACK_COUNT
+    # One continuous reference clip plus dialogue clips.
+    assert len(widget._clips) == 5 * AUDIO_TRACK_COUNT + 1
 
 
 def test_load_segments_creates_clip_items(qapp):
@@ -137,11 +137,41 @@ def test_load_segments_empty_list(qapp):
     assert widget._clips == []
 
 
+def test_repeated_selection_never_hides_tracks_or_clips(qapp):
+    widget = TimelineWidget()
+    widget.load_segments(_make_segments(3))
+    initial_visibility = {
+        track_id: [item.isVisible() for item in items]
+        for track_id, items in widget._lane_items_by_track.items()
+    }
+    initial_clip_visibility = {
+        clip_id: item.isVisible()
+        for clip_id, item in widget._clips_by_clip_id.items()
+    }
+
+    for _ in range(100):
+        for item in widget._clips:
+            if item.flags() & QGraphicsItem.GraphicsItemFlag.ItemIsSelectable:
+                item.setSelected(True)
+                item.setSelected(False)
+        widget._scene.clearSelection()
+
+    assert {
+        track_id: [item.isVisible() for item in items]
+        for track_id, items in widget._lane_items_by_track.items()
+    } == initial_visibility
+    assert {
+        clip_id: item.isVisible()
+        for clip_id, item in widget._clips_by_clip_id.items()
+    } == initial_clip_visibility
+    assert all(track.visible for track in widget.timeline.tracks)
+
+
 def test_reload_replaces_clips(qapp):
     widget = TimelineWidget()
     widget.load_segments(_make_segments(3))
     widget.load_segments(_make_segments(2))
-    assert len(widget._clips) == 2 * AUDIO_TRACK_COUNT
+    assert len(widget._clips) == 2 * AUDIO_TRACK_COUNT + 1
 
 
 # ---------------------------------------------------------------------------
@@ -248,10 +278,16 @@ def test_selection_signal_emitted(qapp):
     received: list = []
     widget.segmentSelected.connect(received.append)
 
-    widget._clips[1].setSelected(True)  # lane 1 — selectable
+    selected = next(
+        clip
+        for clip in widget._clips
+        if clip.timeline_clip is not None
+        and clip.timeline_clip.track_id == "khmer_tts"
+    )
+    selected.setSelected(True)
 
     assert len(received) >= 1
-    assert received[-1] is widget._clips[1].segment
+    assert received[-1] is selected.segment
 
 
 # ---------------------------------------------------------------------------
