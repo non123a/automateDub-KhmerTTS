@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QDoubleSpinBox,
@@ -29,8 +29,10 @@ _STATUS_EDITED = "Edited"
 _STATUS_GENERATING = "Generating"
 _STATUS_FAILED = "Failed"
 _STATUS_NEEDS_REGENERATION = "Needs Regeneration"
-_STATUS_MODIFIED = "Unsaved changes"
+_STATUS_MODIFIED = "● Unsaved changes"
+_STATUS_SAVED = "✓ Saved"
 _STATUS_REGENERATION_COMPLETED = "Regeneration completed"
+_SAVED_CONFIRMATION_MS = 2500
 _NO_SELECTION_TEXT = "No clip selected."
 
 
@@ -49,6 +51,7 @@ class SegmentInspectorWidget(QWidget):
     clipFadeOutChanged = Signal(str, int, int)
     clipLockedChanged = Signal(str, bool, bool)
     clipTranslationSaveRequested = Signal(str, str)
+    clipSaveRequested = Signal(str, str, float)
     clipRegenerateRequested = Signal(str)
 
     def __init__(self, parent: QWidget | None = None):
@@ -59,6 +62,7 @@ class SegmentInspectorWidget(QWidget):
         self._live_offset_ms: int = 0
         self._is_generating: bool = False
         self._saved_khmer_text: str = ""
+        self._saved_speaking_rate: float = 1.0
         self._dirty: bool = False
         self._status_override: str | None = None
 
@@ -87,13 +91,29 @@ class SegmentInspectorWidget(QWidget):
 
         self._id_label = QLabel()
         self._status_label = QLabel()
-        self._original_text_label = QLabel()
-        self._original_text_label.setWordWrap(True)
+        self._original_text_label = QTextEdit()
+        self._original_text_label.setAcceptRichText(False)
+        self._original_text_label.setReadOnly(True)
+        self._original_text_label.setMinimumHeight(70)
+        self._original_text_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+            | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
+        self._original_text_label.setObjectName("reference_text_label")
+        self._original_text_label.setStyleSheet(
+            "QTextEdit#reference_text_label { background: #2b2b2b; color: #b8b8b8; "
+            "border: 1px solid #454545; padding: 6px; }"
+        )
         self._khmer_text_label = QLabel()
         self._khmer_text_label.setWordWrap(True)
         self._khmer_text_edit = QTextEdit()
         self._khmer_text_edit.setAcceptRichText(False)
         self._khmer_text_edit.setMinimumHeight(90)
+        self._translation_helper_label = QLabel(
+            "Only the Khmer Translation is used when generating speech."
+        )
+        self._translation_helper_label.setWordWrap(True)
+        self._translation_helper_label.setStyleSheet("color: #888888;")
         self._start_label = QLabel()
         self._end_label = QLabel()
         self._duration_label = QLabel()
@@ -102,6 +122,12 @@ class SegmentInspectorWidget(QWidget):
         self._audio_duration_label = QLabel()
         self._voice_model_label = QLabel()
         self._speaking_rate_label = QLabel()
+        self._speaking_rate_spin = QDoubleSpinBox()
+        self._speaking_rate_spin.setRange(0.50, 2.00)
+        self._speaking_rate_spin.setSingleStep(0.05)
+        self._speaking_rate_spin.setDecimals(2)
+        self._speaking_rate_spin.setSuffix("x")
+        self._speaking_rate_spin.setValue(1.00)
         self._pitch_label = QLabel()
         self._gain_label = QLabel()
 
@@ -143,11 +169,12 @@ class SegmentInspectorWidget(QWidget):
         form.addRow("End:", self._end_label)
         form.addRow("Duration:", self._duration_label)
         form.addRow("Offset:", self._offset_label)
-        form.addRow("Chinese Text:", self._original_text_label)
+        form.addRow("Original (Reference Only):", self._original_text_label)
         form.addRow("Original Audio Duration:", self._audio_duration_label)
         form.addRow("Khmer Text:", self._khmer_text_edit)
+        form.addRow("", self._translation_helper_label)
         form.addRow("Voice Model:", self._voice_model_label)
-        form.addRow("Speaking Rate:", self._speaking_rate_label)
+        form.addRow("Speaking Rate:", self._speaking_rate_spin)
         form.addRow("Pitch:", self._pitch_label)
         form.addRow("Volume:", self._gain_label)
         form.addRow("Speed:", self._speed_spin)
@@ -176,7 +203,7 @@ class SegmentInspectorWidget(QWidget):
 
         actions_group = QGroupBox("Actions")
         actions_layout = QHBoxLayout(actions_group)
-        self._save_translation_button = QPushButton("Save Translation")
+        self._save_translation_button = QPushButton("Save")
         self._save_translation_button.setEnabled(False)
         self._save_translation_button.clicked.connect(self.save_translation)
         self._regenerate_button = QPushButton("Regenerate")
@@ -230,6 +257,7 @@ class SegmentInspectorWidget(QWidget):
         self._fade_out_spin.valueChanged.connect(self._on_fade_out_changed)
         self._locked_check.toggled.connect(self._on_locked_changed)
         self._khmer_text_edit.textChanged.connect(self._on_khmer_text_changed)
+        self._speaking_rate_spin.valueChanged.connect(self._on_speaking_rate_changed)
 
     # ------------------------------------------------------------------
     # Public API
@@ -315,18 +343,27 @@ class SegmentInspectorWidget(QWidget):
             return
         text = self._khmer_text_edit.toPlainText()
         self._saved_khmer_text = text
+        self._saved_speaking_rate = self._speaking_rate_spin.value()
         self._timeline_clip.khmer_text = text
         self._timeline_clip.target_text = text
+        self._timeline_clip.speaking_rate = self._saved_speaking_rate
         self._khmer_text_label.setText(text or _PLACEHOLDER)
         self.clipTranslationSaveRequested.emit(self._timeline_clip.id, text)
+        self.clipSaveRequested.emit(
+            self._timeline_clip.id, text, self._saved_speaking_rate
+        )
         self._set_dirty(False)
-        self._status_override = None
+        self._status_override = _STATUS_SAVED
         self._update_status()
+        self._schedule_saved_status_clear(self._timeline_clip.id)
 
     def revert_translation(self) -> None:
         self._khmer_text_edit.blockSignals(True)
+        self._speaking_rate_spin.blockSignals(True)
         self._khmer_text_edit.setPlainText(self._saved_khmer_text)
+        self._speaking_rate_spin.setValue(self._saved_speaking_rate)
         self._khmer_text_edit.blockSignals(False)
+        self._speaking_rate_spin.blockSignals(False)
         self._khmer_text_label.setText(self._saved_khmer_text or _PLACEHOLDER)
         self._set_dirty(False)
         self._status_override = None
@@ -473,6 +510,7 @@ class SegmentInspectorWidget(QWidget):
             self._fade_out_spin,
             self._locked_check,
             self._khmer_text_edit,
+            self._speaking_rate_spin,
         ):
             ctrl.blockSignals(True)
 
@@ -480,7 +518,7 @@ class SegmentInspectorWidget(QWidget):
         self._track_label.setText(_PLACEHOLDER)
         self._speed_spin.setEnabled(True)
         self._live_offset_ms = segment.offset_ms
-        self._original_text_label.setText(segment.source_text or _PLACEHOLDER)
+        self._original_text_label.setPlainText(segment.source_text or _PLACEHOLDER)
         self._khmer_text_label.setText(segment.target_text)
         self._khmer_text_edit.setPlainText(segment.target_text)
         self._start_label.setText(f"{segment.start:.3f} s")
@@ -490,10 +528,12 @@ class SegmentInspectorWidget(QWidget):
         self._audio_duration_label.setText(f"{duration:.3f} s")
         self._voice_model_label.setText(_PLACEHOLDER)
         self._speaking_rate_label.setText("1.00")
+        self._speaking_rate_spin.setValue(1.0)
         self._pitch_label.setText(_PLACEHOLDER)
         self._gain_label.setText("100%")
         self._offset_label.setText(self._format_offset(segment.offset_ms))
         self._saved_khmer_text = segment.target_text
+        self._saved_speaking_rate = 1.0
 
         speed = es.speed if es else 1.0
         volume = es.volume if es else 1.0
@@ -518,6 +558,7 @@ class SegmentInspectorWidget(QWidget):
             self._fade_out_spin,
             self._locked_check,
             self._khmer_text_edit,
+            self._speaking_rate_spin,
         ):
             ctrl.blockSignals(False)
 
@@ -534,13 +575,14 @@ class SegmentInspectorWidget(QWidget):
             self._fade_out_spin,
             self._locked_check,
             self._khmer_text_edit,
+            self._speaking_rate_spin,
         ):
             ctrl.blockSignals(True)
 
         self._id_label.setText(clip.id)
         self._track_label.setText(clip.track_id)
         self._live_offset_ms = round((clip.start_time - clip.source_offset) * 1000)
-        self._original_text_label.setText(clip.chinese_text or _PLACEHOLDER)
+        self._original_text_label.setPlainText(clip.chinese_text or _PLACEHOLDER)
         self._saved_khmer_text = clip.khmer_text or clip.target_text
         self._khmer_text_label.setText(self._saved_khmer_text or _PLACEHOLDER)
         self._khmer_text_edit.setPlainText(self._saved_khmer_text)
@@ -550,6 +592,8 @@ class SegmentInspectorWidget(QWidget):
         self._audio_duration_label.setText(f"{clip.duration:.3f} s")
         self._voice_model_label.setText(clip.voice_model or _PLACEHOLDER)
         self._speaking_rate_label.setText(f"{clip.speaking_rate:.2f}")
+        self._saved_speaking_rate = clip.speaking_rate
+        self._speaking_rate_spin.setValue(clip.speaking_rate)
         self._pitch_label.setText(_PLACEHOLDER if clip.pitch == 0 else f"{clip.pitch:.2f}")
         self._gain_label.setText(f"{round(clip.gain * 100)}%")
         self._offset_label.setText(self._format_offset(self._live_offset_ms))
@@ -571,6 +615,7 @@ class SegmentInspectorWidget(QWidget):
             self._fade_out_spin,
             self._locked_check,
             self._khmer_text_edit,
+            self._speaking_rate_spin,
         ):
             ctrl.blockSignals(False)
         self._set_dirty(False)
@@ -711,7 +756,14 @@ class SegmentInspectorWidget(QWidget):
         text = self._khmer_text_edit.toPlainText()
         self._khmer_text_label.setText(text or _PLACEHOLDER)
         self._status_override = None
-        self._set_dirty(text != self._saved_khmer_text)
+        self._set_dirty(self._has_draft_changes())
+        self._update_status()
+
+    def _on_speaking_rate_changed(self, _new_val: float) -> None:
+        if self._timeline_clip is None:
+            return
+        self._status_override = None
+        self._set_dirty(self._has_draft_changes())
         self._update_status()
 
     def _set_dirty(self, dirty: bool) -> None:
@@ -735,6 +787,29 @@ class SegmentInspectorWidget(QWidget):
             )
             return
         self._regenerate_button.setEnabled(not self._is_generating and self._segment is not None)
+
+    def _has_draft_changes(self) -> bool:
+        return (
+            self._khmer_text_edit.toPlainText() != self._saved_khmer_text
+            or abs(self._speaking_rate_spin.value() - self._saved_speaking_rate) > 1e-9
+        )
+
+    def _schedule_saved_status_clear(self, clip_id: str) -> None:
+        QTimer.singleShot(
+            _SAVED_CONFIRMATION_MS,
+            lambda: self._clear_saved_status_if_current(clip_id),
+        )
+
+    def _clear_saved_status_if_current(self, clip_id: str) -> None:
+        if (
+            self._timeline_clip is not None
+            and self._timeline_clip.id == clip_id
+            and not self._dirty
+            and not self._is_generating
+            and self._status_override == _STATUS_SAVED
+        ):
+            self._status_override = None
+            self._update_status()
 
     @staticmethod
     def _format_offset(offset_ms: int) -> str:

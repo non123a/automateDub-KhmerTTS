@@ -1,12 +1,16 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from conftest import make_valid_project
+from PySide6.QtCore import Qt
+from PySide6.QtTest import QTest
 
 from automatedub.config import ToolConfig
 from automatedub.vertical_slice.tts import GeneratedSpeech
 from automatedub_studio.backend.regeneration_service import (
+    ClipRegenerationOutcome,
     clip_tts_output_path,
     regenerate_timeline_clip,
 )
@@ -66,6 +70,39 @@ def test_timeline_clip_metadata_serializes_roundtrip(tmp_path):
     assert restored.speaking_rate == 1.1
 
 
+def test_inspector_original_text_is_reference_only(qapp, tmp_path):
+    inspector = SegmentInspectorWidget()
+    inspector.set_timeline_clip(_clip(tmp_path))
+    original = inspector._original_text_label
+
+    assert original.toPlainText() == "source text"
+    assert original.isReadOnly() is True
+    assert (
+        original.textInteractionFlags()
+        & Qt.TextInteractionFlag.TextSelectableByMouse
+    )
+    original.setFocus()
+    original.moveCursor(original.textCursor().MoveOperation.End)
+    QTest.keyClicks(original, " changed")
+    assert original.toPlainText() == "source text"
+
+    original.selectAll()
+    original.copy()
+    assert qapp.clipboard().text() == "source text"
+    assert "reference_text_label" == original.objectName()
+
+
+def test_inspector_khmer_translation_is_editable_with_generation_helper(qapp, tmp_path):
+    inspector = SegmentInspectorWidget()
+    inspector.set_timeline_clip(_clip(tmp_path))
+
+    assert inspector._khmer_text_edit.isReadOnly() is False
+    assert (
+        inspector._translation_helper_label.text()
+        == "Only the Khmer Translation is used when generating speech."
+    )
+
+
 def test_timeline_edits_persist_clip_translation(tmp_path):
     timeline = Timeline.from_clips([_clip(tmp_path)])
     timeline.clip_by_id("khmer:1").khmer_text = "saved khmer"
@@ -98,6 +135,17 @@ def test_inspector_loads_timeline_clip_and_saves_translation(qapp, tmp_path):
     assert inspector.has_unsaved_changes is False
 
 
+def test_editing_speaking_rate_enables_save_and_disables_regenerate(qapp, tmp_path):
+    inspector = SegmentInspectorWidget()
+    inspector.set_timeline_clip(_clip(tmp_path))
+
+    inspector._speaking_rate_spin.setValue(1.25)
+
+    assert inspector.has_unsaved_changes is True
+    assert inspector._save_translation_button.isEnabled() is True
+    assert inspector._regenerate_button.isEnabled() is False
+
+
 def test_inspector_disables_regenerate_until_translation_is_saved(qapp, tmp_path):
     inspector = SegmentInspectorWidget()
     clip = _clip(tmp_path)
@@ -115,6 +163,24 @@ def test_inspector_disables_regenerate_until_translation_is_saved(qapp, tmp_path
 
     assert inspector._save_translation_button.isEnabled() is False
     assert inspector._regenerate_button.isEnabled() is True
+
+
+def test_inspector_save_emits_translation_and_speaking_rate(qapp, tmp_path):
+    inspector = SegmentInspectorWidget()
+    clip = _clip(tmp_path)
+    saved: list[tuple[str, str, float]] = []
+    inspector.clipSaveRequested.connect(
+        lambda clip_id, text, rate: saved.append((clip_id, text, rate))
+    )
+
+    inspector.set_timeline_clip(clip)
+    inspector._khmer_text_edit.setPlainText("new khmer")
+    inspector._speaking_rate_spin.setValue(1.35)
+    inspector.save_translation()
+
+    assert clip.khmer_text == "new khmer"
+    assert clip.speaking_rate == 1.35
+    assert saved == [("khmer:1", "new khmer", 1.35)]
 
 
 def test_inspector_reverts_unsaved_translation(qapp, tmp_path):
@@ -145,6 +211,31 @@ def test_main_window_save_and_reload_persists_clip_translation(qapp, tmp_path):
     reloaded.open_project_path(project_dir)
 
     assert reloaded.timeline.timeline.clip_by_id("khmer:0").khmer_text == "persisted khmer"
+
+
+def test_clip_save_immediately_persists_text_and_speaking_rate_without_changing_translation_json(
+    qapp, tmp_path
+):
+    project_dir = make_valid_project(tmp_path, segment_count=1)
+    translation_path = project_dir / "translation.json"
+    original_translation = json.loads(translation_path.read_text(encoding="utf-8"))
+    window = MainWindow()
+    window.open_project_path(project_dir)
+    clip = window.timeline.timeline.clip_by_id("khmer:0")
+    window.inspector.set_timeline_clip(clip)
+
+    window.inspector._khmer_text_edit.setPlainText("edited khmer")
+    window.inspector._speaking_rate_spin.setValue(1.45)
+    window.inspector.save_translation()
+
+    edited = load_timeline_edits(project_dir)
+    unchanged_translation = json.loads(translation_path.read_text(encoding="utf-8"))
+
+    assert edited is not None
+    edited_clip = edited.clip_by_id("khmer:0")
+    assert edited_clip.khmer_text == "edited khmer"
+    assert edited_clip.speaking_rate == 1.45
+    assert unchanged_translation == original_translation
 
 
 def test_regenerate_timeline_clip_writes_clip_specific_audio(tmp_path):
@@ -199,6 +290,33 @@ def test_regenerate_timeline_clip_uses_only_timeline_clip_khmer_text(tmp_path):
     assert calls == ["edited khmer"]
 
 
+def test_regenerate_timeline_clip_uses_clip_speaking_rate(tmp_path):
+    clip = _clip(tmp_path)
+    clip.speaking_rate = 1.55
+    speeds: list[float] = []
+
+    class Provider:
+        def describe(self):
+            raise AssertionError("unused")
+
+        def generate(self, text: str) -> GeneratedSpeech:
+            return GeneratedSpeech(audio=_wav_bytes())
+
+    def provider_factory(config: ToolConfig) -> Provider:
+        speeds.append(config.tts_speed)
+        return Provider()
+
+    outcome = regenerate_timeline_clip(
+        clip,
+        tmp_path,
+        ToolConfig(tts_speed=1.0),
+        provider_factory=provider_factory,
+    )
+
+    assert outcome.success is True
+    assert speeds == [1.55]
+
+
 def test_main_window_clip_regen_result_replaces_only_selected_clip_source(qapp, tmp_path):
     project_dir = make_valid_project(tmp_path, segment_count=1)
     window = MainWindow()
@@ -219,6 +337,33 @@ def test_main_window_clip_regen_result_replaces_only_selected_clip_source(qapp, 
     assert khmer.source_path == new_path
     assert original.source_path == old_original_path
     assert window.playback_controller._timeline.clip_by_id("khmer:0").source_path == new_path
+
+
+def test_reopen_restores_edited_text_rate_regenerated_source_and_playback(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, segment_count=1)
+    window = MainWindow()
+    window.open_project_path(project_dir)
+    clip = window.timeline.timeline.clip_by_id("khmer:0")
+    window.inspector.set_timeline_clip(clip)
+    window.inspector._khmer_text_edit.setPlainText("reopened khmer")
+    window.inspector._speaking_rate_spin.setValue(1.65)
+    window.inspector.save_translation()
+    new_path = project_dir / "tts" / "clips" / "khmer_0.wav"
+    new_path.parent.mkdir()
+    new_path.write_bytes(_wav_bytes())
+
+    window._on_clip_regen_result(
+        ClipRegenerationOutcome(clip_id="khmer:0", success=True, wav_path=new_path)
+    )
+
+    reloaded = MainWindow()
+    reloaded.open_project_path(project_dir)
+    reloaded_clip = reloaded.timeline.timeline.clip_by_id("khmer:0")
+
+    assert reloaded_clip.khmer_text == "reopened khmer"
+    assert reloaded_clip.speaking_rate == 1.65
+    assert reloaded_clip.source_path == new_path
+    assert reloaded.playback_controller._timeline.clip_by_id("khmer:0").source_path == new_path
 
 
 def test_main_window_clip_regen_completion_updates_inspector_status(qapp, tmp_path):

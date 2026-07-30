@@ -292,6 +292,7 @@ class MainWindow(QMainWindow):
         self.inspector.clipTranslationSaveRequested.connect(
             self._on_clip_translation_save_requested
         )
+        self.inspector.clipSaveRequested.connect(self._on_clip_save_requested)
         self.inspector.clipRegenerateRequested.connect(self._regenerate_timeline_clip)
 
         dock = QDockWidget("Segment Inspector", self)
@@ -458,6 +459,15 @@ class MainWindow(QMainWindow):
 
     def _on_clip_translation_save_requested(self, clip_id: str, khmer_text: str) -> None:
         self.timeline.set_timeline_clip_translation(clip_id, khmer_text)
+        self._refresh_playback_sources()
+
+    def _on_clip_save_requested(
+        self, clip_id: str, khmer_text: str, speaking_rate: float
+    ) -> None:
+        self.timeline.set_timeline_clip_translation(clip_id, khmer_text)
+        self.timeline.set_timeline_clip_speaking_rate(clip_id, speaking_rate)
+        if self.project is not None:
+            save_timeline_edits(self.timeline.timeline, self.project.project_path)
         self._refresh_playback_sources()
 
     def _push_clip_property_command(
@@ -816,6 +826,8 @@ class MainWindow(QMainWindow):
     def _on_clip_regen_result(self, outcome: ClipRegenerationOutcome) -> None:
         if outcome.success and outcome.wav_path is not None:
             self.timeline.set_timeline_clip_source_path(outcome.clip_id, outcome.wav_path)
+            if self.project is not None:
+                save_timeline_edits(self.timeline.timeline, self.project.project_path)
             self.timeline.set_timeline_clip_status(outcome.clip_id, None)
             self.inspector.show_regeneration_completed()
             self.statusBar().showMessage(f"Regeneration completed: {outcome.clip_id}")
@@ -980,7 +992,7 @@ class MainWindow(QMainWindow):
         response = QMessageBox.question(
             self,
             "Unsaved Translation",
-            "Save changes to the selected clip translation?",
+            "You have unsaved changes.",
             QMessageBox.StandardButton.Save
             | QMessageBox.StandardButton.Discard
             | QMessageBox.StandardButton.Cancel,

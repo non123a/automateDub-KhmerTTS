@@ -736,6 +736,11 @@ class TimelineWidget(QWidget):
         clip.khmer_text = khmer_text
         clip.target_text = khmer_text
 
+    def set_timeline_clip_speaking_rate(self, clip_id: str, speaking_rate: float) -> None:
+        clip = self._find_timeline_clip(clip_id)
+        if clip is not None:
+            clip.speaking_rate = max(0.5, min(2.0, speaking_rate))
+
     def set_timeline_clip_source_path(self, clip_id: str, source_path: Path) -> None:
         clip = self._find_timeline_clip(clip_id)
         item = self._clips_by_clip_id.get(clip_id)

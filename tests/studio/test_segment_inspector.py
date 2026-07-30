@@ -87,7 +87,7 @@ def test_set_segment_displays_original_text(qapp):
 
     inspector.set_segment(seg)
 
-    assert inspector._original_text_label.text() == "Original"
+    assert inspector._original_text_label.toPlainText() == "Original"
 
 
 def test_set_segment_displays_khmer_text(qapp):
@@ -116,7 +116,7 @@ def test_set_segment_empty_source_text_shows_placeholder(qapp):
 
     inspector.set_segment(seg)
 
-    assert inspector._original_text_label.text() == _PLACEHOLDER
+    assert inspector._original_text_label.toPlainText() == _PLACEHOLDER
 
 
 def test_set_segment_displays_default_offset(qapp):
