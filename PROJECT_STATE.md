@@ -4,7 +4,7 @@ AutomateDub is a planned knowledge-driven AI localization platform for Khmer med
 
 The current implementation strategy is vertical-slice first. The immediate product proof is the Smallest Working Pipeline: take one Chinese MP4 and produce one playable Khmer MP4 by extracting audio, transcribing speech, translating/localizing dialogue to Khmer, generating Khmer speech, replacing or covering the original dialogue, and rendering a final MP4.
 
-Current milestone: VS5, Render Playable MP4, is the next implementation phase to build. The project has completed VS0 through VS4.
+Current milestone: V5.0A – Application Foundation. The project has completed VS0 through VS4 and the Studio architecture is now being documented in modular subsystem files under `docs/architecture/`.
 
 Completed milestones:
 
