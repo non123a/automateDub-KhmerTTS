@@ -12,6 +12,7 @@ Related documents:
 ## Code Ownership
 
 - `automatedub_studio/project/models.py`
+- `automatedub_studio/project/manager.py`
 - `automatedub_studio/project/loader.py`
 - `automatedub_studio/project/edits.py`
 - `automatedub_studio/project/timeline_edits.py`
@@ -23,6 +24,10 @@ Related documents:
 Common project files include:
 
 - `project.json`: project metadata and source/editor video references.
+- `.autodub/` project folder for new Studio-managed projects.
+- `source/`: imported source video storage.
+- `pipeline/`: pipeline stage artifacts.
+- `timeline/`: timeline-specific project artifacts.
 - `audio.wav`: extracted original movie audio.
 - `translation.json`: imported transcript/translation data.
 - `translation.edited.json`: legacy/edit compatibility data.
@@ -40,6 +45,15 @@ Common project files include:
 5. Load `timeline.edited.json` if present.
 6. Overlay saved timeline values onto `TimelineClip` objects.
 7. Publish the Timeline to Playback.
+
+## Creation Order
+
+1. Home window collects project name, location, source video, and languages.
+2. UI passes a `NewProjectRequest` to `PipelineManager`.
+3. `PipelineManager` runs jobs that call `ProjectManager` for project structure and video copy.
+4. Source video is copied into `source/`.
+5. `project.json` is initialized and updated with pipeline artifact paths.
+6. ProcessingWindow observes pipeline state and can open the editor when the project is ready.
 
 ## Ownership Boundary
 

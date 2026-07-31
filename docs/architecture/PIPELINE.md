@@ -19,6 +19,9 @@ Related documents:
 - `automatedub/vertical_slice/mix.py`
 - `automatedub/vertical_slice/tts_combine.py`
 - `automatedub/vertical_slice/duration_report.py`
+- `automatedub_studio/pipeline/manager.py`
+- `automatedub_studio/pipeline/jobs.py`
+- `automatedub_studio/pipeline/timeline_generation.py`
 
 ## Pipeline Stages
 
@@ -33,6 +36,38 @@ input video
 ```
 
 The current vertical slice has implemented processing through mix artifacts. Studio uses those artifacts as project inputs and edit references.
+
+## Studio Project Pipeline
+
+New Studio projects use an observable Pipeline Manager:
+
+```text
+ProcessingWindow
+    -> observes PipelineManager
+    -> renders stage state
+
+PipelineManager
+    -> Create Project
+    -> Copy Source Video
+    -> Extract Audio
+    -> Transcription through ProviderManager
+    -> Speech Detection artifact
+    -> Translation through ProviderManager
+    -> Timeline Generation
+
+Jobs
+    -> existing vertical-slice modules
+```
+
+Each job emits Started, Progress, Completed, and Failed events. On failure the
+manager stops remaining jobs and leaves retry/cancel decisions to the UI.
+
+TTS generation remains out of this Studio processing flow until a later
+milestone.
+
+AI stages must request provider capabilities through `ProviderManager`. They
+must not instantiate Whisper, translation clients, Camb.ai, or other concrete
+providers directly.
 
 ## Responsibilities
 
@@ -52,8 +87,12 @@ The current vertical slice has implemented processing through mix artifacts. Stu
 
 Studio consumes pipeline output:
 
-- `audio.wav` becomes original audio source material.
-- `translation.json` seeds initial segment and clip metadata.
+- `source/<video>` stores the imported source video.
+- `pipeline/audio.wav` becomes original audio source material.
+- `pipeline/transcript.json` stores transcription output.
+- `pipeline/speech_segments.json` stores detected segment timing.
+- `pipeline/translation.json` seeds initial segment and clip metadata.
+- `timeline/timeline.edited.json` stores the initial Timeline model.
 - `tts/*.wav` seeds Khmer TTS clips.
 - `mixed_audio.wav` and mix plans are export/render artifacts, not editing playback requirements.
 

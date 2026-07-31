@@ -18,6 +18,8 @@ class ToolConfig:
     ffprobe_path: str = "ffprobe"
     whisper_cpp_path: str = "whisper-cli"
     whisper_model_path: Path = Path("models/ggml-small.bin")
+    stt_provider: str = "whisper_cpp"
+    translation_provider: str = "nbwcode"
     nbw_base_url: str = "https://www.nbwcode.top/v1"
     nbw_automatedub_api_key: str | None = None
     localization_model: str = "gpt-5.5"
@@ -59,6 +61,8 @@ def load_tool_config(env_file: Path | None = Path(".env")) -> ToolConfig:
             get_config_value("AUTOMATEDUB_WHISPER_MODEL", "models/ggml-small.bin")
             or "models/ggml-small.bin"
         ),
+        stt_provider=get_config_value("STT_PROVIDER", "whisper_cpp") or "whisper_cpp",
+        translation_provider=get_config_value("TRANSLATION_PROVIDER", "nbwcode") or "nbwcode",
         nbw_base_url=get_config_value("NBW_BASE_URL", "https://www.nbwcode.top/v1")
         or "https://www.nbwcode.top/v1",
         nbw_automatedub_api_key=get_config_value("NBW_AUTOMATEDUB_API_KEY"),

@@ -20,6 +20,8 @@ def test_load_tool_config_reads_environment(monkeypatch):
     monkeypatch.setenv("AUTOMATEDUB_FFPROBE_BIN", "custom-ffprobe")
     monkeypatch.setenv("AUTOMATEDUB_WHISPER_CPP_BIN", "custom-whisper")
     monkeypatch.setenv("AUTOMATEDUB_WHISPER_MODEL", "/models/model.bin")
+    monkeypatch.setenv("STT_PROVIDER", "custom-stt")
+    monkeypatch.setenv("TRANSLATION_PROVIDER", "custom-translation")
     monkeypatch.setenv("NBW_BASE_URL", "https://gateway.example/v1")
     monkeypatch.setenv("NBW_AUTOMATEDUB_API_KEY", "test-key")
     monkeypatch.setenv("LOCALIZATION_MODEL", "test-model")
@@ -39,6 +41,8 @@ def test_load_tool_config_reads_environment(monkeypatch):
     assert tool_config.ffprobe_path == "custom-ffprobe"
     assert tool_config.whisper_cpp_path == "custom-whisper"
     assert str(tool_config.whisper_model_path) == "/models/model.bin"
+    assert tool_config.stt_provider == "custom-stt"
+    assert tool_config.translation_provider == "custom-translation"
     assert tool_config.nbw_base_url == "https://gateway.example/v1"
     assert tool_config.nbw_automatedub_api_key == "test-key"
     assert tool_config.localization_model == "test-model"
@@ -53,6 +57,8 @@ def test_load_tool_config_reads_environment(monkeypatch):
 
 
 def test_load_tool_config_uses_nbw_defaults(monkeypatch):
+    monkeypatch.delenv("STT_PROVIDER", raising=False)
+    monkeypatch.delenv("TRANSLATION_PROVIDER", raising=False)
     monkeypatch.delenv("NBW_BASE_URL", raising=False)
     monkeypatch.delenv("LOCALIZATION_MODEL", raising=False)
     monkeypatch.delenv("TTS_PROVIDER", raising=False)
@@ -64,6 +70,8 @@ def test_load_tool_config_uses_nbw_defaults(monkeypatch):
     tool_config = config.load_tool_config(env_file=None)
 
     assert tool_config.nbw_base_url == "https://www.nbwcode.top/v1"
+    assert tool_config.stt_provider == "whisper_cpp"
+    assert tool_config.translation_provider == "nbwcode"
     assert tool_config.localization_model == "gpt-5.5"
     assert tool_config.tts_provider == "cambai"
     assert tool_config.tts_model == config.DEFAULT_TTS_MODEL
@@ -82,6 +90,8 @@ def test_default_tool_config_fully_mutes_dialogue_windows():
 
 
 def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
+    monkeypatch.delenv("STT_PROVIDER", raising=False)
+    monkeypatch.delenv("TRANSLATION_PROVIDER", raising=False)
     monkeypatch.delenv("NBW_BASE_URL", raising=False)
     monkeypatch.delenv("NBW_AUTOMATEDUB_API_KEY", raising=False)
     monkeypatch.delenv("LOCALIZATION_MODEL", raising=False)
@@ -98,6 +108,8 @@ def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
         "\n".join(
             [
                 "# AutomateDub local config",
+                "STT_PROVIDER=whisper_cpp",
+                "TRANSLATION_PROVIDER=nbwcode",
                 "NBW_BASE_URL=https://gateway.example/v1",
                 "NBW_AUTOMATEDUB_API_KEY=test-key",
                 'LOCALIZATION_MODEL="test model"',
@@ -117,6 +129,8 @@ def test_load_tool_config_reads_dotenv_file(monkeypatch, tmp_path):
     tool_config = config.load_tool_config(env_file=env_file)
 
     assert tool_config.nbw_base_url == "https://gateway.example/v1"
+    assert tool_config.stt_provider == "whisper_cpp"
+    assert tool_config.translation_provider == "nbwcode"
     assert tool_config.nbw_automatedub_api_key == "test-key"
     assert tool_config.localization_model == "test model"
     assert tool_config.tts_provider == "cambai"

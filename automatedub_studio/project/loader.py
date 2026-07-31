@@ -17,9 +17,7 @@ from automatedub.vertical_slice.paths import (
     AUDIO_FILENAME,
     TRANSLATION_FILENAME,
     TTS_DIRECTORY_NAME,
-    audio_output_path,
     mixed_audio_output_path,
-    translation_output_path,
     tts_combined_output_path,
     tts_output_dir_path,
 )
@@ -42,9 +40,9 @@ def validate_project_directory(project_dir: Path) -> None:
         raise ProjectLoadError(f"{project_dir} is not a directory.")
 
     missing = []
-    if not audio_output_path(project_dir).is_file():
+    if not _project_artifact_path(project_dir, AUDIO_FILENAME).is_file():
         missing.append(AUDIO_FILENAME)
-    if not translation_output_path(project_dir).is_file():
+    if not _project_artifact_path(project_dir, TRANSLATION_FILENAME).is_file():
         missing.append(TRANSLATION_FILENAME)
     if not tts_output_dir_path(project_dir).is_dir():
         missing.append(f"{TTS_DIRECTORY_NAME}/")
@@ -110,6 +108,16 @@ def _read_json_file(path: Path) -> dict[str, object]:
     except Exception:  # noqa: BLE001
         return {}
     return data if isinstance(data, dict) else {}
+
+
+def _project_artifact_path(project_dir: Path, filename: str) -> Path:
+    root_path = project_dir / filename
+    if root_path.is_file():
+        return root_path
+    pipeline_path = project_dir / "pipeline" / filename
+    if pipeline_path.is_file():
+        return pipeline_path
+    return root_path
 
 
 def _video_path_from_metadata(
@@ -182,8 +190,8 @@ def load_project(project_dir: Path) -> Project:
     project_dir = Path(project_dir)
     validate_project_directory(project_dir)
 
-    audio_path = audio_output_path(project_dir)
-    translation_path = translation_output_path(project_dir)
+    audio_path = _project_artifact_path(project_dir, AUDIO_FILENAME)
+    translation_path = _project_artifact_path(project_dir, TRANSLATION_FILENAME)
     tts_directory = tts_output_dir_path(project_dir)
 
     segments = load_segments(translation_path)

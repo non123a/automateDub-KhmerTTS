@@ -13,6 +13,9 @@ Related documents:
 - `automatedub/config.py`
 - `automatedub/doctor.py`
 - `automatedub/setup.py`
+- `automatedub_studio/settings/manager.py`
+- `automatedub_studio/ui/settings_window.py`
+- `automatedub_studio/providers/registry.py`
 - Studio usage of `QSettings` in `automatedub_studio/ui/main_window.py`
 
 ## Configuration Sources
@@ -22,6 +25,8 @@ Related documents:
 - CLI arguments.
 - Project metadata such as `project.json`.
 - Studio application preferences through `QSettings`.
+- Studio settings through `SettingsManager`.
+- Provider credentials through `CredentialStore`.
 
 ## Responsibilities
 
@@ -46,6 +51,46 @@ Project metadata describes the project and source/editor media choices. User edi
 Provider selection, API keys, language IDs, model names, and speed defaults should flow through configuration boundaries and provider adapters.
 
 See [PROVIDERS.md](PROVIDERS.md).
+
+## Settings Window
+
+Studio exposes application settings through `SettingsWindow` with sections for:
+
+- General
+- AI Providers
+- Voices
+- Models
+- Cache
+- Logs
+- Advanced
+
+Provider selectors are populated from `ProviderRegistry`; the UI must not keep
+its own hardcoded provider lists. Provider-specific fields come from provider
+descriptors, allowing adapters to define configuration needs such as API key,
+model, default voice, language, timeout, and diagnostics.
+
+## Secure Settings
+
+`SettingsManager` stores non-secret preferences in a user settings file. Secrets
+go through the `CredentialStore` abstraction.
+
+Projects may store provider identifiers and selected voice, but must never store
+API keys.
+
+```text
+SettingsWindow
+    -> SettingsManager
+    -> CredentialStore
+    -> ProviderManager
+    -> ProviderRegistry
+```
+
+## Diagnostics, Cache, And Logs
+
+- Provider diagnostics call `validate()` and report connection/authentication state and latency.
+- Voice browsing calls `TTSProvider.list_voices()`.
+- Cache usage is computed from the configured cache directory, with a clear-cache action.
+- Logs show recent pipeline errors and can open the configured log directory.
 
 ## Future Guidance
 
