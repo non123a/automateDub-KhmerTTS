@@ -35,6 +35,7 @@ Related documents:
 - Expose settings through typed objects such as `ToolConfig`.
 - Keep provider credentials out of project artifacts.
 - Persist user preferences separately from project edit state.
+- Store first-run completion and the default project folder.
 
 ## Non-Responsibilities
 
@@ -63,6 +64,10 @@ Studio exposes application settings through `SettingsWindow` with sections for:
 - Cache
 - Logs
 - Advanced
+
+The first-run wizard uses the same `SettingsManager` boundary for default
+project folder and provider choices, so setup does not introduce a second
+configuration path.
 
 Provider selectors are populated from `ProviderRegistry`; the UI must not keep
 its own hardcoded provider lists. Provider-specific fields come from provider

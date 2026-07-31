@@ -13,6 +13,10 @@ Related documents:
 
 - `automatedub_studio/project/models.py`
 - `automatedub_studio/project/manager.py`
+- `automatedub_studio/project/recent_projects.py`
+- `automatedub_studio/project/browser.py`
+- `automatedub_studio/project/assets.py`
+- `automatedub_studio/project/session.py`
 - `automatedub_studio/project/loader.py`
 - `automatedub_studio/project/edits.py`
 - `automatedub_studio/project/timeline_edits.py`
@@ -55,6 +59,15 @@ Common project files include:
 5. `project.json` is initialized and updated with pipeline artifact paths.
 6. ProcessingWindow observes pipeline state and can open the editor when the project is ready.
 
+## Application Experience Services
+
+- `RecentProjectsManager` persists recent project metadata outside project folders, including name, last-opened time, status, and pinned state.
+- `ProjectBrowser` reads project details and performs project-level actions: rename, duplicate, archive, and delete.
+- `MissingAssetRecovery` checks media references in `project.json` and can relink missing source/editor media.
+- `SessionRecoveryManager` records open sessions and detects unclean shutdown state for recovery prompts.
+
+These services are Qt-free. UI widgets invoke them but do not own filesystem rules.
+
 ## Ownership Boundary
 
 - `translation.json` is imported project data and should not be rewritten by inspector edits.
@@ -74,6 +87,7 @@ Export continues to reference the source video. Preview loads the editor video.
 - Preserve imported `translation.json`.
 - Persist regenerated clip paths when they become timeline state.
 - Keep path handling project-relative where practical for portability.
+- Keep recent-project and session-recovery state in user application data, not inside project edit artifacts.
 
 ## Future Guidance
 

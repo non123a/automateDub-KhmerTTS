@@ -65,6 +65,8 @@ class SettingsData:
     translation_provider_id: str = "nbwcode"
     tts_provider_id: str = "cambai"
     selected_voice: str | None = None
+    default_project_folder: str = ""
+    first_run_completed: bool = False
     provider_settings: dict[str, dict[str, str]] = field(default_factory=dict)
     cache_dir: str = "cache"
     log_dir: str = "logs"
@@ -105,6 +107,8 @@ class SettingsManager:
                 if isinstance(payload.get("selected_voice"), str)
                 else None
             ),
+            default_project_folder=str(payload.get("default_project_folder", "")),
+            first_run_completed=bool(payload.get("first_run_completed", False)),
             provider_settings=_string_map(payload.get("provider_settings")),
             cache_dir=str(payload.get("cache_dir", "cache")),
             log_dir=str(payload.get("log_dir", "logs")),
@@ -134,6 +138,14 @@ class SettingsManager:
             tts_provider_id=tts_provider_id,
             selected_voice=selected_voice,
         )
+        self.save()
+
+    def set_default_project_folder(self, folder: Path | str) -> None:
+        self._data = replace(self._data, default_project_folder=str(folder))
+        self.save()
+
+    def set_first_run_completed(self, completed: bool = True) -> None:
+        self._data = replace(self._data, first_run_completed=completed)
         self.save()
 
     def set_provider_setting(
