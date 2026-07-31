@@ -11,6 +11,9 @@ Related documents:
 
 ## Code Ownership
 
+- `automatedub_studio/export/manager.py`
+- `automatedub_studio/ui/export_wizard.py`
+- `automatedub_studio/ui/export_progress_window.py`
 - `automatedub_studio/backend/export_service.py`
 - `automatedub_studio/backend/export_worker.py`
 - `automatedub_studio/ui/export_dialog.py`
@@ -18,6 +21,8 @@ Related documents:
 
 ## Responsibilities
 
+- Coordinate export jobs through `ExportManager`.
+- Collect user export settings through `ExportWizard`.
 - Build final mix/render plans from current project edit state.
 - Run media rendering through FFmpeg boundaries.
 - Keep rendering work outside the UI thread.
@@ -40,6 +45,48 @@ Export may read:
 ## Outputs
 
 Export writes final user-facing media, typically MP4, and may create temporary intermediate audio during rendering.
+
+Studio-managed exports also write metadata under:
+
+- `exports/<filename>.export.json`
+
+Metadata records the output path, subtitle path, selected codec, quality, audio
+mode, subtitle mode, and stage list for future export history.
+
+## Export Pipeline
+
+```text
+MainWindow
+    -> ExportWizard
+    -> ExportManager
+    -> ExportProgressWindow observes events
+
+ExportManager
+    -> Prepare Timeline
+    -> Render Audio
+    -> Mix Audio
+    -> Generate Subtitles
+    -> Encode Video
+    -> Finalize Export
+```
+
+Every stage reports Started, Progress, Completed, and Failed events. The
+progress window provides Retry, Cancel, Open Folder, and Close controls.
+
+## Export Options
+
+Initial user-facing options:
+
+- output folder
+- filename
+- video quality
+- codec (`h264` initially)
+- audio mode: Khmer only, Original only, Mixed
+- subtitle mode: None, Burned-in, External SRT
+
+The current renderer delegates existing mixed-audio export to the tested
+Milestone 9 backend. Original-only and Khmer-only modes use existing audio
+artifacts when available.
 
 ## Boundary With Playback
 

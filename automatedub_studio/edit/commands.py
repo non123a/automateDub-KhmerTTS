@@ -13,6 +13,7 @@ from PySide6.QtGui import QUndoCommand
 
 from automatedub.vertical_slice.tts import tts_segment_output_path
 from automatedub_studio.project.models import Segment
+from automatedub_studio.timeline.timeline_clip import TimelineClip
 
 
 class ClipClipboard:
@@ -434,3 +435,33 @@ class PasteSegmentsCommand(QUndoCommand):
 
     def _sort_segments(self) -> None:
         self._segments.sort(key=lambda segment: (segment.start, segment.id))
+
+
+class DeleteTimelineClipsCommand(QUndoCommand):
+    """Remove one or more TimelineClips as a single undoable edit."""
+
+    def __init__(
+        self,
+        clip_ids: list[str],
+        remove_cb: Callable[[str], TimelineClip | None],
+        restore_cb: Callable[[TimelineClip], None],
+    ):
+        super().__init__(f"Delete {len(clip_ids)} clips")
+        self._clip_ids = list(clip_ids)
+        self._remove_cb = remove_cb
+        self._restore_cb = restore_cb
+        self._removed: list[TimelineClip] = []
+
+    def undo(self) -> None:
+        for clip in self._removed:
+            self._restore_cb(clip)
+
+    def redo(self) -> None:
+        if not self._removed:
+            for clip_id in self._clip_ids:
+                clip = self._remove_cb(clip_id)
+                if clip is not None:
+                    self._removed.append(clip)
+            return
+        for clip_id in self._clip_ids:
+            self._remove_cb(clip_id)

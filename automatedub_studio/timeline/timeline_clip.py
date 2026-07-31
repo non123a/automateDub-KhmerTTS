@@ -27,6 +27,28 @@ REFERENCE_TRACK_IDS = (
 
 
 @dataclass
+class TimelineMarker:
+    id: str
+    time_ms: int
+    comment: str = ""
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "time_ms": self.time_ms,
+            "comment": self.comment,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> TimelineMarker:
+        return cls(
+            id=str(data["id"]),
+            time_ms=int(data["time_ms"]),
+            comment=str(data.get("comment", "")),
+        )
+
+
+@dataclass
 class TimelineClip:
     """A true timeline clip with state owned independently from transcript data."""
 
@@ -189,6 +211,7 @@ class TimelineTrack:
 @dataclass
 class Timeline:
     tracks: list[TimelineTrack] = field(default_factory=list)
+    markers: list[TimelineMarker] = field(default_factory=list)
 
     @classmethod
     def default(cls) -> Timeline:
@@ -266,6 +289,19 @@ class Timeline:
     def clip_by_id(self, clip_id: str) -> TimelineClip | None:
         return next((clip for clip in self.all_clips() if clip.id == clip_id), None)
 
+    def remove_clip(self, clip_id: str) -> TimelineClip | None:
+        clip = self.clip_by_id(clip_id)
+        if clip is None:
+            return None
+        track = self.track_by_id(clip.track_id)
+        if track is None:
+            return None
+        try:
+            track.clips.remove(clip)
+        except ValueError:
+            return None
+        return clip
+
     def move_clip_to_track(self, clip_id: str, track_id: str) -> bool:
         clip = self.clip_by_id(clip_id)
         if clip is None:
@@ -341,11 +377,17 @@ class Timeline:
         return sorted(fallback_clips, key=lambda clip: (clip.start_time, clip.track_id, clip.id))
 
     def to_dict(self) -> dict:
-        return {"tracks": [track.to_dict() for track in self.tracks]}
+        return {
+            "tracks": [track.to_dict() for track in self.tracks],
+            "markers": [marker.to_dict() for marker in self.markers],
+        }
 
     @classmethod
     def from_dict(cls, data: dict) -> Timeline:
-        return cls(tracks=[TimelineTrack.from_dict(item) for item in data.get("tracks", [])])
+        return cls(
+            tracks=[TimelineTrack.from_dict(item) for item in data.get("tracks", [])],
+            markers=[TimelineMarker.from_dict(item) for item in data.get("markers", [])],
+        )
 
 
 def active_clips(

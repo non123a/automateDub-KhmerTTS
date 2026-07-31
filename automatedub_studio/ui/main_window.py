@@ -9,7 +9,9 @@ from typing import Any
 from PySide6.QtCore import QSettings, Qt, QThreadPool
 from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QUndoStack
 from PySide6.QtWidgets import (
+    QDialog,
     QDockWidget,
+    QDoubleSpinBox,
     QFileDialog,
     QInputDialog,
     QMainWindow,
@@ -23,8 +25,6 @@ from PySide6.QtWidgets import (
 
 from automatedub.config import ToolConfig, load_tool_config
 from automatedub.vertical_slice.tts import tts_segment_output_path
-from automatedub_studio.backend.export_service import ExportOptions
-from automatedub_studio.backend.export_worker import ExportJob, ExportRunner
 from automatedub_studio.backend.jobs import ClipRegenerationJob, JobRunner, RegenerationJob
 from automatedub_studio.backend.regeneration_service import (
     ClipRegenerationOutcome,
@@ -37,6 +37,7 @@ from automatedub_studio.backend.regeneration_service import (
 from automatedub_studio.backend.video_proxy_job import VideoProxyJob
 from automatedub_studio.edit.commands import (
     ClipClipboard,
+    DeleteTimelineClipsCommand,
     MultiTimelineClipOffsetChangeCommand,
     MultiTimelineClipPropertyChangeCommand,
     PasteSegmentsCommand,
@@ -45,6 +46,7 @@ from automatedub_studio.edit.commands import (
     TimelineClipPropertyChangeCommand,
     TimelineClipTrimCommand,
 )
+from automatedub_studio.export.manager import ExportManager
 from automatedub_studio.inspector.segment_inspector import SegmentInspectorWidget
 from automatedub_studio.playback.playback_controller import PlaybackController
 from automatedub_studio.playback.video_player import VideoPlayerWidget
@@ -78,7 +80,8 @@ from automatedub_studio.timeline.timeline_clip import (
 )
 from automatedub_studio.timeline.timeline_widget import TimelineWidget
 from automatedub_studio.ui.about_dialog import AboutDialog
-from automatedub_studio.ui.export_dialog import ExportProgressDialog
+from automatedub_studio.ui.export_progress_window import ExportProgressWindow
+from automatedub_studio.ui.export_wizard import ExportWizard
 from automatedub_studio.ui.project_info_panel import ProjectInfoPanel
 
 WINDOW_TITLE = "AutomateDub Studio"
@@ -99,8 +102,8 @@ class MainWindow(QMainWindow):
         self._undo_stack = QUndoStack(self)
         self._tool_config = tool_config if tool_config is not None else load_tool_config()
         self._job_runner = JobRunner()
-        self._export_runner = ExportRunner()
-        self._export_dialog: ExportProgressDialog | None = None
+        self._export_managers: list[ExportManager] = []
+        self._export_windows: list[ExportProgressWindow] = []
         self._progress_dialog: QProgressDialog | None = None
         self._video_proxy_dialog: QProgressDialog | None = None
         self._video_proxy_job: VideoProxyJob | None = None
@@ -187,6 +190,69 @@ class MainWindow(QMainWindow):
         self.play_pause_action.triggered.connect(self._toggle_play_pause)
         edit_menu.addAction(self.play_pause_action)
 
+        self.delete_clip_action = QAction("Delete Clips", self)
+        self.delete_clip_action.setShortcut(QKeySequence.StandardKey.Delete)
+        self.delete_clip_action.triggered.connect(self._delete_selected_clips)
+        edit_menu.addAction(self.delete_clip_action)
+
+        self.search_clip_action = QAction("Find Clips...", self)
+        self.search_clip_action.setShortcut(QKeySequence.StandardKey.Find)
+        self.search_clip_action.triggered.connect(self._find_clips)
+        edit_menu.addAction(self.search_clip_action)
+
+        self.add_marker_action = QAction("Add Marker...", self)
+        self.add_marker_action.setShortcut("M")
+        self.add_marker_action.triggered.connect(self._add_marker)
+        edit_menu.addAction(self.add_marker_action)
+
+        self.ripple_editing_action = QAction("Ripple Editing", self)
+        self.ripple_editing_action.setCheckable(True)
+        self.ripple_editing_action.toggled.connect(self._on_ripple_editing_toggled)
+        edit_menu.addAction(self.ripple_editing_action)
+
+        playback_menu = menu_bar.addMenu("&Playback")
+        self.step_back_action = QAction("Frame Step Back", self)
+        self.step_back_action.triggered.connect(self._step_frame_back)
+        playback_menu.addAction(self.step_back_action)
+
+        self.step_forward_action = QAction("Frame Step Forward", self)
+        self.step_forward_action.triggered.connect(self._step_frame_forward)
+        playback_menu.addAction(self.step_forward_action)
+
+        playback_menu.addSeparator()
+
+        self.previous_segment_action = QAction("Previous Segment", self)
+        self.previous_segment_action.triggered.connect(self._previous_segment)
+        playback_menu.addAction(self.previous_segment_action)
+
+        self.next_segment_action = QAction("Next Segment", self)
+        self.next_segment_action.triggered.connect(self._next_segment)
+        playback_menu.addAction(self.next_segment_action)
+
+        self.loop_selection_action = QAction("Loop Selection", self)
+        self.loop_selection_action.setCheckable(True)
+        self.loop_selection_action.toggled.connect(self._on_loop_selection_toggled)
+        playback_menu.addAction(self.loop_selection_action)
+
+        self.playback_rate_action = QAction("Playback Speed", self)
+        playback_menu.addAction(self.playback_rate_action)
+
+        view_menu = menu_bar.addMenu("&View")
+        self.zoom_in_action = QAction("Zoom In", self)
+        self.zoom_in_action.setShortcut(QKeySequence.StandardKey.ZoomIn)
+        self.zoom_in_action.triggered.connect(self._zoom_in_timeline)
+        view_menu.addAction(self.zoom_in_action)
+
+        self.zoom_out_action = QAction("Zoom Out", self)
+        self.zoom_out_action.setShortcut(QKeySequence.StandardKey.ZoomOut)
+        self.zoom_out_action.triggered.connect(self._zoom_out_timeline)
+        view_menu.addAction(self.zoom_out_action)
+
+        self.fit_timeline_action = QAction("Fit Timeline", self)
+        self.fit_timeline_action.setShortcut("F")
+        self.fit_timeline_action.triggered.connect(self._fit_timeline)
+        view_menu.addAction(self.fit_timeline_action)
+
         help_menu = menu_bar.addMenu("&Help")
         self.about_action = QAction("About", self)
         self.about_action.triggered.connect(self._show_about_dialog)
@@ -241,6 +307,45 @@ class MainWindow(QMainWindow):
         self.mute_paint_action.setCheckable(True)
         self.mute_paint_action.toggled.connect(self._on_mute_paint_toggled)
         toolbar.addAction(self.mute_paint_action)
+
+        toolbar.addSeparator()
+        toolbar.addAction(self.play_pause_action)
+
+        self.stop_action = QAction("Stop", self)
+        self.stop_action.triggered.connect(self._stop_playback)
+        toolbar.addAction(self.stop_action)
+
+        self.step_back_action_toolbar = QAction("Frame Step Back", self)
+        self.step_back_action_toolbar.triggered.connect(self._step_frame_back)
+        toolbar.addAction(self.step_back_action_toolbar)
+
+        self.step_forward_action_toolbar = QAction("Frame Step Forward", self)
+        self.step_forward_action_toolbar.triggered.connect(self._step_frame_forward)
+        toolbar.addAction(self.step_forward_action_toolbar)
+
+        self.previous_segment_action_toolbar = QAction("Previous Segment", self)
+        self.previous_segment_action_toolbar.triggered.connect(self._previous_segment)
+        toolbar.addAction(self.previous_segment_action_toolbar)
+
+        self.next_segment_action_toolbar = QAction("Next Segment", self)
+        self.next_segment_action_toolbar.triggered.connect(self._next_segment)
+        toolbar.addAction(self.next_segment_action_toolbar)
+
+        toolbar.addSeparator()
+        self._playback_rate_spin = QDoubleSpinBox(self)
+        self._playback_rate_spin.setRange(0.25, 4.0)
+        self._playback_rate_spin.setSingleStep(0.25)
+        self._playback_rate_spin.setDecimals(2)
+        self._playback_rate_spin.setValue(1.00)
+        self._playback_rate_spin.setSuffix("x")
+        self._playback_rate_spin.valueChanged.connect(self._on_playback_rate_changed)
+        toolbar.addWidget(self._playback_rate_spin)
+
+        toolbar.addSeparator()
+        toolbar.addAction(self.loop_selection_action)
+        toolbar.addAction(self.zoom_in_action)
+        toolbar.addAction(self.zoom_out_action)
+        toolbar.addAction(self.fit_timeline_action)
 
     def _build_status_bar(self) -> None:
         self.statusBar().showMessage("Ready")
@@ -321,6 +426,83 @@ class MainWindow(QMainWindow):
 
     def _toggle_play_pause(self) -> None:
         self.playback_controller.toggle_play_pause()
+
+    def _stop_playback(self) -> None:
+        self.playback_controller.stop()
+
+    def _step_frame_back(self) -> None:
+        self.playback_controller.step_frame(-1)
+
+    def _step_frame_forward(self) -> None:
+        self.playback_controller.step_frame(1)
+
+    def _previous_segment(self) -> None:
+        self.playback_controller.previous_segment()
+
+    def _next_segment(self) -> None:
+        self.playback_controller.next_segment()
+
+    def _on_loop_selection_toggled(self, enabled: bool) -> None:
+        self.playback_controller.set_loop_selection_enabled(enabled)
+        self.timeline.set_loop_selection_enabled(enabled)
+
+    def _on_ripple_editing_toggled(self, enabled: bool) -> None:
+        self.timeline.set_ripple_editing_enabled(enabled)
+
+    def _on_playback_rate_changed(self, rate: float) -> None:
+        self.playback_controller.set_playback_rate(rate)
+
+    def _zoom_in_timeline(self) -> None:
+        self.timeline.zoom_in()
+
+    def _zoom_out_timeline(self) -> None:
+        self.timeline.zoom_out()
+
+    def _fit_timeline(self) -> None:
+        self.timeline.fit_timeline()
+
+    def _add_marker(self) -> None:
+        comment, ok = QInputDialog.getText(
+            self,
+            "Add Marker",
+            "Marker comment:",
+        )
+        if not ok:
+            return
+        self.timeline.add_marker(comment.strip(), self.timeline.playhead_ms)
+
+    def _find_clips(self) -> None:
+        query, ok = QInputDialog.getText(
+            self,
+            "Find Clips",
+            "Search transcript or translation:",
+        )
+        if not ok or not query.strip():
+            return
+        matches = self.timeline.find_matching_clips(query)
+        if not matches:
+            self.statusBar().showMessage(f'No clips found for "{query}".', 2500)
+            return
+        self.timeline.jump_to_clip(matches[0].id)
+        self.statusBar().showMessage(
+            f'Found {len(matches)} clip(s) for "{query}".', 2500
+        )
+
+    def _delete_selected_clips(self) -> None:
+        selected = [
+            clip
+            for clip in self.timeline.selected_timeline_clips
+            if clip.track_id not in REFERENCE_TRACK_IDS
+        ]
+        if not selected:
+            self._show_reference_read_only_message()
+            return
+        cmd = DeleteTimelineClipsCommand(
+            [clip.id for clip in selected],
+            remove_cb=self.timeline.remove_timeline_clip,
+            restore_cb=self.timeline.add_timeline_clip,
+        )
+        self._undo_stack.push(cmd)
 
     def _on_timeline_seek_requested(self, position_ms: int) -> None:
         self.playback_controller.seek(position_ms)
@@ -1037,40 +1219,49 @@ class MainWindow(QMainWindow):
     def _export_video(self) -> None:
         if self.project is None:
             return
-        default_name = f"{self.project.project_path.name}_dubbed.mp4"
-        output_path_str, _ = QFileDialog.getSaveFileName(
-            self,
-            "Export Video",
-            str(self.project.project_path / default_name),
-            "MP4 Video (*.mp4)",
+        default_name = f"{self.project.project_path.name}_dubbed"
+        wizard = ExportWizard(
+            default_output_folder=self.project.project_path / "exports",
+            default_filename=default_name,
+            parent=self,
         )
-        if not output_path_str:
+        if wizard.exec() != QDialog.DialogCode.Accepted:
             return
-        output_path = Path(output_path_str)
-
-        self._export_dialog = ExportProgressDialog(self)
-        job = ExportJob(
+        manager = ExportManager(
             project=self.project,
             editables=self._editables,
             tool_config=self._tool_config,
-            options=ExportOptions(output_path=output_path),
+            configuration=wizard.configuration(),
         )
-        job.signals.stageChanged.connect(self._export_dialog.on_stage_changed)
-        job.signals.finished.connect(self._on_export_finished)
-        job.signals.errorOccurred.connect(self._on_export_error)
-        self._export_runner.submit(job)
+        window = ExportProgressWindow(manager, self)
+        manager.exportCompleted.connect(self._on_managed_export_finished)
+        manager.exportFailed.connect(self._on_managed_export_error)
+        self._export_managers.append(manager)
+        self._export_windows.append(window)
+        window.show()
+        manager.start()
 
-        self._export_dialog.exec()
+    def _legacy_export_video(self) -> None:
+        if self.project is None:
+            return
+        _output_path_str, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Video",
+            str(self.project.project_path / f"{self.project.project_path.name}_dubbed.mp4"),
+            "MP4 Video (*.mp4)",
+        )
 
     def _on_export_finished(self, result) -> None:
-        if self._export_dialog is not None:
-            self._export_dialog.on_finished(result)
         self.statusBar().showMessage(f"Export complete: {result.output_path.name}")
 
     def _on_export_error(self, message: str) -> None:
-        if self._export_dialog is not None:
-            self._export_dialog.on_error(message)
         self.statusBar().showMessage(f"Export failed: {message}")
+
+    def _on_managed_export_finished(self, result) -> None:
+        self.statusBar().showMessage(f"Export complete: {result.output_path.name}")
+
+    def _on_managed_export_error(self, event) -> None:
+        self.statusBar().showMessage(f"Export failed: {event.error or event.message}")
 
     @staticmethod
     def _status_message(project: Project) -> str:

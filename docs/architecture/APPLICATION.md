@@ -18,10 +18,13 @@ Related documents:
 - `automatedub_studio/ui/new_project_wizard.py`: New Project wizard UI.
 - `automatedub_studio/ui/processing_window.py`: project processing progress UI.
 - `automatedub_studio/ui/settings_window.py`: application settings UI.
+- `automatedub_studio/ui/export_wizard.py`: export configuration UI.
+- `automatedub_studio/ui/export_progress_window.py`: export progress UI.
 - `automatedub_studio/ui/main_window.py`: main shell and orchestration.
 - `automatedub_studio/ui/project_info_panel.py`: project metadata display.
 - `automatedub_studio/inspector/segment_inspector.py`: selected clip inspector.
 - `automatedub_studio/pipeline/manager.py`: observable pipeline coordinator.
+- `automatedub_studio/export/manager.py`: export pipeline coordinator.
 
 ## Responsibilities
 
@@ -30,7 +33,7 @@ Related documents:
 - Connect Timeline, Inspector, Playback, Project, Regeneration, and Export signals.
 - Keep the UI responsive by running long jobs through background workers.
 - Present non-intrusive feedback for expected blocked operations.
-- Preserve application-level shortcuts such as Play/Pause and timeline editing commands.
+- Preserve application-level shortcuts such as Play/Pause, frame stepping, marker creation, search, delete, zoom, and timeline editing commands.
 
 ## Non-Responsibilities
 
@@ -59,6 +62,8 @@ MainWindow
     -> initializes Timeline
     -> publishes Timeline to Playback
     -> routes Inspector edits into Timeline commands
+    -> owns playback/timeline actions (zoom, frame step, markers, search, delete, loop selection)
+    -> starts ExportManager from ExportWizard
     -> starts backend jobs for regeneration/export/proxy creation
 ```
 

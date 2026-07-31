@@ -28,7 +28,7 @@ Timeline
         -> TimelineClip[]
 ```
 
-`TimelineClip` is the live source of truth during editing. It owns clip identity, track, timing, source path/window, mute/volume, lock state, text metadata, voice settings, and selection state.
+`TimelineClip` is the live source of truth during editing. It owns clip identity, track, timing, source path/window, mute/volume, lock state, text metadata, voice settings, and selection state. `Timeline` also owns timeline markers for navigation.
 
 ## Initial Track Layout
 
@@ -47,9 +47,10 @@ Reference tracks are read-only. Khmer TTS and Draft Regeneration clips remain ed
 ## Responsibilities
 
 - Own track and clip models.
-- Draw track headers, clips, waveform previews, ruler, and playhead.
-- Manage clip selection and marquee/range selection.
-- Apply move, trim, mute, copy/paste, duplicate, and split commands where allowed.
+- Draw track headers, clips, waveform previews, markers, ruler, and playhead.
+- Manage clip selection, marquee/range selection, zoom, fit-to-screen, and drag-to-pan.
+- Apply move, trim, mute, copy/paste, duplicate, split, delete, and marker commands where allowed.
+- Snap drags to clips, playhead, markers, or the configured grid.
 - Emit changes when the Timeline model mutates.
 - Persist through project timeline edit serialization.
 
@@ -70,6 +71,7 @@ Blocked edit attempts emit a non-modal read-only status signal.
 - Timeline does not decode audio for playback.
 - Timeline does not export final media.
 - Timeline does not use `Segment` or `EditableSegment` as live edit state.
+- Timeline does not own long-running processing jobs.
 
 ## Playback Relationship
 

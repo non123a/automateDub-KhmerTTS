@@ -29,7 +29,7 @@ from automatedub_studio.timeline.ruler_widget import (
     TimelineRulerWidget,
     snap_offset,
 )
-from automatedub_studio.timeline.state import TimelineState
+from automatedub_studio.timeline.state import TimelinePlaybackState, TimelineState
 from automatedub_studio.timeline.timeline_clip import (
     AUDIO_TRACK_3_ID,
     AUDIO_TRACK_4_ID,
@@ -39,8 +39,10 @@ from automatedub_studio.timeline.timeline_clip import (
     ORIGINAL_AUDIO_TRACK_ID,
     ORIGINAL_MOVIE_AUDIO_TRACK_ID,
     REFERENCE_TRACK_IDS,
+    VIDEO_TRACK_ID,
     Timeline,
     TimelineClip,
+    TimelineMarker,
     TimelineTrack,
 )
 from automatedub_studio.timeline.waveform_cache import WaveformCache
@@ -157,6 +159,10 @@ class _TimelineView(QGraphicsView):
         self._dragging: bool = False
         self._drag_label: QGraphicsTextItem | None = None
         self._drag_target_rect: QGraphicsRectItem | None = None
+        self._pan_active = False
+        self._pan_press_pos = None
+        self._pan_scroll_x = 0
+        self._pan_scroll_y = 0
         self._trim_clip: ClipItem | None = None
         self._trim_handle: str | None = None
         self._trim_press_scene_x: float = 0.0
@@ -202,6 +208,13 @@ class _TimelineView(QGraphicsView):
             super().wheelEvent(event)
 
     def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self._pan_active = True
+            self._pan_press_pos = event.position()
+            self._pan_scroll_x = self.horizontalScrollBar().value()
+            self._pan_scroll_y = self.verticalScrollBar().value()
+            event.accept()
+            return
         if event.button() != Qt.MouseButton.LeftButton:
             super().mousePressEvent(event)
             return
@@ -295,6 +308,15 @@ class _TimelineView(QGraphicsView):
             self.clipPlayRequested.emit(item.segment.id)
 
     def mouseMoveEvent(self, event) -> None:
+        if self._pan_active and event.buttons() & Qt.MouseButton.MiddleButton:
+            if self._pan_press_pos is not None:
+                delta = event.position() - self._pan_press_pos
+                self.horizontalScrollBar().setValue(
+                    int(self._pan_scroll_x - delta.x())
+                )
+                self.verticalScrollBar().setValue(int(self._pan_scroll_y - delta.y()))
+                event.accept()
+                return
         if self._playhead_dragging and event.buttons() & Qt.MouseButton.LeftButton:
             scene_pos = self.mapToScene(event.position().toPoint())
             self.timelineSeekRequested.emit(self._scene_x_to_time_ms(scene_pos.x()))
@@ -343,6 +365,11 @@ class _TimelineView(QGraphicsView):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:
+        if self._pan_active and event.button() == Qt.MouseButton.MiddleButton:
+            self._pan_active = False
+            self._pan_press_pos = None
+            event.accept()
+            return
         if self._playhead_dragging and event.button() == Qt.MouseButton.LeftButton:
             scene_pos = self.mapToScene(event.position().toPoint())
             self.timelineSeekRequested.emit(self._scene_x_to_time_ms(scene_pos.x()))
@@ -425,11 +452,18 @@ class _TimelineView(QGraphicsView):
             start_ms = round(
                 (x - (LANE_LABEL_WIDTH + SCENE_MARGIN_H)) / BASE_PIXELS_PER_SECOND * 1000
             )
-            x = (
-                LANE_LABEL_WIDTH
-                + SCENE_MARGIN_H
-                + snap_offset(start_ms, self._snap_interval_ms) / 1000.0 * BASE_PIXELS_PER_SECOND
+            snapped_seconds = self._snap_time_to_targets(
+                self._drag_clip, start_ms / 1000.0
             )
+            x = LANE_LABEL_WIDTH + SCENE_MARGIN_H + snapped_seconds * BASE_PIXELS_PER_SECOND
+            if abs(snapped_seconds - start_ms / 1000.0) < 1e-9:
+                x = (
+                    LANE_LABEL_WIDTH
+                    + SCENE_MARGIN_H
+                    + snap_offset(start_ms, self._snap_interval_ms)
+                    / 1000.0
+                    * BASE_PIXELS_PER_SECOND
+                )
         self._drag_clip.lane = lane
         self._drag_clip.setRect(x, _lane_y(lane) + 4, rect.width(), rect.height())
         self._drag_clip.setX(0)
@@ -615,6 +649,7 @@ class TimelineWidget(QWidget):
         self._timeline_clips: list[TimelineClip] = []
         self._clips_by_clip_id: dict[str, ClipItem] = {}
         self._lane_items_by_track: dict[str, list[object]] = {}
+        self._marker_items: list[object] = []
         self._waveform_cache = WaveformCache()
         self._audio_path: Path | None = None
         self._tts_directory: Path | None = None
@@ -731,6 +766,8 @@ class TimelineWidget(QWidget):
             self._playhead.setLine(x, 0, x, _scene_height())
         self._ensure_scene_rect_covers_time(position_ms / 1000.0)
         self._ruler.set_playhead_position(position_ms)
+        if self._state.playback_state == TimelinePlaybackState.PLAYING:
+            self._auto_scroll_playhead(x)
 
     @property
     def selected_segment(self) -> Segment | None:
@@ -776,6 +813,10 @@ class TimelineWidget(QWidget):
         return self._timeline
 
     @property
+    def markers(self) -> list[TimelineMarker]:
+        return list(self._timeline.markers)
+
+    @property
     def _clips(self) -> list[ClipItem]:
         return sorted(
             self._clips_by_clip_id.values(),
@@ -799,6 +840,99 @@ class TimelineWidget(QWidget):
         for clip in clips:
             # rect().x() is the fixed scene-x set at construction; pos() is the delta
             clip.setX(new_x - clip.rect().x())
+
+    def zoom_in(self) -> None:
+        self._apply_zoom(_ZOOM_STEP)
+
+    def zoom_out(self) -> None:
+        self._apply_zoom(1.0 / _ZOOM_STEP)
+
+    def fit_timeline(self) -> None:
+        duration_seconds = max(
+            self._duration_ms / 1000.0,
+            max((clip.end_time for clip in self._timeline_clips), default=0.0),
+            max((marker.time_ms for marker in self._timeline.markers), default=0) / 1000.0,
+            0.5,
+        )
+        available_width = max(1, self._view.viewport().width() - LANE_LABEL_WIDTH - SCENE_MARGIN_H)
+        target_width = max(1.0, duration_seconds * BASE_PIXELS_PER_SECOND)
+        zoom = available_width / target_width
+        self._apply_zoom(max(_MIN_ZOOM, min(_MAX_ZOOM, zoom)))
+        self._view.horizontalScrollBar().setValue(0)
+
+    def set_ripple_editing_enabled(self, enabled: bool) -> None:
+        self._state.ripple_editing_enabled = enabled
+
+    def set_loop_selection_enabled(self, enabled: bool) -> None:
+        self._state.loop_selection_enabled = enabled
+
+    def add_marker(self, comment: str, position_ms: int | None = None) -> TimelineMarker:
+        marker_id = f"marker:{len(self._timeline.markers)}"
+        marker = TimelineMarker(
+            id=marker_id,
+            time_ms=self._playhead_ms if position_ms is None else max(0, position_ms),
+            comment=comment,
+        )
+        self._timeline.markers.append(marker)
+        self._timeline.markers.sort(key=lambda item: (item.time_ms, item.id))
+        self._rebuild_scene(self._segments)
+        self.timelineChanged.emit()
+        return marker
+
+    def find_matching_clips(self, query: str) -> list[TimelineClip]:
+        query = query.casefold().strip()
+        if not query:
+            return []
+        matches = []
+        for clip in self._timeline_clips:
+            haystack = " ".join(
+                value.casefold()
+                for value in (
+                    clip.source_text,
+                    clip.target_text,
+                    clip.chinese_text,
+                    clip.khmer_text,
+                    clip.voice_model,
+                )
+                if value
+            )
+            if query in haystack:
+                matches.append(clip)
+        return matches
+
+    def jump_to_clip(self, clip_id: str) -> bool:
+        clip = self._find_timeline_clip(clip_id)
+        if clip is None:
+            return False
+        self.select_timeline_clip_ids([clip_id])
+        self.set_playhead_position(round(clip.start_time * 1000))
+        self._view.centerOn(
+            self._time_to_x(clip.start_time),
+            _lane_y(self._lane_for_track_id(clip.track_id) or 0),
+        )
+        return True
+
+    def previous_clip_start_ms(self, position_ms: int) -> int | None:
+        position_seconds = position_ms / 1000.0
+        candidates = [
+            clip.start_time
+            for clip in self._timeline_clips
+            if clip.track_id != VIDEO_TRACK_ID and clip.start_time < position_seconds
+        ]
+        if not candidates:
+            return None
+        return round(max(candidates) * 1000)
+
+    def next_clip_start_ms(self, position_ms: int) -> int | None:
+        position_seconds = position_ms / 1000.0
+        candidates = [
+            clip.start_time
+            for clip in self._timeline_clips
+            if clip.track_id != VIDEO_TRACK_ID and clip.start_time > position_seconds
+        ]
+        if not candidates:
+            return None
+        return round(min(candidates) * 1000)
 
     def apply_timeline_clip_offset(self, clip_id: str, offset_ms: int) -> None:
         """Move one independent timeline clip without moving its sibling track clip."""
@@ -866,6 +1000,15 @@ class TimelineWidget(QWidget):
         self._timeline_clips = self._timeline.all_clips()
         self._rebuild_scene(self._segments)
         self.timelineChanged.emit()
+
+    def remove_timeline_clip(self, clip_id: str) -> TimelineClip | None:
+        clip = self._timeline.remove_clip(clip_id)
+        if clip is None:
+            return None
+        self._timeline_clips = self._timeline.all_clips()
+        self._rebuild_scene(self._segments)
+        self.timelineChanged.emit()
+        return clip
 
     def set_timeline_clip_fade_in(self, clip_id: str, fade_in_ms: int) -> None:
         clip = self._find_timeline_clip(clip_id)
@@ -1141,9 +1284,11 @@ class TimelineWidget(QWidget):
         self._clips_by_segment = {}
         self._clips_by_clip_id = {}
         self._lane_items_by_track = {}
+        self._marker_items = []
         self._playhead = None
         self._draw_static_lanes(self._duration_ms)
         self._draw_clips(segments)
+        self._draw_markers()
         self._draw_playhead()
 
     def _find_segment(self, segment_id: int) -> Segment | None:
@@ -1166,6 +1311,27 @@ class TimelineWidget(QWidget):
             or clip.track_id in REFERENCE_TRACK_IDS
             or (track and track.locked)
         )
+
+    def _snap_time_to_targets(self, clip: TimelineClip, proposed_start_s: float) -> float:
+        if not self._view._snap_enabled:
+            return proposed_start_s
+        snap_candidates: list[float] = [round(self._playhead_ms) / 1000.0]
+        for marker in self._timeline.markers:
+            snap_candidates.append(marker.time_ms / 1000.0)
+        for other in self._timeline_clips:
+            if other.id == clip.id:
+                continue
+            snap_candidates.extend([other.start_time, other.end_time])
+        desired = proposed_start_s
+        best = desired
+        best_distance = float("inf")
+        threshold = max(0.08, self._view._snap_interval_ms / 1000.0)
+        for candidate in snap_candidates:
+            distance = abs(candidate - desired)
+            if distance <= threshold and distance < best_distance:
+                best = candidate
+                best_distance = distance
+        return best
 
     def _notify_reference_clip_blocked(self, clip: TimelineClip) -> None:
         if clip.track_id in REFERENCE_TRACK_IDS:
@@ -1267,6 +1433,22 @@ class TimelineWidget(QWidget):
             if segment is not None:
                 self._clips_by_segment.setdefault(segment.id, []).append(clip)
             self._clips_by_clip_id[timeline_clip.id] = clip
+
+    def _draw_markers(self) -> None:
+        for marker in self._timeline.markers:
+            x = self._time_to_x(marker.time_ms / 1000.0)
+            line = QGraphicsLineItem(x, 0, x, _scene_height())
+            line.setPen(QPen(QColor("#E6A23C"), 1, Qt.PenStyle.DashLine))
+            line.setZValue(500)
+            self._scene.addItem(line)
+            self._marker_items.append(line)
+
+            label = QGraphicsTextItem(marker.comment or "Marker")
+            label.setDefaultTextColor(QColor("#E6A23C"))
+            label.setPos(x + 4, 2)
+            label.setZValue(501)
+            self._scene.addItem(label)
+            self._marker_items.append(label)
 
     def _build_timeline(self, segments: list[Segment]) -> Timeline:
         timeline = Timeline.default()
@@ -1393,6 +1575,22 @@ class TimelineWidget(QWidget):
         self._playhead.setZValue(1000)
         self._scene.addItem(self._playhead)
 
+    def _auto_scroll_playhead(self, playhead_x: float) -> None:
+        view = self._view
+        viewport_rect = view.viewport().rect()
+        if viewport_rect.isNull():
+            return
+        mapped = view.mapFromScene(playhead_x, 0)
+        margin = max(60, viewport_rect.width() // 8)
+        if mapped.x() > viewport_rect.width() - margin:
+            view.horizontalScrollBar().setValue(
+                view.horizontalScrollBar().value() + (mapped.x() - (viewport_rect.width() - margin))
+            )
+        elif mapped.x() < margin:
+            view.horizontalScrollBar().setValue(
+                max(0, view.horizontalScrollBar().value() - (margin - mapped.x()))
+            )
+
     def _ensure_scene_rect_covers_time(self, seconds: float) -> None:
         current_rect = self._scene.sceneRect()
         needed_x = self._time_to_x(seconds) + SCENE_MARGIN_H
@@ -1448,6 +1646,9 @@ class TimelineWidget(QWidget):
         if track_id not in AUDIO_TRACK_IDS:
             self._sync_clip_item_to_model(clip_id)
             return
+        clip = self._find_timeline_clip(clip_id)
+        if clip is not None:
+            start_time = self._snap_time_to_targets(clip, start_time)
         self.move_timeline_clip(clip_id, track_id, start_time)
 
     def _on_clip_trim_moved(

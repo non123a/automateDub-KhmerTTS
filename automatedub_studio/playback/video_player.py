@@ -59,6 +59,7 @@ class VideoPlayerWidget(QWidget):
     pauseRequested = Signal()
     stopRequested = Signal()
     seekRequested = Signal(int)  # milliseconds
+    playbackRateChanged = Signal(float)
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -84,6 +85,7 @@ class VideoPlayerWidget(QWidget):
         self._play_button = QPushButton("Play/Pause")
         self._pause_button = self._play_button
         self._stop_button = QPushButton("Stop")
+        self._playback_rate_spin = QLabel("1.00x")
         self._seek_slider = QSlider(Qt.Orientation.Horizontal)
         self._seek_slider.setRange(0, 0)
         self._time_label = QLabel(_DEFAULT_TIME_LABEL)
@@ -96,6 +98,7 @@ class VideoPlayerWidget(QWidget):
         controls_layout = QHBoxLayout()
         controls_layout.addWidget(self._play_button)
         controls_layout.addWidget(self._stop_button)
+        controls_layout.addWidget(self._playback_rate_spin)
         controls_layout.addWidget(self._seek_slider, 1)
         controls_layout.addWidget(self._time_label)
 
@@ -177,6 +180,16 @@ class VideoPlayerWidget(QWidget):
         a separate audio source (Mixed/Khmer/Timeline Preview) is active.
         """
         self._audio_output.setMuted(muted)
+
+    def set_playback_rate(self, rate: float) -> None:
+        rate = max(0.25, min(4.0, rate))
+        self._media_player.setPlaybackRate(rate)
+        self._playback_rate_spin.setText(f"{rate:.2f}x")
+        self.playbackRateChanged.emit(rate)
+
+    @property
+    def playback_rate(self) -> float:
+        return self._media_player.playbackRate()
 
     @property
     def is_playing(self) -> bool:

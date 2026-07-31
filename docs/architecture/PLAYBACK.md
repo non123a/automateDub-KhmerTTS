@@ -22,7 +22,7 @@ Related documents:
 - Play active audio clips on unmuted, unsoloed/solo-respecting audio tracks.
 - Reuse media player objects where practical.
 - Avoid continuous seeking during normal playback drift.
-- Provide clip audition separately from timeline playback.
+- Support frame stepping, previous/next segment jumps, playback speed, looped selection playback, and clip audition as separate transport concerns.
 
 ## Playback Source Of Truth
 
@@ -45,7 +45,10 @@ Reference-only tracks may exist in the Timeline for visual/audio context. Playba
 
 - Play/Pause toggles from the current playhead.
 - Stop halts playback and seeks to zero.
+- Frame stepping advances the master clock by one video frame.
+- Previous/Next Segment seek to the adjacent clip boundary.
 - Timeline/ruler scrubbing updates the playhead and preview position.
+- Loop selection replays the selected timeline range.
 - Double-click audition plays one clip in isolation and is not required for normal timeline playback.
 
 ## Non-Responsibilities

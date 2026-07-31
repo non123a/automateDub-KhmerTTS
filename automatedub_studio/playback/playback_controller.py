@@ -38,6 +38,8 @@ class PlaybackController(QObject):
         self._timeline = Timeline.default()
         self._timeline_clips: list[TimelineClip] = []
         self._active_khmer_clip_ids: set[str] = set()
+        self._playback_rate = 1.0
+        self._loop_selection_enabled = False
 
         self._original_audio_player, self._original_audio_output = self._make_audio_player()
         self._khmer_audio_player, self._khmer_audio_output = self._make_audio_player()
@@ -71,6 +73,17 @@ class PlaybackController(QObject):
             )
         )
 
+    def _apply_playback_rate(self, rate: float) -> None:
+        self._video_player.set_playback_rate(rate)
+        for player in (
+            self._original_audio_player,
+            self._khmer_audio_player,
+            self._audition_player,
+            *[player for player, _output in self._khmer_clip_players.values()],
+        ):
+            if hasattr(player, "setPlaybackRate"):
+                player.setPlaybackRate(rate)
+
     def set_timeline_clips(self, timeline_clips: list[TimelineClip]) -> None:
         self.set_timeline(Timeline.from_clips(timeline_clips))
 
@@ -78,12 +91,44 @@ class PlaybackController(QObject):
         self._video_player.set_audio_muted(True)
         self._timeline = timeline
         self._timeline_clips = timeline.all_clips()
+        self._apply_playback_rate(self._playback_rate)
         self._configure_timeline_clip_players()
         self._active_khmer_clip_ids = set()
         self._sync_audio_to_position(
             self._video_player.position_ms,
             start_playing=self._video_player.is_playing,
         )
+
+    def set_playback_rate(self, rate: float) -> None:
+        self._playback_rate = max(0.25, min(4.0, rate))
+        self._apply_playback_rate(self._playback_rate)
+
+    def set_loop_selection_enabled(self, enabled: bool) -> None:
+        self._loop_selection_enabled = enabled
+
+    def step_frame(self, direction: int = 1) -> None:
+        frame_ms = 33
+        self.seek(max(0, self._video_player.position_ms + frame_ms * direction))
+
+    def previous_segment(self) -> None:
+        position_ms = self._video_player.position_ms
+        starts = [
+            round(clip.start_time * 1000)
+            for clip in self._timeline.all_clips()
+            if round(clip.start_time * 1000) < position_ms
+        ]
+        if starts:
+            self.seek(max(starts))
+
+    def next_segment(self) -> None:
+        position_ms = self._video_player.position_ms
+        starts = [
+            round(clip.start_time * 1000)
+            for clip in self._timeline.all_clips()
+            if round(clip.start_time * 1000) > position_ms
+        ]
+        if starts:
+            self.seek(min(starts))
 
     def set_original_muted(self, muted: bool) -> None:
         self.set_track_muted("original_audio", muted)
@@ -139,6 +184,7 @@ class PlaybackController(QObject):
         player = QMediaPlayer(self)
         output = QAudioOutput(self)
         player.setAudioOutput(output)
+        player.setPlaybackRate(self._playback_rate)
         return player, output
 
     def _configure_timeline_clip_players(self) -> None:
@@ -248,12 +294,31 @@ class PlaybackController(QObject):
     def _on_video_position_changed(self, position_ms: int) -> None:
         if self._video_player.is_playing:
             self._maybe_resync(position_ms)
+            self._maybe_loop(position_ms)
 
     def _on_sync_tick(self) -> None:
         self._maybe_resync(self._video_player.position_ms)
+        self._maybe_loop(self._video_player.position_ms)
 
     def _maybe_resync(self, position_ms: int) -> None:
         self._sync_audio_to_position(position_ms, start_playing=self._video_player.is_playing)
+
+    def _maybe_loop(self, position_ms: int) -> None:
+        if not self._loop_selection_enabled:
+            return
+        loop_start, loop_end = self._selected_loop_bounds()
+        if loop_start is None or loop_end is None or loop_end <= loop_start:
+            return
+        if position_ms >= loop_end:
+            self.seek(loop_start)
+
+    def _selected_loop_bounds(self) -> tuple[int | None, int | None]:
+        selected = [clip for clip in self._timeline.all_clips() if clip.selected]
+        if not selected:
+            return None, None
+        start = min(clip.start_time for clip in selected)
+        end = max(clip.end_time for clip in selected)
+        return round(start * 1000), round(end * 1000)
 
     def _sync_audio_to_position(
         self, position_ms: int, *, start_playing: bool, force_seek: bool = False
