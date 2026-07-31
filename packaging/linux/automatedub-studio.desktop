@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=AutomateDub Studio
+Comment=AI-assisted dubbing editor for AutomateDub
+Exec=automatedub-studio %f
+Icon=automatedub-studio
+Terminal=false
+Categories=AudioVideo;AudioVideoEditing;
+MimeType=application/x-automatedub-project;

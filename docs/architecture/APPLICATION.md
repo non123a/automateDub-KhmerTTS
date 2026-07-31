@@ -14,6 +14,7 @@ Related documents:
 
 - `automatedub_studio/app.py`: application setup.
 - `automatedub_studio/main.py`: Studio executable entry point.
+- `automatedub_studio/metadata.py`: central app name, version, identifiers, extension, and artifact naming.
 - `automatedub_studio/ui/home_window.py`: startup Home window and workflow entry.
 - `automatedub_studio/ui/first_run_wizard.py`: first-run setup for default folder and providers.
 - `automatedub_studio/ui/new_project_wizard.py`: New Project wizard UI.
@@ -28,6 +29,8 @@ Related documents:
 - `automatedub_studio/inspector/segment_inspector.py`: selected clip inspector.
 - `automatedub_studio/pipeline/manager.py`: observable pipeline coordinator.
 - `automatedub_studio/export/manager.py`: export pipeline coordinator.
+- `packaging/`: PyInstaller, installer, AppImage, DMG, icon, and file-association metadata.
+- `.github/workflows/`: CI test and package workflows.
 
 ## Responsibilities
 
@@ -38,6 +41,7 @@ Related documents:
 - Keep the UI responsive by running long jobs through background workers.
 - Present non-intrusive feedback for expected blocked operations.
 - Preserve application-level shortcuts such as Play/Pause, frame stepping, marker creation, search, delete, zoom, and timeline editing commands.
+- Provide application metadata to packaging, About, file association, and release artifact naming.
 
 ## Non-Responsibilities
 
@@ -101,6 +105,14 @@ Widgets should emit intent through signals and expose focused update methods. Bu
 - Dropping a supported video starts the New Project workflow.
 - Dropping a `.autodub` folder opens that project directly.
 - Unclean sessions are detected through `SessionRecoveryManager` and surfaced as a recovery prompt.
+
+## Packaging Boundary
+
+- `automatedub_studio/metadata.py` is the source of truth for Studio version and identifiers.
+- `packaging/build.py` is the reproducible local and CI package entry point.
+- Platform package templates declare `.autodub` file associations.
+- GitHub Actions run tests, lint, whitespace checks, and platform package builds.
+- Build and release procedures are documented in `docs/BUILD.md`, `docs/INSTALL.md`, and `docs/RELEASE.md`.
 
 ## Future Guidance
 

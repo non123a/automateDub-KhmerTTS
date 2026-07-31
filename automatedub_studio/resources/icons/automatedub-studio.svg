@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="AutomateDub Studio">
+  <rect width="512" height="512" rx="96" fill="#171717"/>
+  <rect x="80" y="128" width="352" height="232" rx="28" fill="#f5f5f5"/>
+  <rect x="112" y="160" width="288" height="128" rx="14" fill="#2f6f73"/>
+  <path d="M144 320h224" stroke="#171717" stroke-width="20" stroke-linecap="round"/>
+  <path d="M156 246h44l30-52 54 104 34-52h38" fill="none" stroke="#f4c542" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="184" cy="384" r="20" fill="#f4c542"/>
+  <circle cx="256" cy="384" r="20" fill="#f4c542"/>
+  <circle cx="328" cy="384" r="20" fill="#f4c542"/>
+</svg>

@@ -1,6 +1,6 @@
 [project]
 name = "automatedub"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Vertical-slice AI localization harness for Khmer media."
 readme = "README.md"
 requires-python = ">=3.12"
@@ -28,6 +28,12 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["automatedub*", "automatedub_studio*"]
 exclude = ["research*", "benchmarks*", "tests*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "automatedub_studio.metadata.APP_VERSION"}
+
+[tool.setuptools.package-data]
+automatedub_studio = ["resources/icons/*"]
 
 [dependency-groups]
 dev = [

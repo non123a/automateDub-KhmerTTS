@@ -1,0 +1,40 @@
+name: Package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+            artifact: AutomateDub-Studio-windows
+          - os: macos-latest
+            platform: macos
+            artifact: AutomateDub-Studio-macos
+          - os: ubuntu-latest
+            platform: linux
+            artifact: AutomateDub-Studio-linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install Linux media tools
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Build package
+        run: uv run --with pyinstaller python packaging/build.py --platform ${{ matrix.platform }}
+      - name: Build macOS DMG
+        if: matrix.platform == 'macos'
+        run: packaging/macos/create-dmg.sh
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/**

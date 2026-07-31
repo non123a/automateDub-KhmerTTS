@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout
 
-APP_NAME = "AutomateDub Studio"
-APP_VERSION = "0.1.0"
-APP_DESCRIPTION = "AI-assisted dubbing editor for AutomateDub."
+from automatedub_studio.metadata import APP_DESCRIPTION, APP_NAME, APP_VERSION
 
 
 class AboutDialog(QDialog):

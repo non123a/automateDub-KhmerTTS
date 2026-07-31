@@ -8,6 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import QEvent, Signal
 from PySide6.QtWidgets import QApplication
 
+from automatedub_studio.metadata import APP_ID
 from automatedub_studio.project.manager import ProjectManager
 from automatedub_studio.settings.manager import SettingsManager
 from automatedub_studio.ui.home_window import HomeWindow
@@ -34,6 +35,8 @@ def create_application(argv: list[str] | None = None) -> QApplication:
         app = StudioApplication(argv if argv is not None else sys.argv)
     app.setOrganizationName(ORGANIZATION_NAME)
     app.setApplicationName(APPLICATION_NAME)
+    app.setApplicationDisplayName(APPLICATION_NAME)
+    app.setDesktopFileName(APP_ID)
     return app
 
 
