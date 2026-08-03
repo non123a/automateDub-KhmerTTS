@@ -1,11 +1,38 @@
 from __future__ import annotations
 
 import json
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
 from automatedub.config import ToolConfig
 from automatedub.vertical_slice import localization
+
+
+class _CapturePostHandler(BaseHTTPRequestHandler):
+    captured: dict[str, object] = {}
+
+    def do_POST(self) -> None:  # noqa: N802
+        body = self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode(
+            "utf-8"
+        )
+        self.__class__.captured = {
+            "request_version": self.request_version,
+            "command": self.command,
+            "path": self.path,
+            "headers": dict(self.headers.items()),
+            "body": body,
+        }
+        response_body = b'{"output_text":"{}"}'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(response_body)))
+        self.end_headers()
+        self.wfile.write(response_body)
+
+    def log_message(self, *_args) -> None:
+        return None
 
 
 def sample_transcript_payload() -> dict[str, object]:
@@ -168,6 +195,7 @@ def test_openai_compatible_dialogue_localizer_writes_prompt_and_translation(monk
         segment_count=None,
         batch_index=None,
         batch_count=None,
+        **_diagnostics,
     ) -> dict[str, object]:
         assert base_url == "https://gateway.example/v1"
         assert api_key == "test-key"
@@ -224,6 +252,7 @@ def test_nbwcode_dialogue_localizer_batches_and_merges_translation(monkeypatch, 
         segment_count=None,
         batch_index=None,
         batch_count=None,
+        **_diagnostics,
     ) -> dict[str, object]:
         assert base_url == "https://gateway.example/v1"
         assert api_key == "test-key"
@@ -325,6 +354,37 @@ def test_openai_compatible_call_falls_back_to_chat_completions(monkeypatch):
     assert payload == {"output_text": '{"segments":[]}'}
 
 
+def test_localization_request_debug_includes_redacted_http_details(monkeypatch, tmp_path):
+    def fake_post_json(**kwargs):
+        assert kwargs["provider_id"] == "nbwcode"
+        assert kwargs["wire_api"] == "responses"
+        return {"output_text": '{"segments":[]}'}
+
+    monkeypatch.setattr(localization, "post_json", fake_post_json)
+
+    localization.call_openai_compatible_responses_api(
+        base_url="https://gateway.example/v1",
+        api_key="secret-key",
+        model="test-model",
+        provider_id="nbwcode",
+        wire_api="responses",
+        prompt={"system": "system", "user": "user"},
+        debug_dir=tmp_path / "debug",
+    )
+
+    request_debug = json.loads(
+        (tmp_path / "debug" / "localization_request.json").read_text(encoding="utf-8")
+    )
+    attempt = request_debug["attempts"][0]
+    assert attempt["provider_id"] == "nbwcode"
+    assert attempt["model"] == "test-model"
+    assert attempt["wire_api"] == "responses"
+    assert attempt["url"] == "https://gateway.example/v1/responses"
+    assert attempt["method"] == "POST"
+    assert attempt["headers"]["Authorization"] == "Bearer <redacted>"
+    assert attempt["json_payload"]["model"] == "test-model"
+
+
 def test_openai_compatible_call_writes_debug_files_when_fallback_fails(monkeypatch, tmp_path):
     def fake_responses(**kwargs):
         raise localization.EndpointUnsupported(
@@ -391,6 +451,84 @@ def test_openai_compatible_call_writes_debug_files_when_fallback_fails(monkeypat
         "responses missing",
         "bad request",
     ]
+
+
+def test_endpoint_error_attempt_includes_request_and_response_headers():
+    request_debug = {
+        "url": "https://gateway.example/v1/responses",
+        "method": "POST",
+        "headers": {"authorization": "Bearer <redacted>"},
+        "json_payload": {"model": "test-model"},
+    }
+
+    attempt = localization.build_endpoint_attempt_result(
+        endpoint_name="Responses",
+        url="https://gateway.example/v1/responses",
+        status_code=403,
+        response_body="blocked",
+        response_headers={"cf-ray": "ray-id"},
+        request_debug=request_debug,
+        exception=RuntimeError("failed"),
+    )
+
+    assert attempt["request"] == request_debug
+    assert attempt["response_headers"] == {"cf-ray": "ray-id"}
+
+
+def test_post_json_uses_httpx_transport_and_writes_wire_debug(tmp_path):
+    _CapturePostHandler.captured = {}
+    server = HTTPServer(("127.0.0.1", 0), _CapturePostHandler)
+    thread = threading.Thread(target=server.handle_request)
+    thread.start()
+
+    try:
+        payload = localization.post_json(
+            url=f"http://127.0.0.1:{server.server_port}/responses",
+            api_key="secret-key",
+            payload={
+                "model": "test-model",
+                "input": [{"role": "user", "content": "Return JSON."}],
+                "max_output_tokens": 16,
+            },
+            timeout=5,
+            endpoint_name="Responses",
+            provider_id="nbwcode",
+            model="test-model",
+            wire_api="responses",
+            debug_dir=tmp_path / "debug",
+        )
+    finally:
+        thread.join(timeout=5)
+        server.server_close()
+
+    assert payload == {"output_text": "{}"}
+    captured = _CapturePostHandler.captured
+    assert captured["request_version"] == "HTTP/1.1"
+    assert captured["command"] == "POST"
+    assert captured["path"] == "/responses"
+    headers = captured["headers"]
+    assert headers["Authorization"] == "Bearer secret-key"
+    assert headers["Content-Type"] == "application/json"
+    assert headers["Accept"] == "application/json"
+    assert headers["User-Agent"] == localization.OPENAI_COMPATIBLE_USER_AGENT
+    assert json.loads(str(captured["body"]))["model"] == "test-model"
+
+    request_debug = json.loads(
+        (tmp_path / "debug" / "localization_http_request.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    response_debug = json.loads(
+        (tmp_path / "debug" / "localization_http_response.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert request_debug["url"].endswith("/responses")
+    assert request_debug["method"] == "POST"
+    assert request_debug["http_version"] == "HTTP/1.0"
+    assert request_debug["headers"]["authorization"] == "Bearer <redacted>"
+    assert response_debug["status_code"] == 200
+    assert response_debug["body"] == '{"output_text":"{}"}'
 
 
 def test_detect_supported_endpoint_prefers_responses(monkeypatch):

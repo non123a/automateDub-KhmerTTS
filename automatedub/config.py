@@ -9,6 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 DEFAULT_TTS_MODEL = "mars-8.1-flash-beta"
+DEFAULT_CAMB_VOICE_ID = "170542"
+DEFAULT_TTS_SYNC_OFFSET_MS = 150
+DEFAULT_TTS_SPEED = 0.85
+DEFAULT_CAMB_API_BASE_URL = "https://client.camb.ai/apis"
 
 
 @dataclass(frozen=True)
@@ -23,13 +27,15 @@ class ToolConfig:
     nbw_base_url: str = "https://www.nbwcode.top/v1"
     nbw_automatedub_api_key: str | None = None
     localization_model: str = "gpt-5.5"
+    translation_wire_api: str = "responses"
     tts_provider: str = "cambai"
     tts_model: str = DEFAULT_TTS_MODEL
     camb_api_key: str | None = None
+    camb_api_base_url: str = DEFAULT_CAMB_API_BASE_URL
     camb_language: str = "km-kh"
-    camb_voice_id: str | None = None
-    tts_sync_offset_ms: int = 200
-    tts_speed: float = 1.0
+    camb_voice_id: str | None = DEFAULT_CAMB_VOICE_ID
+    tts_sync_offset_ms: int = DEFAULT_TTS_SYNC_OFFSET_MS
+    tts_speed: float = DEFAULT_TTS_SPEED
     duck_volume: float = 0.0
 
 
@@ -67,13 +73,27 @@ def load_tool_config(env_file: Path | None = Path(".env")) -> ToolConfig:
         or "https://www.nbwcode.top/v1",
         nbw_automatedub_api_key=get_config_value("NBW_AUTOMATEDUB_API_KEY"),
         localization_model=get_config_value("LOCALIZATION_MODEL", "gpt-5.5") or "gpt-5.5",
+        translation_wire_api=get_config_value("TRANSLATION_WIRE_API", "responses")
+        or "responses",
         tts_provider=get_config_value("TTS_PROVIDER", "cambai") or "cambai",
-        tts_model=get_config_value("TTS_MODEL", DEFAULT_TTS_MODEL) or DEFAULT_TTS_MODEL,
+        tts_model=(
+            get_config_value(
+                "CAMB_TTS_MODEL",
+                get_config_value("TTS_MODEL", DEFAULT_TTS_MODEL),
+            )
+            or DEFAULT_TTS_MODEL
+        ),
         camb_api_key=get_config_value("CAMB_API_KEY"),
+        camb_api_base_url=(
+            get_config_value("CAMB_API_BASE_URL", DEFAULT_CAMB_API_BASE_URL)
+            or DEFAULT_CAMB_API_BASE_URL
+        ),
         camb_language=get_config_value("CAMB_LANGUAGE", "km-kh") or "km-kh",
-        camb_voice_id=get_config_value("CAMB_VOICE_ID"),
-        tts_sync_offset_ms=get_config_int("TTS_SYNC_OFFSET_MS", 200),
-        tts_speed=get_config_float("TTS_SPEED", 1.0),
+        camb_voice_id=get_config_value("CAMB_VOICE_ID", DEFAULT_CAMB_VOICE_ID),
+        tts_sync_offset_ms=get_config_int(
+            "TTS_SYNC_OFFSET_MS", DEFAULT_TTS_SYNC_OFFSET_MS
+        ),
+        tts_speed=get_config_float("TTS_SPEED", DEFAULT_TTS_SPEED),
         duck_volume=get_config_float("DUCK_VOLUME", 0.0),
     )
 

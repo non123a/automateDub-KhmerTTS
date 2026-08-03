@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "resolved": true,
+  "executed": true,
+  "provider_id": "cambai",
+  "provider_class": "CambAITTSProvider",
+  "provider_module": "automatedub_studio.providers.tts.cambai",
+  "underlying_provider_class": "automatedub.vertical_slice.tts.CambAIProvider",
+  "selected_provider_id": "cambai",
+  "voice_id": "170542",
+  "model": "gpt-5.5",
+  "language": "km-kh",
+  "speaking_rate": 1.0,
+  "error": null
+}

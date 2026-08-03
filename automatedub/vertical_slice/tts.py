@@ -188,7 +188,10 @@ class CambAIProvider:
                 raise VS3Error(
                     "Camb.ai SDK is not installed. Install the camb-sdk package."
                 ) from exc
-            self._client = CambAI(api_key=self.tool_config.camb_api_key)
+            self._client = CambAI(
+                api_key=self.tool_config.camb_api_key,
+                base_url=self.tool_config.camb_api_base_url,
+            )
         return self._client
 
     def describe(self) -> TtsProviderInfo:
@@ -201,18 +204,15 @@ class CambAIProvider:
         )
 
     def generate(self, text: str) -> GeneratedSpeech:
-        voice_id = parse_camb_voice_id(self.tool_config.camb_voice_id)
         try:
             from camb.types import StreamTtsOutputConfiguration, StreamTtsVoiceSettings
         except ImportError as exc:
             raise VS3Error(
                 "Camb.ai SDK is not installed. Install the camb-sdk package."
             ) from exc
+        payload = build_cambai_tts_payload(self.tool_config, text)
         stream = self.client.text_to_speech.tts(
-            text=text,
-            voice_id=voice_id,
-            language=self.tool_config.camb_language,
-            speech_model=self.tool_config.tts_model,
+            **payload,
             output_configuration=StreamTtsOutputConfiguration(format="wav"),
             voice_settings=StreamTtsVoiceSettings(speaking_rate=self.tool_config.tts_speed),
         )
@@ -257,6 +257,16 @@ def validate_cambai_tts_config(tool_config: ToolConfig) -> None:
         raise VS3Error("CAMB_LANGUAGE is required for Camb.ai speech generation")
     if not tool_config.camb_voice_id:
         raise VS3Error("CAMB_VOICE_ID is required for Camb.ai speech generation")
+
+
+def build_cambai_tts_payload(tool_config: ToolConfig, text: str) -> dict[str, object]:
+    """Return the exact Camb.ai speech request fields used by both editor paths."""
+    return {
+        "text": text,
+        "voice_id": parse_camb_voice_id(tool_config.camb_voice_id),
+        "language": tool_config.camb_language,
+        "speech_model": tool_config.tts_model,
+    }
 
 
 def load_translation_segments(translation_path: Path) -> list[TtsSegment]:

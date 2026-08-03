@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from automatedub_studio.pipeline.jobs import STAGE_TTS_GENERATION
 from automatedub_studio.pipeline.manager import PipelineEvent, PipelineManager, PipelineResult
 
 
@@ -70,6 +71,14 @@ class ProcessingWindow(QMainWindow):
         self.retry_button.clicked.connect(self.pipeline_manager.retry)
         button_layout.addWidget(self.retry_button)
 
+        self.skip_tts_button = QPushButton("Skip TTS & Open Editor")
+        self.skip_tts_button.setObjectName("processing_skip_tts_button")
+        self.skip_tts_button.setEnabled(False)
+        self.skip_tts_button.clicked.connect(
+            self.pipeline_manager.skip_tts_and_open_editor
+        )
+        button_layout.addWidget(self.skip_tts_button)
+
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.setObjectName("processing_cancel_button")
         self.cancel_button.clicked.connect(self.pipeline_manager.cancel)
@@ -118,12 +127,22 @@ class ProcessingWindow(QMainWindow):
         self.stage_status[event.stage_id] = event.status
         label = self.stage_labels.get(event.stage_id)
         if label is not None:
-            label.setText(self._format_stage(event.label, event.status, event.progress))
+            label.setText(
+                self._format_stage(
+                    event.label,
+                    event.status,
+                    event.progress,
+                    event.message,
+                )
+            )
         if event.status in {"started", "progress"}:
             self.status_label.setText(event.message or event.label)
             self.progress.setValue(event.progress)
         elif event.status == "completed":
             self.status_label.setText(f"{event.label} completed")
+            self.progress.setValue(100)
+        elif event.status == "warning":
+            self.status_label.setText(event.message or event.label)
             self.progress.setValue(100)
         elif event.status == "failed":
             self.status_label.setText(f"{event.label} failed")
@@ -134,6 +153,7 @@ class ProcessingWindow(QMainWindow):
         self.status_label.setText("Project Ready")
         self.progress.setValue(100)
         self.retry_button.setEnabled(False)
+        self.skip_tts_button.setEnabled(False)
         self.cancel_button.setEnabled(False)
         self.open_editor_button.setEnabled(True)
         self.close_button.setEnabled(True)
@@ -142,6 +162,7 @@ class ProcessingWindow(QMainWindow):
         self.status_label.setText(f"{event.label} failed")
         self.error_label.setText(event.error or event.message)
         self.retry_button.setEnabled(True)
+        self.skip_tts_button.setEnabled(event.stage_id == STAGE_TTS_GENERATION)
         self.cancel_button.setEnabled(True)
         self.open_editor_button.setEnabled(False)
         self.close_button.setEnabled(False)
@@ -156,14 +177,17 @@ class ProcessingWindow(QMainWindow):
             self.openEditorRequested.emit(self.project_path)
 
     @staticmethod
-    def _format_stage(label: str, status: str, progress: int) -> str:
+    def _format_stage(label: str, status: str, progress: int, message: str = "") -> str:
         icon = {
             "complete": "✓",
             "completed": "✓",
             "started": "⏳",
             "progress": "⏳",
             "pending": "",
-            "failed": "!",
+            "failed": "✗",
+            "warning": "⚠",
         }.get(status, "")
         suffix = f" {progress}%" if status == "progress" else ""
+        if status == "warning" and message:
+            suffix = f" — {message}"
         return f"{icon} {label}{suffix}".strip()

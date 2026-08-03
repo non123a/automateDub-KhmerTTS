@@ -1,0 +1,20 @@
+{
+  "provider_base_url": "https://www.nbwcode.top/v1",
+  "model": "gpt-5.5",
+  "segment_count": 20,
+  "prompt_size_characters": 3652,
+  "estimated_input_tokens": 913,
+  "batch_index": 1,
+  "batch_count": 4,
+  "fallback_attempted": false,
+  "attempts": [
+    {
+      "endpoint": "Responses",
+      "url": "https://www.nbwcode.top/v1/responses",
+      "http_status_code": 502,
+      "response_body": "{\"error\":{\"message\":\"Upstream access forbidden, please contact administrator\",\"type\":\"upstream_error\",\"param\":\"\",\"code\":null}}",
+      "exception_type": "HTTPError",
+      "exception": "HTTP Error 502: Bad Gateway"
+    }
+  ]
+}

@@ -80,5 +80,6 @@ def test_processing_window_shows_placeholder_stages(qapp, tmp_path):
         "Transcription",
         "Speech Detection",
         "Translation",
+        "Generating Khmer Speech",
         "Timeline Generation",
     ]

@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "camb-sdk>=1.5.15",
+    "httpx>=0.28",
 ]
 
 [project.optional-dependencies]

@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QAbstractItemView,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -86,7 +87,7 @@ class HomeWindow(QMainWindow):
 
         self.new_project_button = QPushButton("New Project")
         self.new_project_button.setObjectName("new_project_button")
-        self.new_project_button.clicked.connect(self._new_project)
+        self.new_project_button.clicked.connect(lambda _checked=False: self._new_project())
         layout.addWidget(self.new_project_button)
 
         self.open_project_button = QPushButton("Open Project")
@@ -97,12 +98,23 @@ class HomeWindow(QMainWindow):
         self.recent_projects_label = QLabel("Recent Projects")
         self.recent_projects_label.setObjectName("recent_projects_placeholder")
         layout.addWidget(self.recent_projects_label)
+        self.recent_selected_label = QLabel("Select a recent project to manage it.")
+        self.recent_selected_label.setObjectName("recent_selected_label")
+        layout.addWidget(self.recent_selected_label)
         self.recent_projects_list = QListWidget()
         self.recent_projects_list.setObjectName("recent_projects_list")
         self.recent_projects_list.itemDoubleClicked.connect(self._open_recent_project)
+        self.recent_projects_list.itemSelectionChanged.connect(self._update_recent_action_state)
+        self.recent_projects_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         layout.addWidget(self.recent_projects_list)
 
-        recent_actions = QHBoxLayout()
+        self.recent_empty_label = QLabel("No recent projects yet.")
+        self.recent_empty_label.setObjectName("recent_empty_label")
+        layout.addWidget(self.recent_empty_label)
+
+        self.recent_actions_widget = QWidget()
+        recent_actions = QHBoxLayout(self.recent_actions_widget)
+        recent_actions.setContentsMargins(0, 0, 0, 0)
         self.pin_recent_button = QPushButton("Pin")
         self.pin_recent_button.clicked.connect(self._pin_selected_recent_project)
         recent_actions.addWidget(self.pin_recent_button)
@@ -115,7 +127,7 @@ class HomeWindow(QMainWindow):
         self.project_browser_button = QPushButton("Project Browser")
         self.project_browser_button.clicked.connect(self._show_project_browser)
         recent_actions.addWidget(self.project_browser_button)
-        layout.addLayout(recent_actions)
+        layout.addWidget(self.recent_actions_widget)
 
         self.session_recovery_label = QLabel("")
         self.session_recovery_label.setObjectName("session_recovery_label")
@@ -234,16 +246,27 @@ class HomeWindow(QMainWindow):
         self.recent_projects_list.clear()
         projects = self.recent_projects_manager.list_projects()
         if not projects:
-            self.recent_projects_label.setText("Recent Projects\nNo recent projects yet.")
+            self.recent_projects_label.setText("Recent Projects")
+            self.recent_selected_label.setText("No recent projects selected.")
+            self.recent_projects_list.setVisible(False)
+            self.recent_empty_label.setVisible(True)
+            self.recent_actions_widget.setVisible(False)
+            self._set_recent_action_enabled(False)
             return
         self.recent_projects_label.setText("Recent Projects")
+        self.recent_projects_list.setVisible(True)
+        self.recent_empty_label.setVisible(False)
+        self.recent_actions_widget.setVisible(True)
         for project in projects:
             prefix = "Pinned - " if project.pinned else ""
             item = QListWidgetItem(
                 f"{prefix}{project.name} | {project.status} | Last opened: {project.last_opened}"
             )
+            item.setToolTip(str(project.project_path))
             item.setData(0x0100, str(project.project_path))
             self.recent_projects_list.addItem(item)
+        self.recent_projects_list.setCurrentRow(0)
+        self._update_recent_action_state()
 
     def _selected_recent_path(self) -> Path | None:
         item = self.recent_projects_list.currentItem()
@@ -297,6 +320,25 @@ class HomeWindow(QMainWindow):
 
     def _show_notification(self, notification) -> None:
         self.notification_label.setText(f"{notification.level}: {notification.message}")
+
+    def _update_recent_action_state(self) -> None:
+        has_selection = self._selected_recent_path() is not None
+        self._set_recent_action_enabled(has_selection)
+        if has_selection:
+            item = self.recent_projects_list.currentItem()
+            if item is not None:
+                self.recent_selected_label.setText(f"Selected project: {item.text()}")
+            return
+        if self.recent_projects_list.count() == 0:
+            self.recent_selected_label.setText("No recent projects yet.")
+        else:
+            self.recent_selected_label.setText("Select a recent project to manage it.")
+
+    def _set_recent_action_enabled(self, enabled: bool) -> None:
+        self.pin_recent_button.setEnabled(enabled)
+        self.remove_recent_button.setEnabled(enabled)
+        self.open_recent_folder_button.setEnabled(enabled)
+        self.project_browser_button.setEnabled(enabled)
 
     @staticmethod
     def _first_dropped_path(mime_data) -> Path | None:

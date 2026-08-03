@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QDialog,
     QFormLayout,
@@ -41,7 +43,7 @@ class SettingsWindow(QDialog):
         self.provider_manager = provider_manager or ProviderManager(
             self.settings_manager.tool_config()
         )
-        self.provider_inputs: dict[tuple[str, str], QLineEdit] = {}
+        self.provider_inputs: dict[tuple[str, ...], QLineEdit] = {}
 
         self.setWindowTitle("Settings")
         layout = QVBoxLayout(self)
@@ -99,13 +101,25 @@ class SettingsWindow(QDialog):
             self.settings_manager.data.tts_provider_id,
         )
         self.tts_combo.setObjectName("settings_tts_provider_combo")
-        self.stt_combo.currentIndexChanged.connect(self._refresh_provider_config)
-        self.translation_combo.currentIndexChanged.connect(self._refresh_provider_config)
-        self.tts_combo.currentIndexChanged.connect(self._refresh_provider_config)
+        self.stt_combo.currentIndexChanged.connect(self._provider_selection_changed)
+        self.translation_combo.currentIndexChanged.connect(self._provider_selection_changed)
+        self.tts_combo.currentIndexChanged.connect(self._tts_provider_selection_changed)
         form.addRow("STT Provider", self.stt_combo)
         form.addRow("Translation Provider", self.translation_combo)
         form.addRow("TTS Provider", self.tts_combo)
         layout.addLayout(form)
+
+        self.selected_provider_label = QLabel("Selected provider: Not tested")
+        self.selected_provider_label.setObjectName("settings_selected_provider_label")
+        self.selected_provider_label.setWordWrap(True)
+        layout.addWidget(self.selected_provider_label)
+        self.connection_status_label = QLabel("Connection status: Not tested")
+        self.connection_status_label.setObjectName("settings_connection_status_label")
+        self.connection_status_label.setWordWrap(True)
+        layout.addWidget(self.connection_status_label)
+        self.provider_version_label = QLabel("Provider version: unavailable")
+        self.provider_version_label.setObjectName("settings_provider_version_label")
+        layout.addWidget(self.provider_version_label)
 
         self.provider_config_container = QWidget()
         self.provider_config_layout = QVBoxLayout(self.provider_config_container)
@@ -120,6 +134,16 @@ class SettingsWindow(QDialog):
     def _build_voices_tab(self) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout(widget)
+        self.voice_status_label = QLabel("Voices are shown after provider validation.")
+        self.voice_status_label.setWordWrap(True)
+        self.voice_status_label.setObjectName("settings_voice_status_label")
+        layout.addWidget(self.voice_status_label)
+        self.voice_count_label = QLabel("Voices: 0")
+        self.voice_count_label.setObjectName("settings_voice_count_label")
+        layout.addWidget(self.voice_count_label)
+        self.voice_refresh_label = QLabel("Last refresh: never")
+        self.voice_refresh_label.setObjectName("settings_voice_refresh_label")
+        layout.addWidget(self.voice_refresh_label)
         self.voice_list = QListWidget()
         self.voice_list.setObjectName("settings_voice_list")
         layout.addWidget(self.voice_list)
@@ -204,6 +228,7 @@ class SettingsWindow(QDialog):
             for field in descriptor.config_fields:
                 edit = self._field_editor(descriptor, field)
                 form.addRow(field.label, edit)
+                self.provider_inputs[(descriptor.kind, descriptor.id, field.key)] = edit
                 self.provider_inputs[(descriptor.id, field.key)] = edit
             test_button = QPushButton("Test Connection")
             test_button.clicked.connect(
@@ -211,6 +236,8 @@ class SettingsWindow(QDialog):
             )
             form.addRow(test_button)
             self.provider_config_layout.addWidget(group)
+        self._update_selected_provider_label()
+        self.connection_status_label.setText("Connection status: Not tested")
 
     def _field_editor(
         self,
@@ -230,91 +257,134 @@ class SettingsWindow(QDialog):
         return edit
 
     def _selected_descriptors(self) -> list[ProviderDescriptor]:
-        descriptors_by_id = {
-            descriptor.id: descriptor
-            for descriptor in (
-                self.provider_manager.available_stt_providers()
-                + self.provider_manager.available_translation_providers()
-                + self.provider_manager.available_tts_providers()
+        selections = [
+            (
+                self.provider_manager.available_stt_providers(),
+                self.stt_combo.currentData(),
+            ),
+            (
+                self.provider_manager.available_translation_providers(),
+                self.translation_combo.currentData(),
+            ),
+            (
+                self.provider_manager.available_tts_providers(),
+                self.tts_combo.currentData(),
+            ),
+        ]
+        descriptors: list[ProviderDescriptor] = []
+        for available, selected_id in selections:
+            descriptor = next(
+                (item for item in available if item.id == selected_id),
+                None,
             )
-        }
-        selected_ids = [
-            self.stt_combo.currentData(),
-            self.translation_combo.currentData(),
-            self.tts_combo.currentData(),
-        ]
-        return [
-            descriptors_by_id[selected_id]
-            for selected_id in selected_ids
-            if selected_id in descriptors_by_id
-        ]
+            if descriptor is not None:
+                descriptors.append(descriptor)
+        return descriptors
 
     def save_settings(self) -> None:
-        self.settings_manager.set_provider_selection(
-            stt_provider_id=str(self.stt_combo.currentData()),
-            translation_provider_id=str(self.translation_combo.currentData()),
-            tts_provider_id=str(self.tts_combo.currentData()),
-            selected_voice=self._selected_voice_id(),
-        )
-        data = self.settings_manager.data
+        data = self._persist_current_provider_state(selected_voice=self._selected_voice_id())
         self.settings_manager.save(
             type(data)(
                 stt_provider_id=data.stt_provider_id,
                 translation_provider_id=data.translation_provider_id,
                 tts_provider_id=data.tts_provider_id,
                 selected_voice=data.selected_voice,
+                default_project_folder=data.default_project_folder,
+                first_run_completed=data.first_run_completed,
                 provider_settings=data.provider_settings,
                 cache_dir=self.cache_dir_edit.text(),
                 log_dir=self.log_dir_edit.text(),
                 advanced=data.advanced,
             )
         )
-        for descriptor in self._selected_descriptors():
-            for field in descriptor.config_fields:
-                edit = self.provider_inputs.get((descriptor.id, field.key))
-                if edit is not None:
-                    self.settings_manager.set_provider_setting(
-                        descriptor.id,
-                        field.key,
-                        edit.text(),
-                        secret=field.secret,
-                    )
         self.diagnostics_label.setText("Settings saved.")
-        self.provider_manager = ProviderManager(self.settings_manager.tool_config())
+        self.provider_manager = ProviderManager(
+            self.settings_manager.tool_config(),
+            registry=self.provider_manager.registry,
+        )
+        self.refresh_voices()
 
     def refresh_voices(self) -> None:
+        self._persist_current_provider_state(selected_voice=self._selected_voice_id())
+        self.provider_manager = ProviderManager(
+            self.settings_manager.tool_config(),
+            registry=self.provider_manager.registry,
+        )
+        self.voice_status_label.setText("Loading voices...")
         self.voice_list.clear()
+        self.voice_count_label.setText("Voices: 0")
+        QApplication.processEvents()
         try:
             provider = self.provider_manager.tts_provider(str(self.tts_combo.currentData()))
             provider.validate()
             voices = provider.list_voices()
         except Exception as exc:  # noqa: BLE001
-            self.voice_list.addItem(f"Failed to load voices: {exc}")
+            self.voice_status_label.setText(f"Unable to load voices: {exc}")
+            self.voice_list.addItem("Unable to load voices.")
+            self.voice_refresh_label.setText(f"Last refresh: {_now_text()}")
+            self.connection_status_label.setText(
+                f"Connection status: Connection Failed - {exc}"
+            )
             return
+        if not voices:
+            self.voice_status_label.setText("No voices available from this provider.")
+            self.voice_list.addItem("No voices available.")
+            self.voice_count_label.setText("Voices: 0")
+            self.voice_refresh_label.setText(f"Last refresh: {_now_text()}")
+            return
+        self.voice_status_label.setText(f"Loaded {len(voices)} voice(s).")
         for voice in voices:
             language = voice.language or "unknown"
-            self.voice_list.addItem(f"{voice.name} | {language} | preview: unavailable")
+            item_text = f"{voice.name} | {language} | preview: unavailable"
+            self.voice_list.addItem(item_text)
+            item = self.voice_list.item(self.voice_list.count() - 1)
+            item.setData(Qt.ItemDataRole.UserRole, voice.id)
+            if voice.id == self.settings_manager.data.selected_voice:
+                self.voice_list.setCurrentItem(item)
+        self.voice_count_label.setText(f"Voices: {len(voices)}")
+        self.voice_refresh_label.setText(f"Last refresh: {_now_text()}")
 
     def test_provider(self, descriptor: ProviderDescriptor) -> None:
+        self._persist_current_provider_state(selected_voice=self._selected_voice_id())
+        self.provider_manager = ProviderManager(
+            self.settings_manager.tool_config(),
+            registry=self.provider_manager.registry,
+        )
         started = time.monotonic()
         try:
             provider = self._provider_for_descriptor(descriptor)
             provider.validate()
         except Exception as exc:  # noqa: BLE001
             self.diagnostics_label.setText(
-                f"{descriptor.name}: failed authentication/connection: {exc}"
+                f"{descriptor.name}: Connection Failed: {exc}"
+            )
+            self.selected_provider_label.setText(f"Selected provider: {descriptor.name}")
+            self.connection_status_label.setText(
+                f"Connection status: Connection Failed - {exc}"
             )
             return
         latency_ms = round((time.monotonic() - started) * 1000)
         extra = ""
+        voice_count: int | None = None
         if descriptor.kind == "tts":
             try:
                 voices = self._provider_for_descriptor(descriptor).list_voices()
-                extra = f", voices: {len(voices)}"
-            except Exception:  # noqa: BLE001
-                extra = ", voices: unavailable"
+                voice_count = len(voices)
+                extra = f", voices: {voice_count}"
+                self.refresh_voices()
+            except Exception as exc:  # noqa: BLE001
+                extra = f", voices unavailable: {exc}"
         self.diagnostics_label.setText(
-            f"{descriptor.name}: connection ok, authentication ok, latency {latency_ms} ms{extra}"
+            f"{descriptor.name}: Connected, latency {latency_ms} ms{extra}"
+        )
+        self.selected_provider_label.setText(f"Selected provider: {descriptor.name}")
+        self.connection_status_label.setText(
+            f"Connection status: Connected, latency {latency_ms} ms"
+        )
+        if voice_count is not None:
+            self.voice_count_label.setText(f"Voices: {voice_count}")
+        self.provider_version_label.setText(
+            f"Provider version: {getattr(provider, 'version', 'unavailable')}"
         )
 
     def _provider_for_descriptor(self, descriptor: ProviderDescriptor):
@@ -346,5 +416,51 @@ class SettingsWindow(QDialog):
         item = self.voice_list.currentItem()
         if item is None:
             return self.settings_manager.data.selected_voice
+        voice_id = item.data(Qt.ItemDataRole.UserRole)
+        if isinstance(voice_id, str) and voice_id:
+            return voice_id
         text = item.text()
         return text.split("|", 1)[0].strip() or None
+
+    def _provider_selection_changed(self, _index: int = 0) -> None:
+        self._refresh_provider_config()
+
+    def _tts_provider_selection_changed(self, _index: int = 0) -> None:
+        self._refresh_provider_config()
+        self.voice_list.clear()
+        self.voice_status_label.setText("Refresh voices for the selected TTS provider.")
+        self.voice_count_label.setText("Voices: 0")
+        self.voice_refresh_label.setText("Last refresh: never")
+
+    def _persist_current_provider_state(self, selected_voice: str | None) -> object:
+        self.settings_manager.set_provider_selection(
+            stt_provider_id=str(self.stt_combo.currentData()),
+            translation_provider_id=str(self.translation_combo.currentData()),
+            tts_provider_id=str(self.tts_combo.currentData()),
+            selected_voice=selected_voice,
+        )
+        for descriptor in self._selected_descriptors():
+            for field in descriptor.config_fields:
+                edit = self.provider_inputs.get((descriptor.id, field.key))
+                edit = self.provider_inputs.get(
+                    (descriptor.kind, descriptor.id, field.key),
+                    edit,
+                )
+                if edit is not None:
+                    self.settings_manager.set_provider_setting(
+                        descriptor.id,
+                        field.key,
+                        edit.text(),
+                        secret=field.secret,
+                    )
+        return self.settings_manager.data
+
+    def _update_selected_provider_label(self) -> None:
+        names = [descriptor.name for descriptor in self._selected_descriptors()]
+        self.selected_provider_label.setText(
+            "Selected provider: " + ", ".join(names) if names else "Selected provider: none"
+        )
+
+
+def _now_text() -> str:
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")

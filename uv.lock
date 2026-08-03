@@ -29,6 +29,7 @@ name = "automatedub"
 source = { editable = "." }
 dependencies = [
     { name = "camb-sdk" },
+    { name = "httpx" },
 ]
 
 [package.optional-dependencies]
@@ -50,6 +51,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "camb-sdk", specifier = ">=1.5.15" },
+    { name = "httpx", specifier = ">=0.28" },
     { name = "pyside6", marker = "extra == 'studio'", specifier = ">=6.7" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.6" },

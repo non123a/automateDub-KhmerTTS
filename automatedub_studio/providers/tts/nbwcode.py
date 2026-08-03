@@ -43,6 +43,9 @@ class NBWCodeTTSProvider:
         speech: GeneratedSpeech = self.provider.generate(text)
         return SynthesizedSpeech(audio=speech.audio, metadata=speech.metadata)
 
+    def generate(self, text: str) -> GeneratedSpeech:
+        return self.provider.generate(text)
+
 
 provider_registry.register_tts(
     ProviderDescriptor(
@@ -52,6 +55,7 @@ provider_registry.register_tts(
         factory=NBWCodeTTSProvider,
         config_fields=(
             ProviderConfigField("api_key", "API Key", secret=True),
+            ProviderConfigField("base_url", "Base URL", default="https://www.nbwcode.top/v1"),
             ProviderConfigField("model", "Model"),
             ProviderConfigField("timeout", "Timeout", default="300"),
         ),

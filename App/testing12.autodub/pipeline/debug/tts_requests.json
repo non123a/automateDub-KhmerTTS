@@ -1,0 +1,1103 @@
+{
+  "version": 1,
+  "requests": [
+    {
+      "segment_id": 0,
+      "text": "មិនទាន់ដល់កម្រិតអាចនិយាយទាក់ទងជាមួយជនបរទេសបានពេញលេញទេ",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0000.wav",
+      "request_payload": {
+        "text": "មិនទាន់ដល់កម្រិតអាចនិយាយទាក់ទងជាមួយជនបរទេសបានពេញលេញទេ",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:32:54.464893+00:00",
+      "request_finished_at": "2026-08-03T10:32:58.964920+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 1,
+      "text": "អញ្ចឹងក៏លើសមនុស្សជាច្រើនទៅហើយ",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0001.wav",
+      "request_payload": {
+        "text": "អញ្ចឹងក៏លើសមនុស្សជាច្រើនទៅហើយ",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:32:58.971436+00:00",
+      "request_finished_at": "2026-08-03T10:33:01.437875+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 2,
+      "text": "មនុស្សផ្សេងៗទៀតភាគច្រើនក៏មិនអាចទេ",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0002.wav",
+      "request_payload": {
+        "text": "មនុស្សផ្សេងៗទៀតភាគច្រើនក៏មិនអាចទេ",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:01.442766+00:00",
+      "request_finished_at": "2026-08-03T10:33:03.977182+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 3,
+      "text": "អ្នកកម្ពស់ប៉ុន្មាន?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0003.wav",
+      "request_payload": {
+        "text": "អ្នកកម្ពស់ប៉ុន្មាន?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:03.983011+00:00",
+      "request_finished_at": "2026-08-03T10:33:06.123139+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 4,
+      "text": "ខ្ញុំ 163 សង់ទីម៉ែត្រ",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0004.wav",
+      "request_payload": {
+        "text": "ខ្ញុំ 163 សង់ទីម៉ែត្រ",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:06.127583+00:00",
+      "request_finished_at": "2026-08-03T10:33:08.584590+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 5,
+      "text": "អ្នកមានបងប្អូនទេ?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0005.wav",
+      "request_payload": {
+        "text": "អ្នកមានបងប្អូនទេ?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:08.591274+00:00",
+      "request_finished_at": "2026-08-03T10:33:10.633229+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 6,
+      "text": "ខ្ញុំជាកូនតែមួយ",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0006.wav",
+      "request_payload": {
+        "text": "ខ្ញុំជាកូនតែមួយ",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:10.652427+00:00",
+      "request_finished_at": "2026-08-03T10:33:12.823219+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 7,
+      "text": "អ្នកចូលចិត្តសត្វអ្វីបំផុត?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0007.wav",
+      "request_payload": {
+        "text": "អ្នកចូលចិត្តសត្វអ្វីបំផុត?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:12.828536+00:00",
+      "request_finished_at": "2026-08-03T10:33:14.989770+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 8,
+      "text": "ខ្ញុំចូលចិត្តកូនឆ្កែ និងកូនទន្សាយ",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0008.wav",
+      "request_payload": {
+        "text": "ខ្ញុំចូលចិត្តកូនឆ្កែ និងកូនទន្សាយ",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:14.995874+00:00",
+      "request_finished_at": "2026-08-03T10:33:17.493418+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 9,
+      "text": "អញ្ចឹងអ្នកធ្លាប់ចិញ្ចឹមសត្វតូចៗពួកនេះទេ?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0009.wav",
+      "request_payload": {
+        "text": "អញ្ចឹងអ្នកធ្លាប់ចិញ្ចឹមសត្វតូចៗពួកនេះទេ?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:17.499731+00:00",
+      "request_finished_at": "2026-08-03T10:33:19.982093+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 10,
+      "text": "មុននេះ ខ្ញុំធ្លាប់ចិញ្ចឹមកូនទន្សាយ",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0010.wav",
+      "request_payload": {
+        "text": "មុននេះ ខ្ញុំធ្លាប់ចិញ្ចឹមកូនទន្សាយ",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:19.989291+00:00",
+      "request_finished_at": "2026-08-03T10:33:22.508873+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 11,
+      "text": "ហើយឥឡូវលែងចិញ្ចឹមហើយ",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0011.wav",
+      "request_payload": {
+        "text": "ហើយឥឡូវលែងចិញ្ចឹមហើយ",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:22.512359+00:00",
+      "request_finished_at": "2026-08-03T10:33:24.823542+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 12,
+      "text": "អញ្ចឹងក្រោយនេះ អ្នកនៅចង់ចិញ្ចឹមកូនទន្សាយ",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0012.wav",
+      "request_payload": {
+        "text": "អញ្ចឹងក្រោយនេះ អ្នកនៅចង់ចិញ្ចឹមកូនទន្សាយ",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:24.830225+00:00",
+      "request_finished_at": "2026-08-03T10:33:27.238475+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 13,
+      "text": "ឬកូនឆ្កែអីទៀតទេ?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0013.wav",
+      "request_payload": {
+        "text": "ឬកូនឆ្កែអីទៀតទេ?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:27.244161+00:00",
+      "request_finished_at": "2026-08-03T10:33:29.458503+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 14,
+      "text": "ក្រោយមុខ ខ្ញុំនៅចង់ចិញ្ចឹមកូនឆ្កែ កូនឆ្មា ពួកសត្វតូចៗទៀត",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0014.wav",
+      "request_payload": {
+        "text": "ក្រោយមុខ ខ្ញុំនៅចង់ចិញ្ចឹមកូនឆ្កែ កូនឆ្មា ពួកសត្វតូចៗទៀត",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:29.464858+00:00",
+      "request_finished_at": "2026-08-03T10:33:32.042261+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 15,
+      "text": "ប្រទេសដែលអ្នកចូលចិត្តបំផុត គឺប្រទេសណា?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0015.wav",
+      "request_payload": {
+        "text": "ប្រទេសដែលអ្នកចូលចិត្តបំផុត គឺប្រទេសណា?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:32.049124+00:00",
+      "request_finished_at": "2026-08-03T10:33:34.898563+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 16,
+      "text": "ក្រៅពីចិន",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0016.wav",
+      "request_payload": {
+        "text": "ក្រៅពីចិន",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:34.904502+00:00",
+      "request_finished_at": "2026-08-03T10:33:37.155341+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 17,
+      "text": "ខ្ញុំចូលចិត្តស្វីស",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0017.wav",
+      "request_payload": {
+        "text": "ខ្ញុំចូលចិត្តស្វីស",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:37.162278+00:00",
+      "request_finished_at": "2026-08-03T10:33:39.406821+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 18,
+      "text": "អញ្ចឹងអ្នកធ្លាប់ទៅស្វីសទេ?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0018.wav",
+      "request_payload": {
+        "text": "អញ្ចឹងអ្នកធ្លាប់ទៅស្វីសទេ?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:39.412873+00:00",
+      "request_finished_at": "2026-08-03T10:33:41.788438+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 19,
+      "text": "មកដល់ពេលនេះ ខ្ញុំទាន់មិនធ្លាប់ទៅទេ",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0019.wav",
+      "request_payload": {
+        "text": "មកដល់ពេលនេះ ខ្ញុំទាន់មិនធ្លាប់ទៅទេ",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:41.793178+00:00",
+      "request_finished_at": "2026-08-03T10:33:44.446609+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 20,
+      "text": "អ៊ីចឹង អ្នកធ្លាប់ទៅប្រទេសណាខ្លះហើយ?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0020.wav",
+      "request_payload": {
+        "text": "អ៊ីចឹង អ្នកធ្លាប់ទៅប្រទេសណាខ្លះហើយ?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:44.453353+00:00",
+      "request_finished_at": "2026-08-03T10:33:46.978184+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 21,
+      "text": "ខ្ញុំមកដល់ពេលនេះ មិនទាន់ធ្លាប់ចេញក្រៅប្រទេសទេ។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0021.wav",
+      "request_payload": {
+        "text": "ខ្ញុំមកដល់ពេលនេះ មិនទាន់ធ្លាប់ចេញក្រៅប្រទេសទេ។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:46.983992+00:00",
+      "request_finished_at": "2026-08-03T10:33:49.678739+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 22,
+      "text": "អ៊ីចឹង ចំណូលចិត្តរបស់អ្នកជាអ្វី?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0022.wav",
+      "request_payload": {
+        "text": "អ៊ីចឹង ចំណូលចិត្តរបស់អ្នកជាអ្វី?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:49.683853+00:00",
+      "request_finished_at": "2026-08-03T10:33:51.792778+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 23,
+      "text": "ចំណូលចិត្តខ្ញុំ គឺអូសទូរស័ព្ទលេងហ្នឹងឯង។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0023.wav",
+      "request_payload": {
+        "text": "ចំណូលចិត្តខ្ញុំ គឺអូសទូរស័ព្ទលេងហ្នឹងឯង។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:51.799262+00:00",
+      "request_finished_at": "2026-08-03T10:33:54.835238+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 24,
+      "text": "ផ្លែឈើដែលអ្នកចូលចិត្តបំផុត ជាអ្វី?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0024.wav",
+      "request_payload": {
+        "text": "ផ្លែឈើដែលអ្នកចូលចិត្តបំផុត ជាអ្វី?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:54.841085+00:00",
+      "request_finished_at": "2026-08-03T10:33:57.064707+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 25,
+      "text": "ខ្ញុំចូលចិត្តញ៉ាំស្ត្រប៊េរី។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0025.wav",
+      "request_payload": {
+        "text": "ខ្ញុំចូលចិត្តញ៉ាំស្ត្រប៊េរី។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:57.071527+00:00",
+      "request_finished_at": "2026-08-03T10:33:59.456798+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 26,
+      "text": "អ៊ីចឹង អ្នកចូលចិត្តផឹកភេសជ្ជៈទេ?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0026.wav",
+      "request_payload": {
+        "text": "អ៊ីចឹង អ្នកចូលចិត្តផឹកភេសជ្ជៈទេ?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:33:59.462164+00:00",
+      "request_finished_at": "2026-08-03T10:34:01.838008+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 27,
+      "text": "ខ្ញុំចូលចិត្តផឹកតែទឹកដោះគោ។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0027.wav",
+      "request_payload": {
+        "text": "ខ្ញុំចូលចិត្តផឹកតែទឹកដោះគោ។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:01.844776+00:00",
+      "request_finished_at": "2026-08-03T10:34:04.602745+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 28,
+      "text": "ភេសជ្ជៈទាំងអស់ អ្វីៗផ្អែមៗ ខ្ញុំចូលចិត្តទាំងអស់។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0028.wav",
+      "request_payload": {
+        "text": "ភេសជ្ជៈទាំងអស់ អ្វីៗផ្អែមៗ ខ្ញុំចូលចិត្តទាំងអស់។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:04.607776+00:00",
+      "request_finished_at": "2026-08-03T10:34:07.765693+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 29,
+      "text": "មានរសនិយមមែន។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0029.wav",
+      "request_payload": {
+        "text": "មានរសនិយមមែន។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:07.771172+00:00",
+      "request_finished_at": "2026-08-03T10:34:10.209779+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 30,
+      "text": "ខ្ញុំក៏ចូលចិត្តញ៉ាំផ្អែមដែរ។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0030.wav",
+      "request_payload": {
+        "text": "ខ្ញុំក៏ចូលចិត្តញ៉ាំផ្អែមដែរ។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:10.217762+00:00",
+      "request_finished_at": "2026-08-03T10:34:12.315351+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 31,
+      "text": "ម្ហូបដែលអ្នកចូលចិត្តបំផុត ជាអ្វី?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0031.wav",
+      "request_payload": {
+        "text": "ម្ហូបដែលអ្នកចូលចិត្តបំផុត ជាអ្វី?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:12.321658+00:00",
+      "request_finished_at": "2026-08-03T10:34:14.465579+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 32,
+      "text": "ក្រៅពីរបស់ផ្អែមៗទាំងនោះ។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0032.wav",
+      "request_payload": {
+        "text": "ក្រៅពីរបស់ផ្អែមៗទាំងនោះ។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:14.469932+00:00",
+      "request_finished_at": "2026-08-03T10:34:16.588507+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 33,
+      "text": "ខ្ញុំចូលចិត្តញ៉ាំស្ប៉ាហ្គេទី។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0033.wav",
+      "request_payload": {
+        "text": "ខ្ញុំចូលចិត្តញ៉ាំស្ប៉ាហ្គេទី។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:16.593887+00:00",
+      "request_finished_at": "2026-08-03T10:34:18.956599+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 34,
+      "text": "ហ្នឹងឆ្ងាញ់មែន។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0034.wav",
+      "request_payload": {
+        "text": "ហ្នឹងឆ្ងាញ់មែន។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:18.964869+00:00",
+      "request_finished_at": "2026-08-03T10:34:21.083921+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 35,
+      "text": "រាល់ថ្ងៃ អ្នកក្រោកម៉ោងប៉ុន្មាន?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0035.wav",
+      "request_payload": {
+        "text": "រាល់ថ្ងៃ អ្នកក្រោកម៉ោងប៉ុន្មាន?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:21.091174+00:00",
+      "request_finished_at": "2026-08-03T10:34:23.592935+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 36,
+      "text": "រយៈពេលថ្មីៗនេះ ខ្ញុំវិញ...",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0036.wav",
+      "request_payload": {
+        "text": "រយៈពេលថ្មីៗនេះ ខ្ញុំវិញ...",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:23.596751+00:00",
+      "request_finished_at": "2026-08-03T10:34:25.827171+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 37,
+      "text": "រាល់ព្រឹក ម៉ោង៦ ខ្ញុំក្រោកហើយ។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0037.wav",
+      "request_payload": {
+        "text": "រាល់ព្រឹក ម៉ោង៦ ខ្ញុំក្រោកហើយ។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:25.831051+00:00",
+      "request_finished_at": "2026-08-03T10:34:28.173229+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 38,
+      "text": "ព្រឹកម្ល៉េះ?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0038.wav",
+      "request_payload": {
+        "text": "ព្រឹកម្ល៉េះ?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:28.180380+00:00",
+      "request_finished_at": "2026-08-03T10:34:30.202946+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 39,
+      "text": "ត្រូវទៅរៀនមែនទេ?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0039.wav",
+      "request_payload": {
+        "text": "ត្រូវទៅរៀនមែនទេ?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:30.208049+00:00",
+      "request_finished_at": "2026-08-03T10:34:32.487023+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 40,
+      "text": "ទេ។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0040.wav",
+      "request_payload": {
+        "text": "ទេ។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:32.493989+00:00",
+      "request_finished_at": "2026-08-03T10:34:34.703511+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 41,
+      "text": "គ្រាន់តែចង់ឲ្យខ្លួនឯងក្រោកឲ្យបានមុនបន្តិច។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0041.wav",
+      "request_payload": {
+        "text": "គ្រាន់តែចង់ឲ្យខ្លួនឯងក្រោកឲ្យបានមុនបន្តិច។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:34.711011+00:00",
+      "request_finished_at": "2026-08-03T10:34:37.200214+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 42,
+      "text": "មិនចង់ដេករហូតដល់ថ្ងៃត្រង់ទេ។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0042.wav",
+      "request_payload": {
+        "text": "មិនចង់ដេករហូតដល់ថ្ងៃត្រង់ទេ។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:37.207618+00:00",
+      "request_finished_at": "2026-08-03T10:34:39.488988+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 43,
+      "text": "អ៊ីចឹងវាមានន័យណាស់។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0043.wav",
+      "request_payload": {
+        "text": "អ៊ីចឹងវាមានន័យណាស់។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:39.496216+00:00",
+      "request_finished_at": "2026-08-03T10:34:41.778393+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 44,
+      "text": "អ៊ីចឹងរាល់ថ្ងៃ អ្នកចូលគេងម៉ោងប៉ុន្មាន?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0044.wav",
+      "request_payload": {
+        "text": "អ៊ីចឹងរាល់ថ្ងៃ អ្នកចូលគេងម៉ោងប៉ុន្មាន?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:41.785905+00:00",
+      "request_finished_at": "2026-08-03T10:34:44.297825+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 45,
+      "text": "ថ្មីៗនេះ ខ្ញុំចូលគេងលឿនជាងមុន។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0045.wav",
+      "request_payload": {
+        "text": "ថ្មីៗនេះ ខ្ញុំចូលគេងលឿនជាងមុន។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:44.304868+00:00",
+      "request_finished_at": "2026-08-03T10:34:46.395554+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 46,
+      "text": "ប្រហែលម៉ោង 10 ឬ 11 យប់ ខ្ញុំចូលគេងហើយ។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0046.wav",
+      "request_payload": {
+        "text": "ប្រហែលម៉ោង 10 ឬ 11 យប់ ខ្ញុំចូលគេងហើយ។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:46.402544+00:00",
+      "request_finished_at": "2026-08-03T10:34:48.844617+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 47,
+      "text": "ល្អណាស់ សុខភាពល្អខ្លាំង។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0047.wav",
+      "request_payload": {
+        "text": "ល្អណាស់ សុខភាពល្អខ្លាំង។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:48.851520+00:00",
+      "request_finished_at": "2026-08-03T10:34:51.001766+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 48,
+      "text": "អ៊ីចឹង អ្នកចូលចិត្តហាត់ប្រាណទេ?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0048.wav",
+      "request_payload": {
+        "text": "អ៊ីចឹង អ្នកចូលចិត្តហាត់ប្រាណទេ?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:51.008225+00:00",
+      "request_finished_at": "2026-08-03T10:34:53.442654+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 49,
+      "text": "ខ្ញុំមិនសូវចូលចិត្តហាត់ប្រាណទេ។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0049.wav",
+      "request_payload": {
+        "text": "ខ្ញុំមិនសូវចូលចិត្តហាត់ប្រាណទេ។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:53.449901+00:00",
+      "request_finished_at": "2026-08-03T10:34:56.207482+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 50,
+      "text": "អ៊ីចឹងធម្មតា អ្នកនៅតែអូសទូរស័ព្ទទេ?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0050.wav",
+      "request_payload": {
+        "text": "អ៊ីចឹងធម្មតា អ្នកនៅតែអូសទូរស័ព្ទទេ?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:56.213210+00:00",
+      "request_finished_at": "2026-08-03T10:34:58.758356+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 51,
+      "text": "បាទ/ចាស ខ្ញុំធម្មតាចូលចិត្តដេកលេងទូរស័ព្ទប៉ុណ្ណោះ។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0051.wav",
+      "request_payload": {
+        "text": "បាទ/ចាស ខ្ញុំធម្មតាចូលចិត្តដេកលេងទូរស័ព្ទប៉ុណ្ណោះ។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:34:58.763271+00:00",
+      "request_finished_at": "2026-08-03T10:35:01.482730+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 52,
+      "text": "បាន។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0052.wav",
+      "request_payload": {
+        "text": "បាន។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:35:01.490537+00:00",
+      "request_finished_at": "2026-08-03T10:35:03.480400+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 53,
+      "text": "អ៊ីចឹង រឿងដំបូងដែលអ្នកធ្វើពេលក្រោកពីគេងរាល់ព្រឹក",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0053.wav",
+      "request_payload": {
+        "text": "អ៊ីចឹង រឿងដំបូងដែលអ្នកធ្វើពេលក្រោកពីគេងរាល់ព្រឹក",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:35:03.485151+00:00",
+      "request_finished_at": "2026-08-03T10:35:06.393110+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 54,
+      "text": "គឺអ្វី?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0054.wav",
+      "request_payload": {
+        "text": "គឺអ្វី?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:35:06.399993+00:00",
+      "request_finished_at": "2026-08-03T10:35:08.467348+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 55,
+      "text": "បើកទូរស័ព្ទ ហើយមើលទូរស័ព្ទ។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0055.wav",
+      "request_payload": {
+        "text": "បើកទូរស័ព្ទ ហើយមើលទូរស័ព្ទ។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:35:08.475310+00:00",
+      "request_finished_at": "2026-08-03T10:35:11.111212+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 56,
+      "text": "បានហើយ មនុស្សផ្កាយ។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0056.wav",
+      "request_payload": {
+        "text": "បានហើយ មនុស្សផ្កាយ។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:35:11.117432+00:00",
+      "request_finished_at": "2026-08-03T10:35:13.211903+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 57,
+      "text": "សួស្តី។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0057.wav",
+      "request_payload": {
+        "text": "សួស្តី។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:35:13.218919+00:00",
+      "request_finished_at": "2026-08-03T10:35:15.265002+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 58,
+      "text": "សួស្តី។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0058.wav",
+      "request_payload": {
+        "text": "សួស្តី។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:35:15.272657+00:00",
+      "request_finished_at": "2026-08-03T10:35:17.351126+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 59,
+      "text": "តើអ្នកត្រកូលអ្វី?",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0059.wav",
+      "request_payload": {
+        "text": "តើអ្នកត្រកូលអ្វី?",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:35:17.359475+00:00",
+      "request_finished_at": "2026-08-03T10:35:19.518007+00:00",
+      "http_status": null,
+      "response_body": null
+    },
+    {
+      "segment_id": 60,
+      "text": "ខ្ញុំត្រកូល កៅ។",
+      "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing12.autodub/tts/0060.wav",
+      "request_payload": {
+        "text": "ខ្ញុំត្រកូល កៅ។",
+        "voice_id": 170542,
+        "language": "km-kh",
+        "speech_model": "mars-8.1-flash-beta",
+        "output_format": "wav",
+        "speaking_rate": 1.0
+      },
+      "request_started": true,
+      "request_started_at": "2026-08-03T10:35:19.525938+00:00",
+      "request_finished_at": "2026-08-03T10:35:21.774824+00:00",
+      "http_status": null,
+      "response_body": null
+    }
+  ]
+}

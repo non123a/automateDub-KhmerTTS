@@ -189,15 +189,20 @@ class SettingsManager:
             stt_provider=self._data.stt_provider_id,
             translation_provider=self._data.translation_provider_id,
             tts_provider=self._data.tts_provider_id,
+            whisper_cpp_path=whisper.get("executable", base.whisper_cpp_path),
             whisper_model_path=Path(whisper.get("model_path", str(base.whisper_model_path))),
+            nbw_base_url=nbwcode.get("base_url", base.nbw_base_url),
             nbw_automatedub_api_key=nbw_api_key or base.nbw_automatedub_api_key,
             localization_model=nbwcode.get("model", base.localization_model),
-            tts_model=cambai.get("model") or nbwcode.get("model") or base.tts_model,
+            translation_wire_api=nbwcode.get("wire_api", base.translation_wire_api),
+            tts_model=cambai.get("model") or base.tts_model,
             camb_api_key=camb_api_key or base.camb_api_key,
+            camb_api_base_url=cambai.get("base_url", base.camb_api_base_url),
             camb_language=cambai.get("language", base.camb_language),
             camb_voice_id=self._data.selected_voice
             or cambai.get("voice_id")
             or base.camb_voice_id,
+            tts_speed=_float_setting(cambai.get("speaking_rate"), base.tts_speed),
         )
 
     def cache_usage_bytes(self) -> int:
@@ -253,3 +258,12 @@ def _flat_string_map(value: object) -> dict[str, str]:
     if not isinstance(value, dict):
         return {}
     return {str(key): str(inner) for key, inner in value.items()}
+
+
+def _float_setting(value: str | None, default: float) -> float:
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default

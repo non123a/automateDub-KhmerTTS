@@ -41,7 +41,9 @@ provider_registry.register_stt(
         kind="stt",
         factory=WhisperCppSTTProvider,
         config_fields=(
+            ProviderConfigField("executable", "Executable", default="whisper-cli"),
             ProviderConfigField("model_path", "Model Path", default="models/ggml-small.bin"),
+            ProviderConfigField("threads", "Threads", default="auto"),
         ),
     )
 )

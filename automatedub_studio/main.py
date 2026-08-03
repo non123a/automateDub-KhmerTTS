@@ -5,16 +5,18 @@ from __future__ import annotations
 import sys
 
 from automatedub_studio.app import create_application, create_initial_window, startup_paths
+from automatedub_studio.settings.manager import SettingsManager
 from automatedub_studio.ui.main_window import MainWindow
 
 
 def main() -> int:
     app = create_application(sys.argv)
     editor_windows: list[MainWindow] = []
-    window = create_initial_window()
+    settings_manager = SettingsManager()
+    window = create_initial_window(settings_manager=settings_manager)
 
     def open_editor(project_dir) -> None:
-        editor = MainWindow()
+        editor = MainWindow(tool_config=settings_manager.tool_config())
         editor_windows.append(editor)
         editor.show()
         editor.open_project_path(project_dir)

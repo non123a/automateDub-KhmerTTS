@@ -1,0 +1,621 @@
+{
+  "version": 1,
+  "source_transcript": "transcript.json",
+  "prompt_artifact": "translation_prompt.json",
+  "engine": {
+    "provider": "openai-compatible",
+    "model": "gpt-5.5"
+  },
+  "segments": [
+    {
+      "id": 0,
+      "start": 0.0,
+      "end": 4.08,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "都不能达到完全跟外国人交流的水平",
+      "target_text": "ក៏មិនទាន់ដល់កម្រិតអាចនិយាយជាមួយជនបរទេសបានពេញលេញដែរ",
+      "notes": null
+    },
+    {
+      "id": 1,
+      "start": 4.08,
+      "end": 6.4,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "那已经超越了很多人了",
+      "target_text": "អញ្ចឹងក៏លើសមនុស្សជាច្រើនហើយ",
+      "notes": null
+    },
+    {
+      "id": 2,
+      "start": 6.4,
+      "end": 7.8,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "其他很多人都不会",
+      "target_text": "មនុស្សច្រើនទៀតធ្វើមិនបានផង",
+      "notes": null
+    },
+    {
+      "id": 3,
+      "start": 7.8,
+      "end": 9.36,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "你有多高",
+      "target_text": "អ្នកកម្ពស់ប៉ុន្មាន?",
+      "notes": null
+    },
+    {
+      "id": 4,
+      "start": 9.36,
+      "end": 10.44,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我163",
+      "target_text": "ខ្ញុំមួយរយហុកសិបបី",
+      "notes": null
+    },
+    {
+      "id": 5,
+      "start": 10.44,
+      "end": 12.36,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "你有兄弟姐妹吗",
+      "target_text": "អ្នកមានបងប្អូនប្រុសស្រីទេ?",
+      "notes": null
+    },
+    {
+      "id": 6,
+      "start": 12.36,
+      "end": 13.92,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我是独生女",
+      "target_text": "ខ្ញុំជាកូនស្រីតែម្នាក់",
+      "notes": null
+    },
+    {
+      "id": 7,
+      "start": 13.92,
+      "end": 16.44,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "你最喜欢的动物是什么",
+      "target_text": "សត្វដែលអ្នកចូលចិត្តបំផុតគឺអ្វី?",
+      "notes": null
+    },
+    {
+      "id": 8,
+      "start": 16.44,
+      "end": 18.68,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我喜欢小狗小兔子",
+      "target_text": "ខ្ញុំចូលចិត្តកូនឆ្កែ កូនទន្សាយ",
+      "notes": null
+    },
+    {
+      "id": 9,
+      "start": 18.68,
+      "end": 21.6,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "那你有养这些小动物吗",
+      "target_text": "អញ្ចឹងអ្នកមានចិញ្ចឹមសត្វតូចៗទាំងនេះទេ?",
+      "notes": null
+    },
+    {
+      "id": 10,
+      "start": 21.6,
+      "end": 22.92,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "以前养过小兔子",
+      "target_text": "ពីមុនធ្លាប់ចិញ្ចឹមកូនទន្សាយ",
+      "notes": null
+    },
+    {
+      "id": 11,
+      "start": 22.92,
+      "end": 24.8,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "然后现在不养了",
+      "target_text": "តែឥឡូវមិនចិញ្ចឹមទៀតទេ",
+      "notes": null
+    },
+    {
+      "id": 12,
+      "start": 24.8,
+      "end": 27.72,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "那你以后还会想要养这些小兔子",
+      "target_text": "អញ្ចឹងថ្ងៃក្រោយអ្នកនៅចង់ចិញ្ចឹមកូនទន្សាយទាំងនេះទៀតទេ?",
+      "notes": null
+    },
+    {
+      "id": 13,
+      "start": 27.72,
+      "end": 29.04,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "或者小狗之类的吗",
+      "target_text": "ឬកូនឆ្កែអីបែបនោះ?",
+      "notes": null
+    },
+    {
+      "id": 14,
+      "start": 29.04,
+      "end": 32.64,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我以后还会养小狗小猫这些小动物",
+      "target_text": "ថ្ងៃក្រោយខ្ញុំនឹងចិញ្ចឹមកូនឆ្កែ កូនឆ្មា និងសត្វតូចៗបែបនេះទៀត",
+      "notes": null
+    },
+    {
+      "id": 15,
+      "start": 32.64,
+      "end": 34.68,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "你最喜欢的国家是哪个",
+      "target_text": "ប្រទេសដែលអ្នកចូលចិត្តបំផុតគឺប្រទេសណា?",
+      "notes": null
+    },
+    {
+      "id": 16,
+      "start": 34.68,
+      "end": 36.28,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "除了中国",
+      "target_text": "ក្រៅពីចិនนะ",
+      "notes": null
+    },
+    {
+      "id": 17,
+      "start": 36.28,
+      "end": 40.76,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我喜欢瑞士",
+      "target_text": "ខ្ញុំចូលចិត្តស្វ៊ីស",
+      "notes": null
+    },
+    {
+      "id": 18,
+      "start": 40.76,
+      "end": 43.04,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "那你有没有去过瑞士",
+      "target_text": "អញ្ចឹងអ្នកធ្លាប់ទៅស្វ៊ីសទេ?",
+      "notes": null
+    },
+    {
+      "id": 19,
+      "start": 43.04,
+      "end": 44.72,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "暂时还没有去过",
+      "target_text": "បណ្ដោះអាសន្នមិនទាន់ធ្លាប់ទៅទេ",
+      "notes": null
+    },
+    {
+      "id": 20,
+      "start": 44.72,
+      "end": 47.24,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "那你去过哪些国家",
+      "target_text": "អ៊ីចឹង អ្នកធ្លាប់ទៅប្រទេសណាខ្លះ?",
+      "notes": null
+    },
+    {
+      "id": 21,
+      "start": 47.24,
+      "end": 49.4,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我目前没有出过国",
+      "target_text": "មកដល់ពេលនេះ ខ្ញុំមិនទាន់ធ្លាប់ចេញក្រៅប្រទេសទេ។",
+      "notes": null
+    },
+    {
+      "id": 22,
+      "start": 49.4,
+      "end": 52.32,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "那你的爱好是什么",
+      "target_text": "ហើយចំណង់ចំណូលចិត្តរបស់អ្នកជាអ្វី?",
+      "notes": null
+    },
+    {
+      "id": 23,
+      "start": 52.32,
+      "end": 54.84,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我的爱好就是刷手机",
+      "target_text": "ចំណង់ចំណូលចិត្តខ្ញុំ គឺអូសមើលទូរស័ព្ទហ្នឹងឯង។",
+      "notes": null
+    },
+    {
+      "id": 24,
+      "start": 57.84,
+      "end": 60.24,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "你最喜欢的水果是什么",
+      "target_text": "ផ្លែឈើដែលអ្នកចូលចិត្តបំផុតជាអ្វី?",
+      "notes": null
+    },
+    {
+      "id": 25,
+      "start": 60.24,
+      "end": 62.0,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我喜欢吃草莓",
+      "target_text": "ខ្ញុំចូលចិត្តញ៉ាំស្ត្របឺរី។",
+      "notes": null
+    },
+    {
+      "id": 26,
+      "start": 62.0,
+      "end": 64.32,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "那你喜欢喝饮料吗",
+      "target_text": "ហើយអ្នកចូលចិត្តផឹកភេសជ្ជៈអត់?",
+      "notes": null
+    },
+    {
+      "id": 27,
+      "start": 64.32,
+      "end": 65.4,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我喜欢喝奶茶",
+      "target_text": "ខ្ញុំចូលចិត្តផឹកតែទឹកដោះគោ។",
+      "notes": null
+    },
+    {
+      "id": 28,
+      "start": 65.4,
+      "end": 68.56,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "所有的饮料 甜的东西我都喜欢吃",
+      "target_text": "ភេសជ្ជៈគ្រប់មុខ របស់ផ្អែមៗ ខ្ញុំចូលចិត្តញ៉ាំទាំងអស់។",
+      "notes": null
+    },
+    {
+      "id": 29,
+      "start": 68.56,
+      "end": 69.48,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "很有品味",
+      "target_text": "រសនិយមល្អណាស់។",
+      "notes": null
+    },
+    {
+      "id": 30,
+      "start": 69.48,
+      "end": 72.2,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我也喜欢吃甜的",
+      "target_text": "ខ្ញុំក៏ចូលចិត្តញ៉ាំរបស់ផ្អែមដែរ។",
+      "notes": null
+    },
+    {
+      "id": 31,
+      "start": 72.2,
+      "end": 75.2,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "你最喜欢的食物是什么",
+      "target_text": "ម្ហូបដែលអ្នកចូលចិត្តបំផុតជាអ្វី?",
+      "notes": null
+    },
+    {
+      "id": 32,
+      "start": 75.2,
+      "end": 77.64,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "除了那些甜食以外",
+      "target_text": "ក្រៅពីរបស់ផ្អែមទាំងនោះទៅ។",
+      "notes": null
+    },
+    {
+      "id": 33,
+      "start": 77.64,
+      "end": 79.48,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我喜欢吃意大利面",
+      "target_text": "ខ្ញុំចូលចិត្តញ៉ាំស្ប៉ាហ្គេទី។",
+      "notes": null
+    },
+    {
+      "id": 34,
+      "start": 79.48,
+      "end": 81.4,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "那是很好吃",
+      "target_text": "អាហ្នឹងឆ្ងាញ់មែន។",
+      "notes": null
+    },
+    {
+      "id": 35,
+      "start": 81.4,
+      "end": 84.04,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "你每天几点起床",
+      "target_text": "រាល់ថ្ងៃអ្នកក្រោកម៉ោងប៉ុន្មាន?",
+      "notes": null
+    },
+    {
+      "id": 36,
+      "start": 84.04,
+      "end": 84.96,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我最近的话",
+      "target_text": "ថ្មីៗនេះ ខ្ញុំនោះ...",
+      "notes": null
+    },
+    {
+      "id": 37,
+      "start": 84.96,
+      "end": 87.2,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "天天早上6点钟就起床了",
+      "target_text": "រាល់ព្រឹកក្រោកតាំងពីម៉ោងប្រាំមួយ។",
+      "notes": null
+    },
+    {
+      "id": 38,
+      "start": 87.2,
+      "end": 88.48,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "那么早",
+      "target_text": "ឆាប់ម្ល៉េះ?",
+      "notes": null
+    },
+    {
+      "id": 39,
+      "start": 88.48,
+      "end": 89.88,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "是要上课吗",
+      "target_text": "ត្រូវទៅរៀនមែនទេ?",
+      "notes": null
+    },
+    {
+      "id": 40,
+      "start": 89.88,
+      "end": 90.64,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "没有",
+      "target_text": "អត់ទេ",
+      "notes": null
+    },
+    {
+      "id": 41,
+      "start": 90.64,
+      "end": 92.52,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "就是想让自己早点起来",
+      "target_text": "គ្រាន់តែចង់ឲ្យខ្លួនឯងក្រោកពីព្រឹកបន្តិច",
+      "notes": null
+    },
+    {
+      "id": 42,
+      "start": 92.52,
+      "end": 94.72,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "不要就是睡到中午",
+      "target_text": "កុំឲ្យដេករហូតដល់ថ្ងៃត្រង់",
+      "notes": null
+    },
+    {
+      "id": 43,
+      "start": 94.72,
+      "end": 96.16,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "那很有意义",
+      "target_text": "អ៊ីចឹងមានន័យណាស់",
+      "notes": null
+    },
+    {
+      "id": 44,
+      "start": 96.16,
+      "end": 99.4,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "那你每天什么时候睡觉",
+      "target_text": "ចុះរាល់ថ្ងៃ អ្នកគេងម៉ោងប៉ុន្មាន?",
+      "notes": null
+    },
+    {
+      "id": 45,
+      "start": 99.4,
+      "end": 100.88,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我最近睡得比较早",
+      "target_text": "ថ្មីៗនេះ ខ្ញុំគេងលឿនជាងមុន",
+      "notes": null
+    },
+    {
+      "id": 46,
+      "start": 100.88,
+      "end": 103.48,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "大概晚上10点11点就睡了",
+      "target_text": "ប្រហែលម៉ោងដប់ ឬដប់មួយយប់ ក៏គេងហើយ",
+      "notes": null
+    },
+    {
+      "id": 47,
+      "start": 103.48,
+      "end": 105.96,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "好健康 特别好",
+      "target_text": "ល្អណាស់ សុខភាពល្អមែនទែន",
+      "notes": null
+    },
+    {
+      "id": 48,
+      "start": 105.96,
+      "end": 108.72,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "那你喜欢运动吗",
+      "target_text": "ចុះអ្នកចូលចិត្តហាត់ប្រាណទេ?",
+      "notes": null
+    },
+    {
+      "id": 49,
+      "start": 108.72,
+      "end": 110.12,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我不喜欢运动",
+      "target_text": "ខ្ញុំមិនចូលចិត្តហាត់ប្រាណទេ",
+      "notes": null
+    },
+    {
+      "id": 50,
+      "start": 110.12,
+      "end": 113.92,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "那你平时就刷手机",
+      "target_text": "អ៊ីចឹងធម្មតា អ្នកគ្រាន់តែអូសទូរស័ព្ទមែនទេ?",
+      "notes": null
+    },
+    {
+      "id": 51,
+      "start": 113.92,
+      "end": 117.44,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "对 我平时就是喜欢烫着刷手机",
+      "target_text": "បាទ ធម្មតាខ្ញុំចូលចិត្តដេកស្រួលៗ ហើយអូសទូរស័ព្ទ",
+      "notes": null
+    },
+    {
+      "id": 52,
+      "start": 117.44,
+      "end": 118.72,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "好",
+      "target_text": "ល្អ",
+      "notes": null
+    },
+    {
+      "id": 53,
+      "start": 118.72,
+      "end": 121.08,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "那你每天早上起来的第一件事",
+      "target_text": "ចុះរាល់ព្រឹក ពេលអ្នកក្រោកឡើង រឿងដំបូង",
+      "notes": null
+    },
+    {
+      "id": 54,
+      "start": 121.08,
+      "end": 123.6,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "是做什么",
+      "target_text": "អ្នកធ្វើអ្វី?",
+      "notes": null
+    },
+    {
+      "id": 55,
+      "start": 123.6,
+      "end": 126.2,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "打开手机 看手机",
+      "target_text": "បើកទូរស័ព្ទ មើលទូរស័ព្ទ",
+      "notes": null
+    },
+    {
+      "id": 56,
+      "start": 126.2,
+      "end": 130.04,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "好 星星人类",
+      "target_text": "ល្អ មនុស្សផ្កាយ",
+      "notes": null
+    },
+    {
+      "id": 57,
+      "start": 130.04,
+      "end": 131.24,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "你好",
+      "target_text": "សួស្តី",
+      "notes": null
+    },
+    {
+      "id": 58,
+      "start": 131.24,
+      "end": 132.4,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "你好",
+      "target_text": "សួស្តី",
+      "notes": null
+    },
+    {
+      "id": 59,
+      "start": 132.4,
+      "end": 133.88,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "你姓什么",
+      "target_text": "អ្នកត្រកូលអ្វី?",
+      "notes": null
+    },
+    {
+      "id": 60,
+      "start": 133.88,
+      "end": 134.96,
+      "source_language": "zh",
+      "target_language": "km",
+      "source_text": "我姓高",
+      "target_text": "ខ្ញុំត្រកូលកៅ។",
+      "notes": null
+    }
+  ]
+}

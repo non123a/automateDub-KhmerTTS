@@ -32,17 +32,17 @@ class ProjectDetailsPage(QWizardPage):
 
         self.project_name_edit = QLineEdit()
         self.project_name_edit.setObjectName("project_name_edit")
-        self.project_name_edit.textChanged.connect(self.completeChanged.emit)
+        self.project_name_edit.textChanged.connect(self._emit_complete_changed)
         layout.addRow("Project Name", self.project_name_edit)
 
         self.location_edit = QLineEdit()
         self.location_edit.setObjectName("project_location_edit")
-        self.location_edit.textChanged.connect(self.completeChanged.emit)
+        self.location_edit.textChanged.connect(self._emit_complete_changed)
         layout.addRow("Project Location", self._path_row(self.location_edit, self._browse_location))
 
         self.video_file_edit = QLineEdit()
         self.video_file_edit.setObjectName("video_file_edit")
-        self.video_file_edit.textChanged.connect(self.completeChanged.emit)
+        self.video_file_edit.textChanged.connect(self._emit_complete_changed)
         layout.addRow("Video File", self._path_row(self.video_file_edit, self._browse_video))
 
         self.source_language_combo = QComboBox()
@@ -97,6 +97,9 @@ class ProjectDetailsPage(QWizardPage):
         )
         if path:
             self.video_file_edit.setText(path)
+
+    def _emit_complete_changed(self, _text: str) -> None:
+        self.completeChanged.emit()
 
 
 class ProjectSummaryPage(QWizardPage):

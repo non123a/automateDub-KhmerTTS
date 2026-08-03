@@ -72,7 +72,12 @@ configuration path.
 Provider selectors are populated from `ProviderRegistry`; the UI must not keep
 its own hardcoded provider lists. Provider-specific fields come from provider
 descriptors, allowing adapters to define configuration needs such as API key,
-model, default voice, language, timeout, and diagnostics.
+base URL, executable, model path, model, default voice, language, speaking
+rate, timeout, and diagnostics.
+
+Changing a provider selection rebuilds only that descriptor-driven
+configuration panel. Saving persists provider IDs through `SettingsManager`, so
+restart restores the same STT, Translation, and TTS selections.
 
 ## Secure Settings
 
@@ -93,7 +98,9 @@ SettingsWindow
 ## Diagnostics, Cache, And Logs
 
 - Provider diagnostics call `validate()` and report connection/authentication state and latency.
-- Voice browsing calls `TTSProvider.list_voices()`.
+- Voice browsing calls `TTSProvider.list_voices()`, supports manual refresh, and automatically reloads voices after successful TTS validation.
+- The voice browser shows loading, empty, and error states instead of silently leaving a blank list.
+- Voice selection stores provider voice IDs and reselects them after restart when the provider returns the same voice.
 - Cache usage is computed from the configured cache directory, with a clear-cache action.
 - Logs show recent pipeline errors and can open the configured log directory.
 

@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "resolved_pipeline": [
+    "create_project",
+    "copy_source_video",
+    "extract_audio",
+    "transcription",
+    "speech_detection",
+    "translation",
+    "tts_generation",
+    "timeline_generation"
+  ],
+  "resolved_pipeline_jobs": [
+    {
+      "stage_id": "create_project",
+      "stage_name": "Create Project",
+      "job_class": "CreateProjectJob",
+      "job_module": "automatedub_studio.pipeline.jobs"
+    },
+    {
+      "stage_id": "copy_source_video",
+      "stage_name": "Copy Source Video",
+      "job_class": "CopySourceVideoJob",
+      "job_module": "automatedub_studio.pipeline.jobs"
+    },
+    {
+      "stage_id": "extract_audio",
+      "stage_name": "Extract Audio",
+      "job_class": "ExtractAudioJob",
+      "job_module": "automatedub_studio.pipeline.jobs"
+    },
+    {
+      "stage_id": "transcription",
+      "stage_name": "Transcription",
+      "job_class": "TranscriptionJob",
+      "job_module": "automatedub_studio.pipeline.jobs"
+    },
+    {
+      "stage_id": "speech_detection",
+      "stage_name": "Speech Detection",
+      "job_class": "SpeechDetectionJob",
+      "job_module": "automatedub_studio.pipeline.jobs"
+    },
+    {
+      "stage_id": "translation",
+      "stage_name": "Translation",
+      "job_class": "TranslationJob",
+      "job_module": "automatedub_studio.pipeline.jobs"
+    },
+    {
+      "stage_id": "tts_generation",
+      "stage_name": "Generating Khmer Speech",
+      "job_class": "BulkKhmerTTSGenerationJob",
+      "job_module": "automatedub_studio.pipeline.jobs"
+    },
+    {
+      "stage_id": "timeline_generation",
+      "stage_name": "Timeline Generation",
+      "job_class": "TimelineGenerationJob",
+      "job_module": "automatedub_studio.pipeline.jobs"
+    }
+  ],
+  "events": [
+    {
+      "stage_id": "create_project",
+      "stage_name": "Create Project",
+      "job_class": "CreateProjectJob",
+      "job_module": "automatedub_studio.pipeline.jobs",
+      "start_time": "2026-08-03T08:27:13.555028+00:00",
+      "finish_time": "2026-08-03T08:27:13.556824+00:00",
+      "elapsed_seconds": 0.001,
+      "status": "success"
+    },
+    {
+      "stage_id": "copy_source_video",
+      "stage_name": "Copy Source Video",
+      "job_class": "CopySourceVideoJob",
+      "job_module": "automatedub_studio.pipeline.jobs",
+      "start_time": "2026-08-03T08:27:13.557105+00:00",
+      "finish_time": "2026-08-03T08:27:13.566174+00:00",
+      "elapsed_seconds": 0.009,
+      "status": "success"
+    },
+    {
+      "stage_id": "extract_audio",
+      "stage_name": "Extract Audio",
+      "job_class": "ExtractAudioJob",
+      "job_module": "automatedub_studio.pipeline.jobs",
+      "start_time": "2026-08-03T08:27:13.566342+00:00",
+      "finish_time": "2026-08-03T08:27:14.012599+00:00",
+      "elapsed_seconds": 0.446,
+      "status": "success"
+    },
+    {
+      "stage_id": "transcription",
+      "stage_name": "Transcription",
+      "job_class": "TranscriptionJob",
+      "job_module": "automatedub_studio.pipeline.jobs",
+      "start_time": "2026-08-03T08:27:14.014024+00:00",
+      "finish_time": "2026-08-03T08:27:19.824364+00:00",
+      "elapsed_seconds": 5.81,
+      "status": "success"
+    },
+    {
+      "stage_id": "speech_detection",
+      "stage_name": "Speech Detection",
+      "job_class": "SpeechDetectionJob",
+      "job_module": "automatedub_studio.pipeline.jobs",
+      "start_time": "2026-08-03T08:27:19.827925+00:00",
+      "finish_time": "2026-08-03T08:27:19.833804+00:00",
+      "elapsed_seconds": 0.006,
+      "status": "success"
+    },
+    {
+      "stage_id": "translation",
+      "stage_name": "Translation",
+      "job_class": "TranslationJob",
+      "job_module": "automatedub_studio.pipeline.jobs",
+      "start_time": "2026-08-03T08:27:19.836571+00:00",
+      "finish_time": "2026-08-03T08:30:45.528670+00:00",
+      "elapsed_seconds": 205.692,
+      "status": "success"
+    },
+    {
+      "stage_id": "tts_generation",
+      "stage_name": "Generating Khmer Speech",
+      "job_class": "BulkKhmerTTSGenerationJob",
+      "job_module": "automatedub_studio.pipeline.jobs",
+      "start_time": "2026-08-03T08:30:45.535227+00:00",
+      "finish_time": "2026-08-03T08:31:03.589527+00:00",
+      "elapsed_seconds": 18.054,
+      "status": "failure",
+      "error": "All 61 Khmer speech generation requests failed. Common reason: headers: {'content-length': '362', 'content-type': 'application/json', 'date': 'Mon, 03 Aug 2026 08:30:56 GMT', 'server': 'envoy', 'x-envoy-upstream-service-time': '8'}, status_code: 422, body: detail=[ValidationError(loc=['body', 'speech_model'], msg=\"Input should be 'mars-pro', 'mars-81', 'mars-8.1-pro-beta', 'mars-8.1-flash-beta', 'mars-81-flash', 'mars-flash' or 'mars-instruct'\", type='literal_error', input='gpt-5.5', ctx={'expected': \"'mars-pro', 'mars-81', 'mars-8.1-pro-beta', 'mars-8.1-flash-beta', 'mars-81-flash', 'mars-flash' or 'mars-instruct'\"})]"
+    }
+  ]
+}

@@ -41,7 +41,7 @@ def test_run_doctor_reports_missing_tools_and_model(monkeypatch, tmp_path):
         False,
         True,
         True,
-        False,
+        True,
         True,
         True,
     ]
@@ -116,4 +116,4 @@ def test_check_tts_speed_reports_configured_value():
 def test_check_tts_speed_reports_default_value():
     check = doctor.check_tts_speed(ToolConfig())
 
-    assert check.detail == "1.0"
+    assert check.detail == "0.85"

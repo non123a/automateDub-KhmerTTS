@@ -101,6 +101,7 @@ Widgets should emit intent through signals and expose focused update methods. Bu
 
 - The Studio starts at `HomeWindow`, not the editor.
 - Recent projects are persisted outside projects and sorted with pinned entries first.
+- Recent-project actions are hidden for an empty dashboard and enabled only for the selected project.
 - Startup paths and operating-system file-open events route through `HomeWindow.open_path()`.
 - Dropping a supported video starts the New Project workflow.
 - Dropping a `.autodub` folder opens that project directly.

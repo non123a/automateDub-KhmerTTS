@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "project_name": "testing5",
+  "created_at": "2026-08-02T05:28:39.874431Z",
+  "source_language": "Chinese",
+  "target_language": "Khmer",
+  "source_video": "source/videoplayback3.mp4",
+  "editor_video": "source/videoplayback3.mp4",
+  "pipeline": {
+    "status": "created",
+    "stages": []
+  },
+  "providers": {
+    "stt_provider_id": "whisper_cpp",
+    "translation_provider_id": "nbwcode",
+    "tts_provider_id": "cambai",
+    "selected_voice": "170542"
+  },
+  "audio": "pipeline/audio.wav",
+  "transcript": "pipeline/transcript.json",
+  "speech_segments": "pipeline/speech_segments.json"
+}

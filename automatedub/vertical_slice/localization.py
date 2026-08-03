@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
+
+import httpx
 
 from automatedub.config import ToolConfig
 
@@ -15,6 +15,8 @@ PROMPT_VERSION = 1
 TRANSLATION_VERSION = 1
 LOCALIZATION_BATCH_SIZE = 20
 LOCALIZATION_HTTP_TIMEOUT_SECONDS = 300
+NBWCODE_PROVIDER_ID = "nbwcode"
+OPENAI_COMPATIBLE_USER_AGENT = "OpenAI/Python automatedub"
 
 
 class VS2Error(RuntimeError):
@@ -70,63 +72,82 @@ class NBWCodeDialogueLocalizer:
         self.tool_config = tool_config
 
     def localize(self, transcript_path: Path, translation_path: Path, prompt_path: Path) -> None:
-        base_url, api_key, model = validate_llm_config(self.tool_config)
-        transcript = load_transcript(transcript_path)
-        batches = split_transcript_batches(transcript, LOCALIZATION_BATCH_SIZE)
-        prompts = [build_localization_prompt(batch) for batch in batches]
-        write_prompt_artifact(
+        localize_with_tool_config(
+            self.tool_config,
+            transcript_path=transcript_path,
+            translation_path=translation_path,
             prompt_path=prompt_path,
-            prompts=prompts,
+            provider_id=NBWCODE_PROVIDER_ID,
+        )
+
+
+def localize_with_tool_config(
+    tool_config: ToolConfig,
+    transcript_path: Path,
+    translation_path: Path,
+    prompt_path: Path,
+    provider_id: str,
+) -> None:
+    base_url, api_key, model = validate_llm_config(tool_config)
+    wire_api = tool_config.translation_wire_api
+    transcript = load_transcript(transcript_path)
+    batches = split_transcript_batches(transcript, LOCALIZATION_BATCH_SIZE)
+    prompts = [build_localization_prompt(batch) for batch in batches]
+    write_prompt_artifact(
+        prompt_path=prompt_path,
+        prompts=prompts,
+        model=model,
+        source_transcript=transcript_path.name,
+        batch_size=LOCALIZATION_BATCH_SIZE,
+    )
+
+    translated_segments: list[TranslationSegment] = []
+    for batch_index, batch in enumerate(batches, start=1):
+        prompt = prompts[batch_index - 1]
+        response_payload = call_openai_compatible_responses_api(
+            base_url=base_url,
+            api_key=api_key,
             model=model,
-            source_transcript=transcript_path.name,
-            batch_size=LOCALIZATION_BATCH_SIZE,
+            provider_id=provider_id,
+            wire_api=wire_api,
+            prompt=prompt,
+            debug_dir=translation_path.parent / "debug",
+            segment_count=len(batch),
+            batch_index=batch_index,
+            batch_count=len(batches),
         )
-
-        translated_segments: list[TranslationSegment] = []
-        for batch_index, batch in enumerate(batches, start=1):
-            prompt = prompts[batch_index - 1]
-            response_payload = call_openai_compatible_responses_api(
-                base_url=base_url,
-                api_key=api_key,
+        try:
+            batch_translation = normalize_openai_compatible_localization_response(
+                response_payload=response_payload,
+                transcript=batch,
+                source_transcript=transcript_path.name,
+                prompt_artifact=prompt_path.name,
                 model=model,
-                prompt=prompt,
-                debug_dir=translation_path.parent / "debug",
-                segment_count=len(batch),
-                batch_index=batch_index,
-                batch_count=len(batches),
             )
-            try:
-                batch_translation = normalize_openai_compatible_localization_response(
-                    response_payload=response_payload,
-                    transcript=batch,
-                    source_transcript=transcript_path.name,
-                    prompt_artifact=prompt_path.name,
-                    model=model,
-                )
-            except VS2Error as exc:
-                write_localization_error_debug(
-                    debug_dir=translation_path.parent / "debug",
-                    error_payload={
-                        "provider_base_url": base_url,
-                        "model": model,
-                        "phase": "response_normalization",
-                        "batch_index": batch_index,
-                        "batch_count": len(batches),
-                        "error": str(exc),
-                        "raw_response": response_payload,
-                    },
-                )
-                raise
-            translated_segments.extend(batch_translation.segments)
+        except VS2Error as exc:
+            write_localization_error_debug(
+                debug_dir=translation_path.parent / "debug",
+                error_payload={
+                    "provider_base_url": base_url,
+                    "model": model,
+                    "phase": "response_normalization",
+                    "batch_index": batch_index,
+                    "batch_count": len(batches),
+                    "error": str(exc),
+                    "raw_response": response_payload,
+                },
+            )
+            raise
+        translated_segments.extend(batch_translation.segments)
 
-        translation = TranslationArtifact(
-            version=TRANSLATION_VERSION,
-            source_transcript=transcript_path.name,
-            prompt_artifact=prompt_path.name,
-            engine={"provider": "openai-compatible", "model": model},
-            segments=translated_segments,
-        )
-        write_translation_artifact(translation_path, translation)
+    translation = TranslationArtifact(
+        version=TRANSLATION_VERSION,
+        source_transcript=transcript_path.name,
+        prompt_artifact=prompt_path.name,
+        engine={"provider": "openai-compatible", "model": model},
+        segments=translated_segments,
+    )
+    write_translation_artifact(translation_path, translation)
 
 
 def split_transcript_batches(
@@ -225,6 +246,11 @@ def check_nbw_status(base_url: str, api_key: str | None, model: str) -> dict[str
     status["authentication_valid"] = True
     status["connectivity_ok"] = True
     return status
+
+
+def validate_openai_compatible_connection(tool_config: ToolConfig) -> None:
+    base_url, api_key, model = validate_llm_config(tool_config)
+    detect_supported_endpoint(base_url, api_key, model)
 
 
 def load_transcript(transcript_path: Path) -> list[TranscriptSegmentForLocalization]:
@@ -341,6 +367,8 @@ def call_openai_compatible_responses_api(
     api_key: str,
     model: str,
     prompt: dict[str, object],
+    provider_id: str = NBWCODE_PROVIDER_ID,
+    wire_api: str = "responses",
     debug_dir: Path | None = None,
     segment_count: int | None = None,
     batch_index: int | None = None,
@@ -377,7 +405,13 @@ def call_openai_compatible_responses_api(
         "attempts": [
             {
                 "endpoint": "Responses",
+                "provider_id": provider_id,
+                "model": model,
+                "wire_api": wire_api,
                 "url": responses_url,
+                "method": "POST",
+                "headers": build_redacted_json_headers(),
+                "json_payload": responses_payload,
                 "payload": responses_payload,
             }
         ],
@@ -391,6 +425,10 @@ def call_openai_compatible_responses_api(
             payload=responses_payload,
             timeout=LOCALIZATION_HTTP_TIMEOUT_SECONDS,
             endpoint_name="Responses",
+            provider_id=provider_id,
+            model=model,
+            wire_api=wire_api,
+            debug_dir=debug_dir,
         )
     except EndpointUnsupported as responses_exc:
         chat_payload = build_chat_completions_payload(
@@ -403,7 +441,13 @@ def call_openai_compatible_responses_api(
         request_debug["attempts"].append(
             {
                 "endpoint": "Chat Completions",
+                "provider_id": provider_id,
+                "model": model,
+                "wire_api": "chat/completions",
                 "url": chat_url,
+                "method": "POST",
+                "headers": build_redacted_json_headers(),
+                "json_payload": chat_payload,
                 "payload": chat_payload,
             }
         )
@@ -415,6 +459,10 @@ def call_openai_compatible_responses_api(
                 payload=chat_payload,
                 timeout=LOCALIZATION_HTTP_TIMEOUT_SECONDS,
                 endpoint_name="Chat Completions",
+                provider_id=provider_id,
+                model=model,
+                wire_api="chat/completions",
+                debug_dir=debug_dir,
             )
         except LLMEndpointError as chat_exc:
             error_payload = build_localization_error_payload(
@@ -467,6 +515,9 @@ def call_responses_endpoint(
         payload=request_payload,
         timeout=timeout,
         endpoint_name="Responses",
+        provider_id=NBWCODE_PROVIDER_ID,
+        model=model,
+        wire_api="responses",
     )
 
 
@@ -491,6 +542,9 @@ def call_chat_completions_endpoint(
         payload=request_payload,
         timeout=timeout,
         endpoint_name="Chat Completions",
+        provider_id=NBWCODE_PROVIDER_ID,
+        model=model,
+        wire_api="chat/completions",
     )
 
 
@@ -532,36 +586,72 @@ def post_json(
     payload: dict[str, object],
     timeout: int,
     endpoint_name: str,
+    provider_id: str = NBWCODE_PROVIDER_ID,
+    model: str | None = None,
+    wire_api: str | None = None,
+    debug_dir: Path | None = None,
 ) -> dict[str, object]:
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "content-type": "application/json",
-            "authorization": f"Bearer {api_key}",
-        },
-        method="POST",
-    )
+    headers = build_json_headers(api_key)
+    request_debug: dict[str, object] = {
+        "provider_id": provider_id,
+        "model": model or payload.get("model"),
+        "wire_api": wire_api or endpoint_name.lower(),
+        "url": url,
+        "method": "POST",
+        "http_version": None,
+        "headers": redact_headers(headers),
+        "json_payload": payload,
+    }
+    response_body: str | None = None
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            response_body = response.read().decode("utf-8", errors="replace")
-            payload = json.loads(response_body)
-    except urllib.error.HTTPError as exc:
-        response_body = exc.read().decode("utf-8", errors="replace")
+        with httpx.Client(timeout=timeout, http2=False) as client:
+            request = client.build_request(
+                "POST",
+                url,
+                headers=headers,
+                json=payload,
+            )
+            request_debug = build_http_request_debug(
+                request=request,
+                provider_id=provider_id,
+                model=model or payload.get("model"),
+                wire_api=wire_api or endpoint_name.lower(),
+                payload=payload,
+            )
+            write_http_request_debug(debug_dir, request_debug)
+            response = client.send(request)
+            response_body = response.text
+            response_debug = build_http_response_debug(
+                response=response,
+                response_body=response_body,
+            )
+            request_debug["http_version"] = response.http_version
+            write_http_request_debug(debug_dir, request_debug)
+            write_http_response_debug(debug_dir, response_debug)
+            response.raise_for_status()
+            parsed_payload = response.json()
+    except httpx.HTTPStatusError as exc:
+        response = exc.response
+        response_body = response.text
+        request_debug["http_version"] = response.http_version
+        write_http_request_debug(debug_dir, request_debug)
         attempt = build_endpoint_attempt_result(
             endpoint_name=endpoint_name,
-            url=url,
-            status_code=exc.code,
+            url=str(response.request.url),
+            status_code=response.status_code,
             response_body=response_body,
+            response_headers=dict(response.headers.items()),
+            request_debug=request_debug,
             exception=exc,
         )
-        if exc.code in {404, 405, 501}:
+        if response.status_code in {404, 405, 501}:
             raise EndpointUnsupported(
-                f"{endpoint_name} endpoint is not supported: HTTP {exc.code}: {response_body}",
+                f"{endpoint_name} endpoint is not supported: "
+                f"HTTP {response.status_code}: {response_body}",
                 attempt,
             ) from exc
         raise LLMEndpointError(
-            f"{endpoint_name} request failed: HTTP {exc.code}: {response_body}",
+            f"{endpoint_name} request failed: HTTP {response.status_code}: {response_body}",
             attempt,
         ) from exc
     except json.JSONDecodeError as exc:
@@ -570,23 +660,27 @@ def post_json(
             url=url,
             status_code=None,
             response_body=response_body,
+            response_headers=None,
+            request_debug=request_debug,
             exception=exc,
         )
         raise LLMEndpointError(
             f"{endpoint_name} response was not valid JSON: {exc}", attempt
         ) from exc
-    except OSError as exc:
+    except httpx.HTTPError as exc:
         attempt = build_endpoint_attempt_result(
             endpoint_name=endpoint_name,
             url=url,
             status_code=None,
             response_body=None,
+            response_headers=None,
+            request_debug=request_debug,
             exception=exc,
         )
         raise LLMEndpointError(f"{endpoint_name} request failed: {exc}", attempt) from exc
-    if not isinstance(payload, dict):
+    if not isinstance(parsed_payload, dict):
         raise VS2Error("LLM localization response root must be an object")
-    return payload
+    return parsed_payload
 
 
 def build_endpoint_attempt_result(
@@ -594,15 +688,71 @@ def build_endpoint_attempt_result(
     url: str,
     status_code: int | None,
     response_body: str | None,
+    response_headers: dict[str, str] | None,
+    request_debug: dict[str, object],
     exception: BaseException,
 ) -> dict[str, object]:
     return {
         "endpoint": endpoint_name,
         "url": url,
+        "request": request_debug,
         "http_status_code": status_code,
         "response_body": response_body,
+        "response_headers": response_headers or {},
         "exception_type": type(exception).__name__,
         "exception": str(exception),
+    }
+
+
+def build_json_headers(api_key: str) -> dict[str, str]:
+    return {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "User-Agent": OPENAI_COMPATIBLE_USER_AGENT,
+    }
+
+
+def build_redacted_json_headers() -> dict[str, str]:
+    return redact_headers(build_json_headers("<redacted>"))
+
+
+def redact_headers(headers: dict[str, str]) -> dict[str, str]:
+    return {
+        key: ("Bearer <redacted>" if key.lower() == "authorization" else value)
+        for key, value in headers.items()
+    }
+
+
+def build_http_request_debug(
+    request: httpx.Request,
+    provider_id: str,
+    model: object,
+    wire_api: str,
+    payload: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "provider_id": provider_id,
+        "model": model,
+        "wire_api": wire_api,
+        "url": str(request.url),
+        "method": request.method,
+        "http_version": None,
+        "headers": redact_headers(dict(request.headers.items())),
+        "json_payload": payload,
+    }
+
+
+def build_http_response_debug(
+    response: httpx.Response,
+    response_body: str,
+) -> dict[str, object]:
+    return {
+        "url": str(response.request.url),
+        "http_version": response.http_version,
+        "status_code": response.status_code,
+        "headers": dict(response.headers.items()),
+        "body": response_body,
     }
 
 
@@ -646,6 +796,24 @@ def write_localization_error_debug(
     if debug_dir is None:
         return
     write_json(debug_dir / "localization_error.json", error_payload)
+
+
+def write_http_request_debug(
+    debug_dir: Path | None,
+    request_payload: dict[str, object],
+) -> None:
+    if debug_dir is None:
+        return
+    write_json(debug_dir / "localization_http_request.json", request_payload)
+
+
+def write_http_response_debug(
+    debug_dir: Path | None,
+    response_payload: dict[str, object],
+) -> None:
+    if debug_dir is None:
+        return
+    write_json(debug_dir / "localization_http_response.json", response_payload)
 
 
 def format_localization_error(

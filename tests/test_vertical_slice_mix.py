@@ -78,11 +78,11 @@ def test_build_speech_tracks_skips_missing_tts_files(tmp_path):
     tracks = mix.build_speech_tracks(segments, tts_dir, ToolConfig())
 
     assert tracks == [
-        mix.MixSpeechTrack(
-            id=12,
-            start=1.25,
-            end=2.0,
-            delay_ms=1450,
+            mix.MixSpeechTrack(
+                id=12,
+                start=1.25,
+                end=2.0,
+                delay_ms=1400,
             atempo=1.0,
             generated_duration=0.75,
             tts_path=tts_dir / "0012.wav",
@@ -332,15 +332,15 @@ def test_run_mix_writes_plan_and_mixed_audio(monkeypatch, tmp_path):
     assert result.mixed_audio_path.read_bytes() == b"mixed"
     plan = json.loads(result.mix_plan_path.read_text(encoding="utf-8"))
     assert plan["source_duration_seconds"] == 2.5
-    assert plan["tts_sync_offset_ms"] == 200
+    assert plan["tts_sync_offset_ms"] == 150
     assert plan["mixed_segments"] == 2
     assert [segment["status"] for segment in plan["segments"]] == ["included", "included"]
-    assert [segment["delay_ms"] for segment in plan["segments"]] == [200, 1450]
+    assert [segment["delay_ms"] for segment in plan["segments"]] == [150, 1400]
     assert [segment["atempo"] for segment in plan["segments"]] == [1.0, mix.MIN_TTS_ATEMPO]
     assert plan["duck_volume"] == 0.0
     assert plan["duck_windows"] == [
-        {"start": 0.2, "end": 1.2},
-        {"start": 1.45, "end": 1.803},
+        {"start": 0.15, "end": 1.15},
+        {"start": 1.4, "end": 1.753},
     ]
 
 
@@ -382,8 +382,8 @@ def test_run_mix_uses_configured_duck_volume(monkeypatch, tmp_path):
         command for command in captured_commands if command[0] == "/usr/bin/ffmpeg"
     )
     filter_complex = ffmpeg_command[ffmpeg_command.index("-filter_complex") + 1]
-    assert "volume=volume=0.35:enable='between(t,0.200,1.200)'" in filter_complex
-    assert "volume=volume=0.35:enable='between(t,1.450,1.803)'" in filter_complex
+    assert "volume=volume=0.35:enable='between(t,0.150,1.150)'" in filter_complex
+    assert "volume=volume=0.35:enable='between(t,1.400,1.753)'" in filter_complex
 
 
 def test_run_mix_requires_at_least_one_tts_file(monkeypatch, tmp_path):

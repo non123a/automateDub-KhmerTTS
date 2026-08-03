@@ -1,0 +1,540 @@
+{
+  "version": 1,
+  "source_transcript": "transcript.json",
+  "engine": {
+    "provider": "openai-compatible",
+    "model": "gpt-5.5"
+  },
+  "batch_size": 20,
+  "batch_count": 4,
+  "prompt": [
+    {
+      "batch_index": 1,
+      "prompt": {
+        "version": 1,
+        "system": "You are the official Khmer dubbing translator for a television drama. Translate Chinese dialogue into natural spoken Khmer for dubbing. Preserve meaning, emotion, and conversational movie-style delivery. Avoid word-for-word translation. Preserve approximately similar speaking duration. Never merge segments. Never split segments. Keep punctuation suitable for spoken dialogue. Return valid JSON only.",
+        "user": "Localize each segment into Khmer. Return a JSON object with exactly this shape: {\"segments\":[{\"id\":0,\"target_text\":\"...\",\"notes\":null}]}. The returned segments array must have exactly the same length and IDs as the input. Do not include Markdown. Do not include commentary.\n\nInput segments:\n[\n  {\n    \"id\": 0,\n    \"start\": 0.0,\n    \"end\": 4.08,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"都不能达到完全跟外国人交流的水平\"\n  },\n  {\n    \"id\": 1,\n    \"start\": 4.08,\n    \"end\": 6.4,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"那已经超越了很多人了\"\n  },\n  {\n    \"id\": 2,\n    \"start\": 6.4,\n    \"end\": 7.8,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"其他很多人都不会\"\n  },\n  {\n    \"id\": 3,\n    \"start\": 7.8,\n    \"end\": 9.36,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"你有多高\"\n  },\n  {\n    \"id\": 4,\n    \"start\": 9.36,\n    \"end\": 10.44,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我163\"\n  },\n  {\n    \"id\": 5,\n    \"start\": 10.44,\n    \"end\": 12.36,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"你有兄弟姐妹吗\"\n  },\n  {\n    \"id\": 6,\n    \"start\": 12.36,\n    \"end\": 13.92,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我是独生女\"\n  },\n  {\n    \"id\": 7,\n    \"start\": 13.92,\n    \"end\": 16.44,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"你最喜欢的动物是什么\"\n  },\n  {\n    \"id\": 8,\n    \"start\": 16.44,\n    \"end\": 18.68,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我喜欢小狗小兔子\"\n  },\n  {\n    \"id\": 9,\n    \"start\": 18.68,\n    \"end\": 21.6,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"那你有养这些小动物吗\"\n  },\n  {\n    \"id\": 10,\n    \"start\": 21.6,\n    \"end\": 22.92,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"以前养过小兔子\"\n  },\n  {\n    \"id\": 11,\n    \"start\": 22.92,\n    \"end\": 24.8,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"然后现在不养了\"\n  },\n  {\n    \"id\": 12,\n    \"start\": 24.8,\n    \"end\": 27.72,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"那你以后还会想要养这些小兔子\"\n  },\n  {\n    \"id\": 13,\n    \"start\": 27.72,\n    \"end\": 29.04,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"或者小狗之类的吗\"\n  },\n  {\n    \"id\": 14,\n    \"start\": 29.04,\n    \"end\": 32.64,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我以后还会养小狗小猫这些小动物\"\n  },\n  {\n    \"id\": 15,\n    \"start\": 32.64,\n    \"end\": 34.68,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"你最喜欢的国家是哪个\"\n  },\n  {\n    \"id\": 16,\n    \"start\": 34.68,\n    \"end\": 36.28,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"除了中国\"\n  },\n  {\n    \"id\": 17,\n    \"start\": 36.28,\n    \"end\": 40.76,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我喜欢瑞士\"\n  },\n  {\n    \"id\": 18,\n    \"start\": 40.76,\n    \"end\": 43.04,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"那你有没有去过瑞士\"\n  },\n  {\n    \"id\": 19,\n    \"start\": 43.04,\n    \"end\": 44.72,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"暂时还没有去过\"\n  }\n]",
+        "input_segments": [
+          {
+            "id": 0,
+            "start": 0.0,
+            "end": 4.08,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "都不能达到完全跟外国人交流的水平"
+          },
+          {
+            "id": 1,
+            "start": 4.08,
+            "end": 6.4,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "那已经超越了很多人了"
+          },
+          {
+            "id": 2,
+            "start": 6.4,
+            "end": 7.8,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "其他很多人都不会"
+          },
+          {
+            "id": 3,
+            "start": 7.8,
+            "end": 9.36,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "你有多高"
+          },
+          {
+            "id": 4,
+            "start": 9.36,
+            "end": 10.44,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我163"
+          },
+          {
+            "id": 5,
+            "start": 10.44,
+            "end": 12.36,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "你有兄弟姐妹吗"
+          },
+          {
+            "id": 6,
+            "start": 12.36,
+            "end": 13.92,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我是独生女"
+          },
+          {
+            "id": 7,
+            "start": 13.92,
+            "end": 16.44,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "你最喜欢的动物是什么"
+          },
+          {
+            "id": 8,
+            "start": 16.44,
+            "end": 18.68,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我喜欢小狗小兔子"
+          },
+          {
+            "id": 9,
+            "start": 18.68,
+            "end": 21.6,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "那你有养这些小动物吗"
+          },
+          {
+            "id": 10,
+            "start": 21.6,
+            "end": 22.92,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "以前养过小兔子"
+          },
+          {
+            "id": 11,
+            "start": 22.92,
+            "end": 24.8,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "然后现在不养了"
+          },
+          {
+            "id": 12,
+            "start": 24.8,
+            "end": 27.72,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "那你以后还会想要养这些小兔子"
+          },
+          {
+            "id": 13,
+            "start": 27.72,
+            "end": 29.04,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "或者小狗之类的吗"
+          },
+          {
+            "id": 14,
+            "start": 29.04,
+            "end": 32.64,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我以后还会养小狗小猫这些小动物"
+          },
+          {
+            "id": 15,
+            "start": 32.64,
+            "end": 34.68,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "你最喜欢的国家是哪个"
+          },
+          {
+            "id": 16,
+            "start": 34.68,
+            "end": 36.28,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "除了中国"
+          },
+          {
+            "id": 17,
+            "start": 36.28,
+            "end": 40.76,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我喜欢瑞士"
+          },
+          {
+            "id": 18,
+            "start": 40.76,
+            "end": 43.04,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "那你有没有去过瑞士"
+          },
+          {
+            "id": 19,
+            "start": 43.04,
+            "end": 44.72,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "暂时还没有去过"
+          }
+        ]
+      }
+    },
+    {
+      "batch_index": 2,
+      "prompt": {
+        "version": 1,
+        "system": "You are the official Khmer dubbing translator for a television drama. Translate Chinese dialogue into natural spoken Khmer for dubbing. Preserve meaning, emotion, and conversational movie-style delivery. Avoid word-for-word translation. Preserve approximately similar speaking duration. Never merge segments. Never split segments. Keep punctuation suitable for spoken dialogue. Return valid JSON only.",
+        "user": "Localize each segment into Khmer. Return a JSON object with exactly this shape: {\"segments\":[{\"id\":0,\"target_text\":\"...\",\"notes\":null}]}. The returned segments array must have exactly the same length and IDs as the input. Do not include Markdown. Do not include commentary.\n\nInput segments:\n[\n  {\n    \"id\": 20,\n    \"start\": 44.72,\n    \"end\": 47.24,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"那你去过哪些国家\"\n  },\n  {\n    \"id\": 21,\n    \"start\": 47.24,\n    \"end\": 49.4,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我目前没有出过国\"\n  },\n  {\n    \"id\": 22,\n    \"start\": 49.4,\n    \"end\": 52.32,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"那你的爱好是什么\"\n  },\n  {\n    \"id\": 23,\n    \"start\": 52.32,\n    \"end\": 54.84,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我的爱好就是刷手机\"\n  },\n  {\n    \"id\": 24,\n    \"start\": 57.84,\n    \"end\": 60.24,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"你最喜欢的水果是什么\"\n  },\n  {\n    \"id\": 25,\n    \"start\": 60.24,\n    \"end\": 62.0,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我喜欢吃草莓\"\n  },\n  {\n    \"id\": 26,\n    \"start\": 62.0,\n    \"end\": 64.32,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"那你喜欢喝饮料吗\"\n  },\n  {\n    \"id\": 27,\n    \"start\": 64.32,\n    \"end\": 65.4,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我喜欢喝奶茶\"\n  },\n  {\n    \"id\": 28,\n    \"start\": 65.4,\n    \"end\": 68.56,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"所有的饮料 甜的东西我都喜欢吃\"\n  },\n  {\n    \"id\": 29,\n    \"start\": 68.56,\n    \"end\": 69.48,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"很有品味\"\n  },\n  {\n    \"id\": 30,\n    \"start\": 69.48,\n    \"end\": 72.2,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我也喜欢吃甜的\"\n  },\n  {\n    \"id\": 31,\n    \"start\": 72.2,\n    \"end\": 75.2,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"你最喜欢的食物是什么\"\n  },\n  {\n    \"id\": 32,\n    \"start\": 75.2,\n    \"end\": 77.64,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"除了那些甜食以外\"\n  },\n  {\n    \"id\": 33,\n    \"start\": 77.64,\n    \"end\": 79.48,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我喜欢吃意大利面\"\n  },\n  {\n    \"id\": 34,\n    \"start\": 79.48,\n    \"end\": 81.4,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"那是很好吃\"\n  },\n  {\n    \"id\": 35,\n    \"start\": 81.4,\n    \"end\": 84.04,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"你每天几点起床\"\n  },\n  {\n    \"id\": 36,\n    \"start\": 84.04,\n    \"end\": 84.96,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我最近的话\"\n  },\n  {\n    \"id\": 37,\n    \"start\": 84.96,\n    \"end\": 87.2,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"天天早上6点钟就起床了\"\n  },\n  {\n    \"id\": 38,\n    \"start\": 87.2,\n    \"end\": 88.48,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"那么早\"\n  },\n  {\n    \"id\": 39,\n    \"start\": 88.48,\n    \"end\": 89.88,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"是要上课吗\"\n  }\n]",
+        "input_segments": [
+          {
+            "id": 20,
+            "start": 44.72,
+            "end": 47.24,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "那你去过哪些国家"
+          },
+          {
+            "id": 21,
+            "start": 47.24,
+            "end": 49.4,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我目前没有出过国"
+          },
+          {
+            "id": 22,
+            "start": 49.4,
+            "end": 52.32,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "那你的爱好是什么"
+          },
+          {
+            "id": 23,
+            "start": 52.32,
+            "end": 54.84,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我的爱好就是刷手机"
+          },
+          {
+            "id": 24,
+            "start": 57.84,
+            "end": 60.24,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "你最喜欢的水果是什么"
+          },
+          {
+            "id": 25,
+            "start": 60.24,
+            "end": 62.0,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我喜欢吃草莓"
+          },
+          {
+            "id": 26,
+            "start": 62.0,
+            "end": 64.32,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "那你喜欢喝饮料吗"
+          },
+          {
+            "id": 27,
+            "start": 64.32,
+            "end": 65.4,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我喜欢喝奶茶"
+          },
+          {
+            "id": 28,
+            "start": 65.4,
+            "end": 68.56,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "所有的饮料 甜的东西我都喜欢吃"
+          },
+          {
+            "id": 29,
+            "start": 68.56,
+            "end": 69.48,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "很有品味"
+          },
+          {
+            "id": 30,
+            "start": 69.48,
+            "end": 72.2,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我也喜欢吃甜的"
+          },
+          {
+            "id": 31,
+            "start": 72.2,
+            "end": 75.2,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "你最喜欢的食物是什么"
+          },
+          {
+            "id": 32,
+            "start": 75.2,
+            "end": 77.64,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "除了那些甜食以外"
+          },
+          {
+            "id": 33,
+            "start": 77.64,
+            "end": 79.48,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我喜欢吃意大利面"
+          },
+          {
+            "id": 34,
+            "start": 79.48,
+            "end": 81.4,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "那是很好吃"
+          },
+          {
+            "id": 35,
+            "start": 81.4,
+            "end": 84.04,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "你每天几点起床"
+          },
+          {
+            "id": 36,
+            "start": 84.04,
+            "end": 84.96,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我最近的话"
+          },
+          {
+            "id": 37,
+            "start": 84.96,
+            "end": 87.2,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "天天早上6点钟就起床了"
+          },
+          {
+            "id": 38,
+            "start": 87.2,
+            "end": 88.48,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "那么早"
+          },
+          {
+            "id": 39,
+            "start": 88.48,
+            "end": 89.88,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "是要上课吗"
+          }
+        ]
+      }
+    },
+    {
+      "batch_index": 3,
+      "prompt": {
+        "version": 1,
+        "system": "You are the official Khmer dubbing translator for a television drama. Translate Chinese dialogue into natural spoken Khmer for dubbing. Preserve meaning, emotion, and conversational movie-style delivery. Avoid word-for-word translation. Preserve approximately similar speaking duration. Never merge segments. Never split segments. Keep punctuation suitable for spoken dialogue. Return valid JSON only.",
+        "user": "Localize each segment into Khmer. Return a JSON object with exactly this shape: {\"segments\":[{\"id\":0,\"target_text\":\"...\",\"notes\":null}]}. The returned segments array must have exactly the same length and IDs as the input. Do not include Markdown. Do not include commentary.\n\nInput segments:\n[\n  {\n    \"id\": 40,\n    \"start\": 89.88,\n    \"end\": 90.64,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"没有\"\n  },\n  {\n    \"id\": 41,\n    \"start\": 90.64,\n    \"end\": 92.52,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"就是想让自己早点起来\"\n  },\n  {\n    \"id\": 42,\n    \"start\": 92.52,\n    \"end\": 94.72,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"不要就是睡到中午\"\n  },\n  {\n    \"id\": 43,\n    \"start\": 94.72,\n    \"end\": 96.16,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"那很有意义\"\n  },\n  {\n    \"id\": 44,\n    \"start\": 96.16,\n    \"end\": 99.4,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"那你每天什么时候睡觉\"\n  },\n  {\n    \"id\": 45,\n    \"start\": 99.4,\n    \"end\": 100.88,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我最近睡得比较早\"\n  },\n  {\n    \"id\": 46,\n    \"start\": 100.88,\n    \"end\": 103.48,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"大概晚上10点11点就睡了\"\n  },\n  {\n    \"id\": 47,\n    \"start\": 103.48,\n    \"end\": 105.96,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"好健康 特别好\"\n  },\n  {\n    \"id\": 48,\n    \"start\": 105.96,\n    \"end\": 108.72,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"那你喜欢运动吗\"\n  },\n  {\n    \"id\": 49,\n    \"start\": 108.72,\n    \"end\": 110.12,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我不喜欢运动\"\n  },\n  {\n    \"id\": 50,\n    \"start\": 110.12,\n    \"end\": 113.92,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"那你平时就刷手机\"\n  },\n  {\n    \"id\": 51,\n    \"start\": 113.92,\n    \"end\": 117.44,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"对 我平时就是喜欢烫着刷手机\"\n  },\n  {\n    \"id\": 52,\n    \"start\": 117.44,\n    \"end\": 118.72,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"好\"\n  },\n  {\n    \"id\": 53,\n    \"start\": 118.72,\n    \"end\": 121.08,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"那你每天早上起来的第一件事\"\n  },\n  {\n    \"id\": 54,\n    \"start\": 121.08,\n    \"end\": 123.6,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"是做什么\"\n  },\n  {\n    \"id\": 55,\n    \"start\": 123.6,\n    \"end\": 126.2,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"打开手机 看手机\"\n  },\n  {\n    \"id\": 56,\n    \"start\": 126.2,\n    \"end\": 130.04,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"好 星星人类\"\n  },\n  {\n    \"id\": 57,\n    \"start\": 130.04,\n    \"end\": 131.24,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"你好\"\n  },\n  {\n    \"id\": 58,\n    \"start\": 131.24,\n    \"end\": 132.4,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"你好\"\n  },\n  {\n    \"id\": 59,\n    \"start\": 132.4,\n    \"end\": 133.88,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"你姓什么\"\n  }\n]",
+        "input_segments": [
+          {
+            "id": 40,
+            "start": 89.88,
+            "end": 90.64,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "没有"
+          },
+          {
+            "id": 41,
+            "start": 90.64,
+            "end": 92.52,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "就是想让自己早点起来"
+          },
+          {
+            "id": 42,
+            "start": 92.52,
+            "end": 94.72,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "不要就是睡到中午"
+          },
+          {
+            "id": 43,
+            "start": 94.72,
+            "end": 96.16,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "那很有意义"
+          },
+          {
+            "id": 44,
+            "start": 96.16,
+            "end": 99.4,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "那你每天什么时候睡觉"
+          },
+          {
+            "id": 45,
+            "start": 99.4,
+            "end": 100.88,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我最近睡得比较早"
+          },
+          {
+            "id": 46,
+            "start": 100.88,
+            "end": 103.48,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "大概晚上10点11点就睡了"
+          },
+          {
+            "id": 47,
+            "start": 103.48,
+            "end": 105.96,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "好健康 特别好"
+          },
+          {
+            "id": 48,
+            "start": 105.96,
+            "end": 108.72,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "那你喜欢运动吗"
+          },
+          {
+            "id": 49,
+            "start": 108.72,
+            "end": 110.12,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我不喜欢运动"
+          },
+          {
+            "id": 50,
+            "start": 110.12,
+            "end": 113.92,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "那你平时就刷手机"
+          },
+          {
+            "id": 51,
+            "start": 113.92,
+            "end": 117.44,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "对 我平时就是喜欢烫着刷手机"
+          },
+          {
+            "id": 52,
+            "start": 117.44,
+            "end": 118.72,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "好"
+          },
+          {
+            "id": 53,
+            "start": 118.72,
+            "end": 121.08,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "那你每天早上起来的第一件事"
+          },
+          {
+            "id": 54,
+            "start": 121.08,
+            "end": 123.6,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "是做什么"
+          },
+          {
+            "id": 55,
+            "start": 123.6,
+            "end": 126.2,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "打开手机 看手机"
+          },
+          {
+            "id": 56,
+            "start": 126.2,
+            "end": 130.04,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "好 星星人类"
+          },
+          {
+            "id": 57,
+            "start": 130.04,
+            "end": 131.24,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "你好"
+          },
+          {
+            "id": 58,
+            "start": 131.24,
+            "end": 132.4,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "你好"
+          },
+          {
+            "id": 59,
+            "start": 132.4,
+            "end": 133.88,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "你姓什么"
+          }
+        ]
+      }
+    },
+    {
+      "batch_index": 4,
+      "prompt": {
+        "version": 1,
+        "system": "You are the official Khmer dubbing translator for a television drama. Translate Chinese dialogue into natural spoken Khmer for dubbing. Preserve meaning, emotion, and conversational movie-style delivery. Avoid word-for-word translation. Preserve approximately similar speaking duration. Never merge segments. Never split segments. Keep punctuation suitable for spoken dialogue. Return valid JSON only.",
+        "user": "Localize each segment into Khmer. Return a JSON object with exactly this shape: {\"segments\":[{\"id\":0,\"target_text\":\"...\",\"notes\":null}]}. The returned segments array must have exactly the same length and IDs as the input. Do not include Markdown. Do not include commentary.\n\nInput segments:\n[\n  {\n    \"id\": 60,\n    \"start\": 133.88,\n    \"end\": 134.96,\n    \"source_language\": \"zh\",\n    \"target_language\": \"km\",\n    \"source_text\": \"我姓高\"\n  }\n]",
+        "input_segments": [
+          {
+            "id": 60,
+            "start": 133.88,
+            "end": 134.96,
+            "source_language": "zh",
+            "target_language": "km",
+            "source_text": "我姓高"
+          }
+        ]
+      }
+    }
+  ]
+}

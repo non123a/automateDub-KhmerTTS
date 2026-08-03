@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from automatedub.config import ToolConfig
+from automatedub.config import DEFAULT_CAMB_API_BASE_URL, ToolConfig
 from automatedub.vertical_slice.tts import (
     CambAIProvider,
     GeneratedSpeech,
@@ -44,6 +44,9 @@ class CambAITTSProvider:
         speech: GeneratedSpeech = self.provider.generate(text)
         return SynthesizedSpeech(audio=speech.audio, metadata=speech.metadata)
 
+    def generate(self, text: str) -> GeneratedSpeech:
+        return self.provider.generate(text)
+
 
 def _voice_info(voice: TtsVoice) -> VoiceInfo:
     return VoiceInfo(
@@ -62,8 +65,10 @@ provider_registry.register_tts(
         factory=CambAITTSProvider,
         config_fields=(
             ProviderConfigField("api_key", "API Key", secret=True),
+            ProviderConfigField("base_url", "Base URL", default=DEFAULT_CAMB_API_BASE_URL),
             ProviderConfigField("voice_id", "Default Voice"),
             ProviderConfigField("language", "Language", default="km-kh"),
+            ProviderConfigField("speaking_rate", "Speaking Rate", default="1.0"),
             ProviderConfigField("model", "Model"),
             ProviderConfigField("timeout", "Timeout", default="300"),
         ),

@@ -55,6 +55,8 @@ providers/tts/cambai.py
 
 The UI and Pipeline discover available providers from the registry. They should not maintain their own provider lists.
 
+Provider descriptors also own provider-specific settings fields. The Settings UI builds forms from descriptors instead of assuming every provider has the same API key, model, voice, or executable fields.
+
 ## Provider Manager
 
 `ProviderManager` resolves configured provider identifiers to provider instances:
@@ -75,6 +77,8 @@ The manager reads application settings through `ToolConfig`:
 - provider-specific configuration such as model names or API keys
 
 Project metadata stores provider identifiers and selected voice only. It must not store API keys or secrets.
+
+Provider identifiers are resolved by capability, so the same textual provider id may appear in different capabilities. Callers must resolve providers through the STT, Translation, or TTS registry path instead of using a global id-only lookup.
 
 ## Current Adapters
 
@@ -113,6 +117,21 @@ It must not read from imported `translation.json` as an editing source of truth.
 ## Configuration
 
 Provider settings are loaded through configuration boundaries, not directly from UI widgets. See [SETTINGS.md](SETTINGS.md).
+
+## Voice Discovery
+
+TTS voice discovery flows through:
+
+```text
+SettingsWindow
+    -> SettingsManager
+    -> ProviderManager
+    -> ProviderRegistry
+    -> selected TTSProvider
+    -> list_voices()
+```
+
+The UI stores selected voice IDs, not display names. Voice lists must surface loading, empty, and failure states so provider errors are visible during setup.
 
 ## Lifecycle
 

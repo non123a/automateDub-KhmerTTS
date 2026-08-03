@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from automatedub.config import ToolConfig
+from automatedub.vertical_slice import localization
 from automatedub_studio.pipeline.jobs import (
     CreateProjectJob,
     PipelineContext,
@@ -14,6 +15,7 @@ from automatedub_studio.project.manager import NewProjectRequest, ProjectManager
 from automatedub_studio.providers.base.interfaces import SynthesizedSpeech, VoiceInfo
 from automatedub_studio.providers.manager import ProviderManager
 from automatedub_studio.providers.registry import ProviderDescriptor, ProviderRegistry
+from automatedub_studio.providers.translation.nbwcode import NBWCodeTranslationProvider
 
 
 class FakeSTTProvider:
@@ -157,7 +159,7 @@ def test_provider_manager_resolves_configured_provider_ids():
         "stt_provider_id": "fake_stt",
         "translation_provider_id": "fake_translation",
         "tts_provider_id": "fake_tts",
-        "selected_voice": None,
+        "selected_voice": "170542",
     }
 
 
@@ -188,3 +190,83 @@ def test_pipeline_transcription_and_translation_use_provider_manager(tmp_path):
     assert (context.pipeline_path / "translation.json").is_file()
     metadata = json.loads((context.project_path / "project.json").read_text(encoding="utf-8"))
     assert metadata["providers"] == provider_manager.project_metadata()
+    trace = json.loads(
+        (context.pipeline_path / "debug" / "translation_provider_trace.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert trace["selected_provider_id"] == "fake_translation"
+    assert trace["provider_id"] == "fake_translation"
+    assert trace["provider_class"] == "FakeTranslationProvider"
+    assert trace["provider_module"] == __name__
+
+
+def test_nbwcode_translation_provider_validate_uses_authenticated_request_path(
+    monkeypatch,
+):
+    calls: list[ToolConfig] = []
+
+    def fake_validate(tool_config: ToolConfig) -> None:
+        calls.append(tool_config)
+
+    monkeypatch.setattr(
+        "automatedub_studio.providers.translation.nbwcode."
+        "validate_openai_compatible_connection",
+        fake_validate,
+    )
+    config = ToolConfig(
+        nbw_base_url="https://gateway.example/v1",
+        nbw_automatedub_api_key="key",
+        localization_model="test-model",
+    )
+    provider = NBWCodeTranslationProvider(config)
+
+    provider.validate()
+
+    assert calls == [config]
+
+
+def test_nbwcode_translation_provider_does_not_instantiate_legacy_localizer(
+    monkeypatch,
+    tmp_path,
+):
+    transcript_path = tmp_path / "transcript.json"
+    transcript_path.write_text(
+        json.dumps(
+            {
+                "language": "zh",
+                "segments": [{"id": 0, "start": 0.0, "end": 1.0, "text": "你好"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fail_legacy_init(*_args, **_kwargs):
+        raise AssertionError("legacy localizer should not be instantiated")
+
+    def fake_call(**_kwargs):
+        return {"output_text": '{"segments":[{"id":0,"target_text":"សួស្តី","notes":null}]}'}
+
+    monkeypatch.setattr(localization.NBWCodeDialogueLocalizer, "__init__", fail_legacy_init)
+    monkeypatch.setattr(localization, "call_openai_compatible_responses_api", fake_call)
+    monkeypatch.setattr(
+        "automatedub_studio.providers.translation.nbwcode."
+        "validate_openai_compatible_connection",
+        lambda _tool_config: None,
+    )
+    provider = NBWCodeTranslationProvider(
+        ToolConfig(
+            nbw_base_url="https://gateway.example/v1",
+            nbw_automatedub_api_key="key",
+            localization_model="test-model",
+        )
+    )
+
+    provider.validate()
+    provider.translate(
+        transcript_path=transcript_path,
+        translation_path=tmp_path / "translation.json",
+        prompt_path=tmp_path / "translation_prompt.json",
+    )
+
+    assert (tmp_path / "translation.json").is_file()

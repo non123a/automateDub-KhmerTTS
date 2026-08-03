@@ -44,6 +44,7 @@ def test_settings_manager_builds_tool_config_from_saved_settings(tmp_path):
     manager.set_provider_setting("whisper_cpp", "model_path", "/models/test.bin")
     manager.set_provider_setting("nbwcode", "api_key", "nbw-secret", secret=True)
     manager.set_provider_setting("nbwcode", "model", "translation-model")
+    manager.set_provider_setting("nbwcode", "wire_api", "responses")
     manager.set_provider_setting("cambai", "api_key", "camb-secret", secret=True)
     manager.set_provider_setting("cambai", "language", "km-kh")
     manager.set_provider_setting("cambai", "model", "tts-model")
@@ -56,6 +57,7 @@ def test_settings_manager_builds_tool_config_from_saved_settings(tmp_path):
     assert str(tool_config.whisper_model_path) == "/models/test.bin"
     assert tool_config.nbw_automatedub_api_key == "nbw-secret"
     assert tool_config.localization_model == "translation-model"
+    assert tool_config.translation_wire_api == "responses"
     assert tool_config.camb_api_key == "camb-secret"
     assert tool_config.camb_voice_id == "voice-9"
     assert tool_config.tts_model == "tts-model"
@@ -83,3 +85,17 @@ def test_settings_manager_cache_and_log_diagnostics(tmp_path):
     manager.clear_cache()
     assert manager.cache_usage_bytes() == 0
     assert cache_dir.is_dir()
+
+
+def test_settings_manager_never_uses_translation_model_for_tts(tmp_path):
+    manager = SettingsManager(
+        settings_path=tmp_path / "settings.json",
+        credential_store=JsonCredentialStore(tmp_path / "credentials.json"),
+    )
+    manager.set_provider_setting("nbwcode", "model", "translation-model")
+
+    tool_config = manager.tool_config()
+
+    assert tool_config.localization_model == "translation-model"
+    assert tool_config.tts_model == "mars-8.1-flash-beta"
+    assert tool_config.tts_provider == "cambai"

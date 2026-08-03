@@ -8,8 +8,10 @@ fails (the previous WAV is left untouched until a new one validates).
 from __future__ import annotations
 
 import dataclasses
+import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from automatedub.config import ToolConfig
@@ -34,6 +36,19 @@ class RegenerationOutcome:
     error: str | None = None
     duration_seconds: float | None = None
     wav_path: Path | None = None
+    provider_id: str | None = None
+    provider_class: str | None = None
+    voice_id: str | None = None
+    model: str | None = None
+    speaking_rate: float | None = None
+    request_started: bool = False
+    request_started_at: str | None = None
+    request_finished_at: str | None = None
+    http_status: int | None = None
+    response_body: str | None = None
+    validation_result: str = "not_run"
+    file_exists: bool = False
+    file_size: int = 0
 
 
 @dataclass(frozen=True)
@@ -43,6 +58,19 @@ class ClipRegenerationOutcome:
     error: str | None = None
     duration_seconds: float | None = None
     wav_path: Path | None = None
+    provider_id: str | None = None
+    provider_class: str | None = None
+    voice_id: str | None = None
+    model: str | None = None
+    speaking_rate: float | None = None
+    request_started: bool = False
+    request_started_at: str | None = None
+    request_finished_at: str | None = None
+    http_status: int | None = None
+    response_body: str | None = None
+    validation_result: str = "not_run"
+    file_exists: bool = False
+    file_size: int = 0
 
 
 def resolve_text(segment: Segment, editable: EditableSegment | None) -> str:
@@ -68,20 +96,60 @@ def regenerate_segment(
     text = resolve_text(segment, editable)
     effective_config = resolve_tool_config(tool_config, editable)
     output_path = tts_segment_output_path(tts_dir, segment.id)
+    request_started_at = datetime.now(UTC).isoformat()
+    provider_id = effective_config.tts_provider
+    provider_class: str | None = None
+    validation_result = "not_run"
+    request_started = False
     try:
         provider = provider_factory(effective_config)
+        provider_class = type(provider).__name__
+        request_started = True
         speech = provider.generate(text)
         validate_wav_audio(speech.audio, segment.id)
+        validation_result = "passed"
         output_path.write_bytes(speech.audio)
         duration = probe_wav_duration_seconds(output_path)
+        request_finished_at = datetime.now(UTC).isoformat()
         return RegenerationOutcome(
             segment_id=segment.id,
             success=True,
             duration_seconds=duration,
             wav_path=output_path,
+            provider_id=provider_id,
+            provider_class=provider_class,
+            voice_id=effective_config.camb_voice_id,
+            model=effective_config.tts_model,
+            speaking_rate=effective_config.tts_speed,
+            request_started=request_started,
+            request_started_at=request_started_at,
+            request_finished_at=request_finished_at,
+            validation_result=validation_result,
+            file_exists=output_path.is_file(),
+            file_size=output_path.stat().st_size if output_path.is_file() else 0,
         )
     except Exception as exc:  # noqa: BLE001 — any provider/validation failure is a per-segment failure
-        return RegenerationOutcome(segment_id=segment.id, success=False, error=str(exc))
+        if "did not return WAV" in str(exc):
+            validation_result = "failed"
+        return RegenerationOutcome(
+            segment_id=segment.id,
+            success=False,
+            error=str(exc),
+            wav_path=output_path,
+            provider_id=provider_id,
+            provider_class=provider_class,
+            voice_id=effective_config.camb_voice_id,
+            model=effective_config.tts_model,
+            speaking_rate=effective_config.tts_speed,
+            request_started=request_started,
+            request_started_at=request_started_at,
+            request_finished_at=datetime.now(UTC).isoformat(),
+            http_status=_http_status_from_error(exc),
+            response_body=_response_body_from_error(exc),
+            validation_result=validation_result,
+            file_exists=output_path.is_file(),
+            file_size=output_path.stat().st_size if output_path.is_file() else 0,
+        )
 
 
 def clip_tts_output_path(tts_dir: Path, clip_id: str) -> Path:
@@ -97,6 +165,11 @@ def regenerate_timeline_clip(
 ) -> ClipRegenerationOutcome:
     """Regenerate one TimelineClip WAV without touching sibling segment audio."""
     output_path = clip_tts_output_path(tts_dir, clip.id)
+    request_started_at = datetime.now(UTC).isoformat()
+    provider_id = tool_config.tts_provider
+    provider_class: str | None = None
+    validation_result = "not_run"
+    request_started = False
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         effective_config = tool_config
@@ -107,18 +180,53 @@ def regenerate_timeline_clip(
                 effective_config, tts_speed=clip.speaking_rate
             )
         provider = provider_factory(effective_config)
+        provider_class = type(provider).__name__
+        request_started = True
         speech = provider.generate(clip.khmer_text)
         validate_wav_audio(speech.audio, clip.segment_id if clip.segment_id is not None else 0)
+        validation_result = "passed"
         output_path.write_bytes(speech.audio)
         duration = probe_wav_duration_seconds(output_path)
+        request_finished_at = datetime.now(UTC).isoformat()
         return ClipRegenerationOutcome(
             clip_id=clip.id,
             success=True,
             duration_seconds=duration,
             wav_path=output_path,
+            provider_id=provider_id,
+            provider_class=provider_class,
+            voice_id=effective_config.camb_voice_id,
+            model=effective_config.tts_model,
+            speaking_rate=effective_config.tts_speed,
+            request_started=request_started,
+            request_started_at=request_started_at,
+            request_finished_at=request_finished_at,
+            validation_result=validation_result,
+            file_exists=output_path.is_file(),
+            file_size=output_path.stat().st_size if output_path.is_file() else 0,
         )
     except Exception as exc:  # noqa: BLE001
-        return ClipRegenerationOutcome(clip_id=clip.id, success=False, error=str(exc))
+        if "did not return WAV" in str(exc):
+            validation_result = "failed"
+        return ClipRegenerationOutcome(
+            clip_id=clip.id,
+            success=False,
+            error=str(exc),
+            wav_path=output_path,
+            provider_id=provider_id,
+            provider_class=provider_class,
+            voice_id=effective_config.camb_voice_id,
+            model=effective_config.tts_model,
+            speaking_rate=effective_config.tts_speed,
+            request_started=request_started,
+            request_started_at=request_started_at,
+            request_finished_at=datetime.now(UTC).isoformat(),
+            http_status=_http_status_from_error(exc),
+            response_body=_response_body_from_error(exc),
+            validation_result=validation_result,
+            file_exists=output_path.is_file(),
+            file_size=output_path.stat().st_size if output_path.is_file() else 0,
+        )
 
 
 def regenerate_segments(
@@ -194,3 +302,14 @@ def select_all_ids(segments: Iterable[Segment], editables: dict[int, EditableSeg
 def _is_locked(segment_id: int, editables: dict[int, EditableSegment]) -> bool:
     es = editables.get(segment_id)
     return es is not None and es.locked
+
+
+def _http_status_from_error(error: Exception) -> int | None:
+    match = re.search(r"\bHTTP\s+(\d{3})\b", str(error), flags=re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def _response_body_from_error(error: Exception) -> str | None:
+    message = str(error)
+    marker = re.search(r"\bHTTP\s+\d{3}:\s*(.*)", message, flags=re.IGNORECASE | re.DOTALL)
+    return marker.group(1).strip() if marker else None

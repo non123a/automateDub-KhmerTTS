@@ -1,0 +1,20 @@
+{
+  "provider_base_url": "https://ai.aiclick.cc",
+  "model": "gpt-5.5",
+  "segment_count": 20,
+  "prompt_size_characters": 3652,
+  "estimated_input_tokens": 913,
+  "batch_index": 1,
+  "batch_count": 4,
+  "fallback_attempted": false,
+  "attempts": [
+    {
+      "endpoint": "Responses",
+      "url": "https://ai.aiclick.cc/responses",
+      "http_status_code": 403,
+      "response_body": "error code: 1010\n",
+      "exception_type": "HTTPError",
+      "exception": "HTTP Error 403: Forbidden"
+    }
+  ]
+}

@@ -71,3 +71,6 @@ class TTSProvider(Protocol):
 
     def synthesize(self, text: str) -> SynthesizedSpeech:
         """Generate speech audio for one text input."""
+
+    def generate(self, text: str) -> object:
+        """Generate speech through the shared editor/CLI TTS implementation."""
