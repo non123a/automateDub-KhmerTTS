@@ -35,6 +35,7 @@ class PipelineEvent:
 class PipelineResult:
     project: CreatedProject
     artifacts: dict[str, object]
+    skipped_tts: bool = False
 
 
 class PipelineManager(QObject):
@@ -209,6 +210,7 @@ class PipelineManager(QObject):
         result = PipelineResult(
             project=context.created_project,
             artifacts=dict(context.artifacts),
+            skipped_tts=context.skip_tts,
         )
         self.result = result
         self.failure = None

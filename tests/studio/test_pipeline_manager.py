@@ -174,11 +174,14 @@ def test_processing_window_observes_pipeline_events(qapp, tmp_path):
         jobs=[FakeProjectJob()],
     )
     window = ProcessingWindow(manager)
+    opened = []
+    window.openEditorRequested.connect(opened.append)
 
     manager.run_sync()
 
     assert window.status_label.text() == "Project Ready"
-    assert window.open_editor_button.isEnabled()
+    assert opened == [tmp_path / "Khmer Cut.autodub"]
+    assert not window.open_editor_button.isEnabled()
     assert window.close_button.isEnabled()
     assert not window.retry_button.isEnabled()
 
@@ -272,3 +275,65 @@ def test_processing_window_renders_tts_warning_summary(qapp, tmp_path):
     label = window.stage_labels[STAGE_TTS_GENERATION]
     assert label.text() == "⚠ Generating Khmer Speech — Generated: 1 · Failed: 1 · Skipped: 0"
     assert window.status_label.text() == "Project Ready"
+
+
+def test_successful_processing_window_auto_opens_editor(qapp, tmp_path):
+    manager = PipelineManager(
+        _request(tmp_path),
+        tool_config=ToolConfig(),
+        jobs=[FakeProjectJob()],
+    )
+    window = ProcessingWindow(manager)
+    window.show()
+    opened = []
+    window.openEditorRequested.connect(opened.append)
+
+    manager.run_sync()
+
+    assert opened == [tmp_path / "Khmer Cut.autodub"]
+    assert window.isVisible() is False
+
+
+def test_failed_processing_window_does_not_auto_open_editor(qapp, tmp_path):
+    manager = PipelineManager(
+        _request(tmp_path),
+        tool_config=ToolConfig(),
+        jobs=[FakeJob("extract_audio", "Extract Audio", fail=True)],
+    )
+    window = ProcessingWindow(manager)
+    window.show()
+    opened = []
+    window.openEditorRequested.connect(opened.append)
+
+    with pytest.raises(PipelineFailedError):
+        manager.run_sync()
+
+    assert opened == []
+    assert window.isVisible() is True
+    assert window.retry_button.isEnabled()
+
+
+def test_skip_tts_completion_keeps_manual_open_editor_flow(qapp, tmp_path):
+    manager = PipelineManager(
+        _request(tmp_path),
+        tool_config=ToolConfig(),
+        jobs=[FakeProjectJob()],
+    )
+    context = PipelineContext(
+        request=_request(tmp_path),
+        project_manager=manager.project_manager,
+        tool_config=manager.tool_config,
+        provider_manager=manager.provider_manager,
+        skip_tts=True,
+        scheduled_stages=[job.stage.id for job in manager.jobs],
+    )
+    window = ProcessingWindow(manager)
+    window.show()
+    opened = []
+    window.openEditorRequested.connect(opened.append)
+
+    manager.run_sync(context=context)
+
+    assert opened == []
+    assert window.isVisible() is True
+    assert window.open_editor_button.isEnabled()

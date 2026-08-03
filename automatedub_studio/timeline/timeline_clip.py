@@ -348,33 +348,38 @@ class Timeline:
         audio_tracks = [
             track for track in self.tracks if track.is_audio and not track.reference_only
         ]
-        soloed_track_ids = {track.id for track in audio_tracks if track.solo}
-        clips: list[TimelineClip] = []
+        soloed_track_ids = {track.id for track in audio_tracks if track.solo and not track.muted}
+        selected: list[TimelineClip] = []
+        by_segment: dict[int, list[TimelineClip]] = {}
         for track in audio_tracks:
             if track.muted:
                 continue
-            if soloed_track_ids and track.id not in soloed_track_ids:
-                continue
-            clips.extend(
+            track_clips = [
                 clip
                 for clip in track.clips
                 if not clip.muted
                 and clip.source_path is not None
                 and clip.contains(position_seconds)
+                and _clip_has_playable_source(clip)
+            ]
+            for clip in track_clips:
+                if clip.segment_id is None:
+                    if not soloed_track_ids or clip.track_id in soloed_track_ids:
+                        selected.append(clip)
+                else:
+                    by_segment.setdefault(clip.segment_id, []).append(clip)
+        for segment_clips in by_segment.values():
+            soloed_segment_clips = [
+                clip for clip in segment_clips if clip.track_id in soloed_track_ids
+            ]
+            priority_pool = soloed_segment_clips or segment_clips
+            best_priority = min(_playback_priority(clip.track_id) for clip in priority_pool)
+            selected.extend(
+                clip
+                for clip in priority_pool
+                if _playback_priority(clip.track_id) == best_priority
             )
-        replacement_segment_ids = {
-            clip.segment_id
-            for clip in clips
-            if clip.segment_id is not None and clip.track_id != ORIGINAL_AUDIO_TRACK_ID
-        }
-        fallback_clips = [
-            clip
-            for clip in clips
-            if clip.track_id != ORIGINAL_AUDIO_TRACK_ID
-            or clip.segment_id is None
-            or clip.segment_id not in replacement_segment_ids
-        ]
-        return sorted(fallback_clips, key=lambda clip: (clip.start_time, clip.track_id, clip.id))
+        return sorted(selected, key=lambda clip: (clip.start_time, clip.track_id, clip.id))
 
     def to_dict(self) -> dict:
         return {
@@ -399,3 +404,19 @@ def active_clips(
         for clip in clips
         if clip.track_id == track_id and not clip.muted and clip.contains(position_seconds)
     ]
+
+
+def _clip_has_playable_source(clip: TimelineClip) -> bool:
+    if clip.segment_id is None:
+        return True
+    return bool(clip.source_path and clip.source_path.is_file())
+
+
+def _playback_priority(track_id: str) -> int:
+    if track_id == DRAFT_REGENERATION_TRACK_ID:
+        return 0
+    if track_id == KHMER_TTS_TRACK_ID:
+        return 1
+    if track_id == ORIGINAL_AUDIO_TRACK_ID:
+        return 2
+    return 1

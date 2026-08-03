@@ -155,8 +155,11 @@ class ProcessingWindow(QMainWindow):
         self.retry_button.setEnabled(False)
         self.skip_tts_button.setEnabled(False)
         self.cancel_button.setEnabled(False)
-        self.open_editor_button.setEnabled(True)
+        self.open_editor_button.setEnabled(result.skipped_tts)
         self.close_button.setEnabled(True)
+        if not result.skipped_tts:
+            self._open_editor()
+            self.close()
 
     def _on_pipeline_failed(self, event: PipelineEvent) -> None:
         self.status_label.setText(f"{event.label} failed")
