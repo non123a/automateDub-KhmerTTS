@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "project_name": "testing15",
+  "created_at": "2026-08-04T07:23:45.267596Z",
+  "source_language": "Chinese",
+  "target_language": "Khmer",
+  "source_video": "videoplayback3.mp4",
+  "editor_video": "proxy_video.mp4",
+  "pipeline": {
+    "status": "ready",
+    "stages": [
+      "create_project",
+      "copy_source_video",
+      "extract_audio",
+      "transcription",
+      "speech_detection",
+      "translation",
+      "tts_generation",
+      "timeline_generation"
+    ]
+  },
+  "providers": {
+    "stt_provider_id": "whisper_cpp",
+    "translation_provider_id": "nbwcode",
+    "tts_provider_id": "cambai",
+    "selected_voice": "170542"
+  },
+  "audio": "pipeline/audio.wav",
+  "transcript": "pipeline/transcript.json",
+  "speech_segments": "pipeline/speech_segments.json",
+  "translation": "pipeline/translation.json",
+  "translation_prompt": "pipeline/translation_prompt.json",
+  "tts": "tts",
+  "tts_generation": {
+    "generated_count": 61,
+    "failed_segment_ids": []
+  },
+  "timeline": "timeline/timeline.edited.json",
+  "editor_codec": "h264",
+  "source_codec": "av1",
+  "video_filename": "videoplayback3.mp4"
+}

@@ -398,6 +398,48 @@ def test_timeline_generation_imports_generated_bulk_tts_wavs(tmp_path):
     assert khmer_clip.source_path == context.project_path / "tts" / "0000.wav"
 
 
+def test_timeline_generation_maps_original_speech_to_pipeline_audio_offset(tmp_path):
+    context = _context(tmp_path)
+    CreateProjectJob().run(context, lambda _value, message="": None)
+    audio_path = context.pipeline_path / "audio.wav"
+    audio_path.write_bytes(b"RIFF....WAVEfmt ")
+    context.artifacts["audio"] = audio_path
+    translation_path = context.pipeline_path / "translation.json"
+    translation_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "segments": [
+                    {
+                        "id": 23,
+                        "start": 52.32,
+                        "end": 53.10,
+                        "source_language": "zh",
+                        "target_language": "km",
+                        "source_text": "source 23",
+                        "target_text": "target 23",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    context.artifacts["translation"] = translation_path
+    context.skip_tts = True
+
+    TimelineGenerationJob().run(context, lambda _value, message="": None)
+
+    timeline = load_timeline_edits(context.project_path)
+    assert timeline is not None
+    original_clip = timeline.clip_by_id("original:23")
+    assert original_clip is not None
+    assert original_clip.source_path == context.project_path / "pipeline" / "audio.wav"
+    assert original_clip.start_time == 52.32
+    assert original_clip.end_time == 53.10
+    assert original_clip.source_offset == 52.32
+    assert original_clip.duration == pytest.approx(0.78)
+
+
 def test_timeline_generation_is_blocked_without_completed_tts(tmp_path):
     context = _context(tmp_path)
     CreateProjectJob().run(context, lambda _value, message="": None)

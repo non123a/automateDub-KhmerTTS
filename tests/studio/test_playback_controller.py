@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -296,6 +297,94 @@ def test_playback_uses_original_audio(qapp, tmp_path):
     assert player.source() == QUrl.fromLocalFile(str(audio_path))
 
 
+def test_original_segment_23_seeks_into_pipeline_audio_at_source_offset(qapp, tmp_path):
+    audio_path = tmp_path / "pipeline" / "audio.wav"
+    audio_path.parent.mkdir()
+    make_wav(audio_path, seconds=1.0)
+    controller = PlaybackController(VideoPlayerWidget())
+    clip = make_timeline_clip(
+        "original:23",
+        ORIGINAL_AUDIO_TRACK_ID,
+        audio_path,
+        start=52.32,
+        end=53.10,
+        source_offset=52.32,
+        segment_id=23,
+    )
+    controller.set_timeline(make_timeline(clip))
+    fake_player = _CountingPlayer(QUrl.fromLocalFile(str(audio_path)), position=0)
+    fake_output = _CountingOutput()
+    controller._khmer_clip_players["original:23"] = (fake_player, fake_output)
+
+    controller._sync_timeline_audio(52320, start_playing=False)
+
+    assert controller._active_khmer_clip_ids == {"original:23"}
+    assert fake_player.seek_count == 1
+    assert fake_player.position() == 52320
+
+
+def test_original_audio_playback_trace_records_qmediaplayer_seek(qapp, tmp_path):
+    audio_path = tmp_path / "pipeline" / "audio.wav"
+    audio_path.parent.mkdir()
+    make_wav(audio_path, seconds=1.0)
+    controller = PlaybackController(VideoPlayerWidget())
+    clip = make_timeline_clip(
+        "original:23",
+        ORIGINAL_AUDIO_TRACK_ID,
+        audio_path,
+        start=52.32,
+        end=53.10,
+        source_offset=52.32,
+        segment_id=23,
+    )
+    controller.set_timeline(make_timeline(clip))
+    fake_player = _CountingPlayer(QUrl.fromLocalFile(str(audio_path)), position=0)
+    fake_output = _CountingOutput()
+    controller._khmer_clip_players["original:23"] = (fake_player, fake_output)
+
+    controller._sync_timeline_audio(52320, start_playing=False)
+
+    trace_path = audio_path.parent / "debug" / "original_audio_playback_trace.json"
+    trace = json.loads(trace_path.read_text(encoding="utf-8"))
+    events = trace["events"]
+    original_event = next(
+        event for event in events if event["event"] == "original_speech_clip_should_play"
+    )
+    seek_event = next(event for event in events if event["event"] == "setPosition")
+    assert original_event["clip"]["id"] == "original:23"
+    assert original_event["source_path"] == str(audio_path)
+    assert original_event["source_offset"] == 52.32
+    assert original_event["elapsed_seconds"] == 0.0
+    assert original_event["computed_seek_position_ms"] == 52320
+    assert seek_event["position_ms"] == 52320
+
+
+def test_khmer_segment_at_late_timeline_time_starts_at_clip_zero(qapp, tmp_path):
+    clip_path = tmp_path / "tts" / "0023.wav"
+    clip_path.parent.mkdir()
+    make_wav(clip_path, seconds=1.0)
+    controller = PlaybackController(VideoPlayerWidget())
+    clip = make_timeline_clip(
+        "khmer:23",
+        KHMER_TTS_TRACK_ID,
+        clip_path,
+        start=52.32,
+        end=53.10,
+        source_offset=0.0,
+        segment_id=23,
+    )
+    controller.set_timeline(make_timeline(clip))
+    fake_player = _CountingPlayer(QUrl.fromLocalFile(str(clip_path)), position=200)
+    fake_output = _CountingOutput()
+    controller._khmer_clip_players["khmer:23"] = (fake_player, fake_output)
+
+    controller._sync_timeline_audio(52320, start_playing=False)
+
+    assert controller._active_khmer_clip_ids == {"khmer:23"}
+    assert fake_player.seek_count == 1
+    assert fake_player.position() == 0
+
+
 def test_playback_uses_khmer_tts(qapp, tmp_path):
     clip_path = tmp_path / "0000.wav"
     make_wav(clip_path, seconds=1.0)
@@ -373,7 +462,7 @@ def test_both_unmuted_both_tracks_are_mixed_by_parallel_players(qapp, tmp_path):
     }
 
 
-def test_same_segment_khmer_suppresses_original_fallback(qapp, tmp_path):
+def test_same_segment_original_and_khmer_both_play_as_independent_tracks(qapp, tmp_path):
     audio_path = tmp_path / "audio.wav"
     clip_path = tmp_path / "0000.wav"
     make_wav(audio_path, seconds=2.0)
@@ -394,10 +483,10 @@ def test_same_segment_khmer_suppresses_original_fallback(qapp, tmp_path):
 
     controller.seek(500)
 
-    assert controller._active_khmer_clip_ids == {"khmer:0"}
+    assert controller._active_khmer_clip_ids == {"original:0", "khmer:0"}
 
 
-def test_missing_khmer_uses_original_fallback(qapp, tmp_path):
+def test_original_only_segment_plays_without_requiring_khmer_clip(qapp, tmp_path):
     audio_path = tmp_path / "audio.wav"
     make_wav(audio_path, seconds=2.0)
     controller = PlaybackController(VideoPlayerWidget())
@@ -416,7 +505,95 @@ def test_missing_khmer_uses_original_fallback(qapp, tmp_path):
     assert controller._active_khmer_clip_ids == {"original:0"}
 
 
-def test_missing_khmer_source_does_not_suppress_original_fallback(qapp, tmp_path):
+def test_all_unmuted_audio_tracks_mix_without_original_khmer_fallback(qapp, tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    make_wav(audio_path, seconds=5.0)
+    controller = PlaybackController(VideoPlayerWidget())
+    khmer0 = tmp_path / "tts0.wav"
+    khmer1 = tmp_path / "tts1.wav"
+    khmer3 = tmp_path / "tts3.wav"
+    make_wav(khmer0, seconds=1.0)
+    make_wav(khmer1, seconds=1.0)
+    make_wav(khmer3, seconds=1.0)
+    clips = [
+        make_timeline_clip(
+            "original:0", ORIGINAL_AUDIO_TRACK_ID, audio_path, 0.0, 1.0, segment_id=0
+        ),
+        make_timeline_clip(
+            "khmer:0", KHMER_TTS_TRACK_ID, khmer0, 0.0, 1.0, segment_id=0
+        ),
+        make_timeline_clip(
+            "original:1", ORIGINAL_AUDIO_TRACK_ID, audio_path, 1.0, 2.0, segment_id=1
+        ),
+        make_timeline_clip(
+            "khmer:1", KHMER_TTS_TRACK_ID, khmer1, 1.0, 2.0, segment_id=1
+        ),
+        make_timeline_clip(
+            "original:2", ORIGINAL_AUDIO_TRACK_ID, audio_path, 2.0, 3.0, segment_id=2
+        ),
+        make_timeline_clip(
+            "original:3", ORIGINAL_AUDIO_TRACK_ID, audio_path, 3.0, 4.0, segment_id=3
+        ),
+        make_timeline_clip(
+            "khmer:3", KHMER_TTS_TRACK_ID, khmer3, 3.0, 4.0, segment_id=3
+        ),
+    ]
+    controller.set_timeline(make_timeline(*clips))
+
+    assert {clip.id for clip in controller._active_audio_clips(500)} == {
+        "original:0",
+        "khmer:0",
+    }
+    assert {clip.id for clip in controller._active_audio_clips(1500)} == {
+        "original:1",
+        "khmer:1",
+    }
+    assert [clip.id for clip in controller._active_audio_clips(2500)] == ["original:2"]
+    assert {clip.id for clip in controller._active_audio_clips(3500)} == {
+        "original:3",
+        "khmer:3",
+    }
+
+
+def test_muted_khmer_leaves_original_track_playing_independently(qapp, tmp_path):
+    audio_path = tmp_path / "audio.wav"
+    khmer_path = tmp_path / "tts0.wav"
+    make_wav(audio_path, seconds=5.0)
+    make_wav(khmer_path, seconds=1.0)
+    controller = PlaybackController(VideoPlayerWidget())
+    original_clips = [
+        make_timeline_clip(
+            f"original:{segment_id}",
+            ORIGINAL_AUDIO_TRACK_ID,
+            audio_path,
+            float(segment_id),
+            float(segment_id + 1),
+            segment_id=segment_id,
+        )
+        for segment_id in range(4)
+    ]
+    khmer_clips = [
+        make_timeline_clip(
+            f"khmer:{segment_id}",
+            KHMER_TTS_TRACK_ID,
+            khmer_path,
+            float(segment_id),
+            float(segment_id + 1),
+            segment_id=segment_id,
+        )
+        for segment_id in (0, 1, 3)
+    ]
+    controller.set_timeline(make_timeline(*(original_clips + khmer_clips)))
+
+    controller.set_khmer_muted(True)
+
+    assert [clip.id for clip in controller._active_audio_clips(500)] == ["original:0"]
+    assert [clip.id for clip in controller._active_audio_clips(1500)] == ["original:1"]
+    assert [clip.id for clip in controller._active_audio_clips(2500)] == ["original:2"]
+    assert [clip.id for clip in controller._active_audio_clips(3500)] == ["original:3"]
+
+
+def test_missing_khmer_source_is_skipped_while_original_track_still_plays(qapp, tmp_path):
     audio_path = tmp_path / "audio.wav"
     missing_khmer_path = tmp_path / "0000.wav"
     make_wav(audio_path, seconds=2.0)
@@ -446,7 +623,7 @@ def test_missing_khmer_source_does_not_suppress_original_fallback(qapp, tmp_path
     assert player.source() == QUrl.fromLocalFile(str(audio_path))
 
 
-def test_soloed_missing_khmer_source_still_falls_back_to_original(qapp, tmp_path):
+def test_soloed_missing_khmer_source_does_not_auto_fallback_to_original(qapp, tmp_path):
     audio_path = tmp_path / "audio.wav"
     missing_khmer_path = tmp_path / "0000.wav"
     make_wav(audio_path, seconds=2.0)
@@ -481,10 +658,10 @@ def test_soloed_missing_khmer_source_still_falls_back_to_original(qapp, tmp_path
 
     controller.seek(500)
 
-    assert controller._active_khmer_clip_ids == {"original:0"}
+    assert controller._active_khmer_clip_ids == set()
 
 
-def test_draft_has_priority_over_khmer_and_original_for_same_segment(qapp, tmp_path):
+def test_draft_khmer_and_original_same_segment_all_mix_when_unmuted(qapp, tmp_path):
     audio_path = tmp_path / "audio.wav"
     khmer_path = tmp_path / "0000.wav"
     draft_path = tmp_path / "draft.wav"
@@ -515,12 +692,12 @@ def test_draft_has_priority_over_khmer_and_original_for_same_segment(qapp, tmp_p
 
     controller.seek(500)
 
-    assert controller._active_khmer_clip_ids == {"draft:0"}
+    assert controller._active_khmer_clip_ids == {"original:0", "khmer:0", "draft:0"}
     player, _output = controller._khmer_clip_players["draft:0"]
     assert player.source() == QUrl.fromLocalFile(str(draft_path))
 
 
-def test_missing_draft_source_falls_back_to_khmer_then_original(qapp, tmp_path):
+def test_missing_draft_source_is_skipped_while_other_tracks_mix(qapp, tmp_path):
     audio_path = tmp_path / "audio.wav"
     khmer_path = tmp_path / "0000.wav"
     missing_draft_path = tmp_path / "draft.wav"
@@ -550,7 +727,7 @@ def test_missing_draft_source_falls_back_to_khmer_then_original(qapp, tmp_path):
 
     controller.seek(500)
 
-    assert controller._active_khmer_clip_ids == {"khmer:0"}
+    assert controller._active_khmer_clip_ids == {"original:0", "khmer:0"}
 
 
 def test_background_original_clip_plays_original_audio(qapp, tmp_path):

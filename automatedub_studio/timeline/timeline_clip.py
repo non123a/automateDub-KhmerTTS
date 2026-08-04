@@ -350,35 +350,14 @@ class Timeline:
         ]
         soloed_track_ids = {track.id for track in audio_tracks if track.solo and not track.muted}
         selected: list[TimelineClip] = []
-        by_segment: dict[int, list[TimelineClip]] = {}
         for track in audio_tracks:
             if track.muted:
                 continue
-            track_clips = [
-                clip
-                for clip in track.clips
-                if not clip.muted
-                and clip.source_path is not None
-                and clip.contains(position_seconds)
-                and _clip_has_playable_source(clip)
-            ]
-            for clip in track_clips:
-                if clip.segment_id is None:
-                    if not soloed_track_ids or clip.track_id in soloed_track_ids:
-                        selected.append(clip)
-                else:
-                    by_segment.setdefault(clip.segment_id, []).append(clip)
-        for segment_clips in by_segment.values():
-            soloed_segment_clips = [
-                clip for clip in segment_clips if clip.track_id in soloed_track_ids
-            ]
-            priority_pool = soloed_segment_clips or segment_clips
-            best_priority = min(_playback_priority(clip.track_id) for clip in priority_pool)
-            selected.extend(
-                clip
-                for clip in priority_pool
-                if _playback_priority(clip.track_id) == best_priority
-            )
+            if soloed_track_ids and track.id not in soloed_track_ids:
+                continue
+            for clip in track.clips:
+                if _clip_enabled_for_playback(track, clip, position_seconds):
+                    selected.append(clip)
         return sorted(selected, key=lambda clip: (clip.start_time, clip.track_id, clip.id))
 
     def to_dict(self) -> dict:
@@ -412,11 +391,13 @@ def _clip_has_playable_source(clip: TimelineClip) -> bool:
     return bool(clip.source_path and clip.source_path.is_file())
 
 
-def _playback_priority(track_id: str) -> int:
-    if track_id == DRAFT_REGENERATION_TRACK_ID:
-        return 0
-    if track_id == KHMER_TTS_TRACK_ID:
-        return 1
-    if track_id == ORIGINAL_AUDIO_TRACK_ID:
-        return 2
-    return 1
+def _clip_enabled_for_playback(
+    track: TimelineTrack, clip: TimelineClip, position_seconds: float
+) -> bool:
+    return (
+        not track.muted
+        and not clip.muted
+        and clip.source_path is not None
+        and clip.contains(position_seconds)
+        and _clip_has_playable_source(clip)
+    )
