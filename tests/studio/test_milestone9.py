@@ -439,6 +439,7 @@ def test_ffmpeg_progress_reports_frame_rate_time_size_and_speed(tmp_path):
     assert output.is_file()
     assert progress[-1].percent == 100
     assert progress[-1].frame is not None
+    assert progress[-1].elapsed_seconds is not None
     assert progress[-1].output_size_bytes and progress[-1].output_size_bytes > 0
 
 

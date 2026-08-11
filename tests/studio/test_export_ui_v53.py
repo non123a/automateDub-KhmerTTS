@@ -54,22 +54,22 @@ def test_export_wizard_persists_last_used_preset(qapp, tmp_path):
         f"export_preset_{VideoEncodingPreset.HIGH_COMPRESSION_H265.value}",
     )
     assert h265_button is not None
-    h265_button.setChecked(True)
+    assert not h265_button.isEnabled()
     wizard.quality_combo.setCurrentText("Small File")
     wizard.audio_mode_combo.setCurrentIndex(0)
     wizard.subtitle_mode_combo.setCurrentIndex(1)
 
     config = wizard.configuration()
 
-    assert config.video_preset == VideoEncodingPreset.HIGH_COMPRESSION_H265
-    assert config.codec == "h265"
+    assert config.video_preset == VideoEncodingPreset.COMPATIBLE_H264
+    assert config.codec == "h264"
     assert config.video_quality == "Small File"
-    assert settings.value("export/video_preset") == "high_compression_h265"
+    assert settings.value("export/video_preset") == "compatible_h264"
     assert settings.value("export/video_quality") == "Small File"
 
     restored = ExportWizard(tmp_path, "dubbed", settings=settings)
 
-    assert restored._selected_preset() == VideoEncodingPreset.HIGH_COMPRESSION_H265
+    assert restored._selected_preset() == VideoEncodingPreset.COMPATIBLE_H264
     assert restored._selected_quality() == "Small File"
     assert restored.audio_mode_combo.currentData() == AudioMode.KHMER_ONLY.value
     assert restored.subtitle_mode_combo.currentData() == SubtitleMode.EXTERNAL_SRT.value
@@ -83,12 +83,12 @@ def test_export_wizard_updates_live_estimates(qapp, tmp_path):
     )
     assert h265_button is not None
 
-    h265_button.click()
+    assert not h265_button.isEnabled()
     wizard.quality_combo.setCurrentText("Small File")
 
-    assert wizard.codec_label.text() == "H.265"
-    assert wizard.size_label.text() == "Smallest"
-    assert "newer devices" in wizard.compatibility_label.text()
+    assert wizard.codec_label.text() == "H.264"
+    assert wizard.size_label.text() == "Small"
+    assert "Excellent" in wizard.compatibility_label.text()
     assert h265_button.text() == "H.265 (HEVC)"
 
 
@@ -172,7 +172,7 @@ def test_export_wizard_disables_h265_without_an_encoder_and_shows_preview(qapp, 
 
     assert h265 is not None
     assert not h265.isEnabled()
-    assert "No supported H.265 encoder" in wizard.validation_label.text()
+    assert "Coming Soon" in wizard.validation_label.text()
     assert wizard.audio_codec_label.text() == "AAC"
     assert wizard.subtitle_preview_label.text() == "None"
 
@@ -252,11 +252,11 @@ def test_export_wizard_lists_available_and_unavailable_preset_reasons(qapp, tmp_
     wizard = ExportWizard(tmp_path, "dubbed", capability_report=report)
 
     assert "Available:" in wizard._preset_descriptions[VideoEncodingPreset.COMPATIBLE_H264].text()
-    assert "Unavailable\nReason: No supported H.265 encoder" in (
+    assert "Coming Soon\nComing Soon. H.265" in (
         wizard._preset_descriptions[VideoEncodingPreset.HIGH_COMPRESSION_H265].text()
     )
-    assert "Unavailable\nReason:" in wizard._preset_descriptions[VideoEncodingPreset.FASTEST].text()
-    assert "Unavailable\nReason:" in (
+    assert "Unavailable\n" in wizard._preset_descriptions[VideoEncodingPreset.FASTEST].text()
+    assert "Coming Soon" in (
         wizard._preset_descriptions[VideoEncodingPreset.ORIGINAL_CODEC].text()
     )
     assert "Copy Original: Unavailable" in wizard.diagnostics_presets_label.text()

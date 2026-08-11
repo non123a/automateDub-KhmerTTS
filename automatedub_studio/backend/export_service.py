@@ -73,6 +73,7 @@ class FFmpegProgress:
     frame: int | None = None
     fps: float | None = None
     encoded_time_seconds: float | None = None
+    elapsed_seconds: float | None = None
     remaining_seconds: float | None = None
     output_size_bytes: int | None = None
     speed: float | None = None
@@ -368,11 +369,12 @@ def _encoder_quality_args(
 ) -> list[str]:
     if video_encoder.endswith("videotoolbox"):
         bitrate = _target_hardware_bitrate(video_quality, source_video_bitrate)
-        args = ["-b:v", str(bitrate)]
+        args: list[str] = []
         if video_encoder == "hevc_videotoolbox":
             # A listed VideoToolbox encoder can still lack a hardware session.
             # Allow FFmpeg's supported software fallback instead of failing late.
             args.extend(["-allow_sw", "1"])
+        args.extend(["-b:v", str(bitrate)])
         return args
     encoder = (
         EXPORT_H265_ENCODER
@@ -655,6 +657,7 @@ def _run_ffmpeg_with_progress(
                     frame=_int_or_none(values.get("frame")),
                     fps=_float_or_none(values.get("fps")),
                     encoded_time_seconds=encoded_seconds,
+                    elapsed_seconds=elapsed,
                     remaining_seconds=remaining,
                     output_size_bytes=_int_or_none(values.get("total_size")),
                     speed=_parse_speed(values.get("speed")),
@@ -828,6 +831,7 @@ def export_project(
                 exc.stderr if isinstance(exc.stderr, str) else "",
             )
             if _cancelled():
+                output_path.unlink(missing_ok=True)
                 raise ExportError("export cancelled") from exc
             msg = exc.stderr.strip() or exc.stdout.strip() or f"ffmpeg exited with {exc.returncode}"
             raise ExportError(f"video render failed: {msg}") from exc

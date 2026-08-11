@@ -343,7 +343,12 @@ class ExportWizard(QDialog):
                     warnings.append(f"{details['label']}: {validation.warning}")
             else:
                 button.setToolTip(validation.message)
-                description_text += f"\n\nUnavailable\nReason: {validation.message}"
+                status = (
+                    "Coming Soon"
+                    if validation.message.startswith("Coming Soon.")
+                    else "Unavailable"
+                )
+                description_text += f"\n\n{status}\n{validation.message}"
                 unavailable.append(f"{details['label']}: {validation.message}")
             description.setText(description_text)
         messages = unavailable + warnings

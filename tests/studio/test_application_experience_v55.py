@@ -91,7 +91,9 @@ def test_home_shows_empty_recent_state(qapp, tmp_path):
         session_recovery_manager=SessionRecoveryManager(tmp_path / "session.json"),
     )
 
-    assert window.recent_empty_label.text() == "No recent projects yet."
+    assert window.recent_empty_label.text() == (
+        "No recent projects yet. Create a project or open an existing project to begin."
+    )
     assert not window.pin_recent_button.isEnabled()
     assert not window.recent_actions_widget.isVisible()
     assert not window.recent_projects_list.isVisible()

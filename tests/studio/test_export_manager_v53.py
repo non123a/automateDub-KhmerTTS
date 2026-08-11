@@ -93,7 +93,8 @@ def test_export_validation_disables_fastest_for_av1_source(tmp_path):
     assert not fastest.available
     assert "AV1" in fastest.message
     assert validations[VideoEncodingPreset.COMPATIBLE_H264].available
-    assert validations[VideoEncodingPreset.HIGH_COMPRESSION_H265].available
+    assert not validations[VideoEncodingPreset.HIGH_COMPRESSION_H265].available
+    assert "Coming Soon" in validations[VideoEncodingPreset.HIGH_COMPRESSION_H265].message
 
 
 def test_export_validation_disables_original_av1_codec_for_mp4(tmp_path):
@@ -103,7 +104,40 @@ def test_export_validation_disables_original_av1_codec_for_mp4(tmp_path):
     validation = validate_export_presets(project)[VideoEncodingPreset.ORIGINAL_CODEC]
 
     assert not validation.available
-    assert "not compatible" in validation.message
+    assert "Coming Soon" in validation.message
+
+
+def test_original_codec_validation_is_unavailable_during_beta(tmp_path):
+    project = _project(tmp_path)
+    project.source_codec = "av1"
+    report = export_manager.ExportCapabilityReport(
+        source_video=project.video_path,
+        source_streams=ExportStreamSummary(
+            1,
+            1,
+            [{"codec_type": "video", "codec_name": "av1"}],
+        ),
+        source_container="mp4",
+        system=export_manager.ExportSystemCapabilities(
+            "ffmpeg test",
+            frozenset({"libx264"}),
+            frozenset({"mp4"}),
+            "libx264",
+            None,
+        ),
+        has_video_edits=False,
+        has_audio_edits=False,
+        subtitle_mode=SubtitleMode.NONE,
+        stream_copy_supported=True,
+        stream_copy_reason="FFmpeg verified -c:v copy for this source and MP4 output.",
+    )
+
+    validation = validate_export_presets(None, capability_report=report)[
+        VideoEncodingPreset.ORIGINAL_CODEC
+    ]
+
+    assert not validation.available
+    assert "Coming Soon" in validation.message
 
 
 def test_export_validation_disables_h265_without_a_supported_encoder(tmp_path):
@@ -114,7 +148,7 @@ def test_export_validation_disables_h265_without_a_supported_encoder(tmp_path):
 
     h265 = validations[VideoEncodingPreset.HIGH_COMPRESSION_H265]
     assert not h265.available
-    assert "No supported H.265 encoder" in h265.message
+    assert "Coming Soon" in h265.message
     assert validations[VideoEncodingPreset.COMPATIBLE_H264].available
 
 
@@ -219,7 +253,7 @@ def test_export_manager_rechecks_encoder_availability_before_rendering(
     )
     monkeypatch.setattr(export_manager, "inspect_export_capabilities", lambda *_args: report)
 
-    with pytest.raises(ExportManagerError, match="No supported H.265 encoder"):
+    with pytest.raises(ExportManagerError, match="Coming Soon"):
         manager.run_sync()
 
     assert manager.failure is not None
@@ -297,3 +331,28 @@ def test_export_manager_fails_at_verification_before_completion(qapp, tmp_path):
         event.stage == ExportPipelineStage.VERIFY_OUTPUT and event.status == "completed"
         for event in events
     )
+
+
+def test_cancelled_export_removes_partial_output(qapp, tmp_path):
+    manager: ExportManager
+
+    def cancelling_renderer(_project, _editables, _tool_config, configuration):
+        configuration.output_path.write_bytes(b"partial")
+        manager.cancel()
+        raise RuntimeError("ffmpeg stopped")
+
+    manager = ExportManager(
+        project=_project(tmp_path),
+        editables={},
+        tool_config=ToolConfig(),
+        configuration=_config(tmp_path),
+        renderer=cancelling_renderer,
+    )
+    cancelled = []
+    manager.exportCancelled.connect(lambda: cancelled.append(True))
+
+    with pytest.raises(ExportManagerError, match="ffmpeg stopped"):
+        manager.run_sync()
+
+    assert cancelled == [True]
+    assert not manager.configuration.output_path.exists()

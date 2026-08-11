@@ -108,19 +108,24 @@ and expected compatibility.
 
 HEVC's `hevc_videotoolbox` was present but its first live command failed with
 VideoToolbox error `-12908` while creating a hardware compression session. The
-valid command is retained and adds FFmpeg's supported `-allow_sw 1` fallback;
-this succeeded in a local MP4 probe. Failures write the complete command, exit
-code, and FFmpeg stderr to `exports/last_export_debug.json`.
+valid command applies FFmpeg's supported `-allow_sw 1` before the bitrate
+option, then sets `-b:v`; this ordering succeeded in a local MP4 probe.
+Failures write the complete command, exit code, and FFmpeg stderr to
+`exports/last_export_debug.json`.
 
 Copy presets are no longer decided from a codec allow-list. Capability detection
 runs a one-second temporary MP4 probe using `-c:v copy`. The preset is available
 only when that exact command creates a non-empty MP4; otherwise its FFmpeg error
-is displayed as the reason.
+is displayed as the reason. The audited AV1 source produced an MP4 with AV1
+video/AAC audio, matching source pixel format, timestamps, and duration; FFmpeg
+also decoded a video frame successfully. Original Codec therefore remains
+available with an explicit warning that a receiving player still needs AV1
+decode support.
 
 During video encoding, FFmpeg runs with `-progress pipe:1`. The progress window
 shows its percent, frame, FPS, encoded duration, estimated remaining time,
 output size, speed, and current encoder command. Cancel terminates the active
-FFmpeg process. The expandable Details section retains selected settings,
+FFmpeg process and removes a partial output. The expandable Details section retains selected settings,
 current command, encoder telemetry, output path/size, stage, and recent FFmpeg
 message.
 

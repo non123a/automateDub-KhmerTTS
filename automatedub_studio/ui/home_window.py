@@ -108,7 +108,9 @@ class HomeWindow(QMainWindow):
         self.recent_projects_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         layout.addWidget(self.recent_projects_list)
 
-        self.recent_empty_label = QLabel("No recent projects yet.")
+        self.recent_empty_label = QLabel(
+            "No recent projects yet. Create a project or open an existing project to begin."
+        )
         self.recent_empty_label.setObjectName("recent_empty_label")
         layout.addWidget(self.recent_empty_label)
 
@@ -237,7 +239,7 @@ class HomeWindow(QMainWindow):
         missing = self.asset_recovery.missing_assets(project_path)
         if missing:
             self.notification_center.warning(
-                f"Missing asset: {missing[0].description} ({missing[0].path})"
+                "Some project media is missing. Use Project Browser to review the project files."
             )
         self._refresh_recent_projects()
         self.openProjectRequested.emit(project_path)
@@ -319,7 +321,7 @@ class HomeWindow(QMainWindow):
         )
 
     def _show_notification(self, notification) -> None:
-        self.notification_label.setText(f"{notification.level}: {notification.message}")
+        self.notification_label.setText(notification.message)
 
     def _update_recent_action_state(self) -> None:
         has_selection = self._selected_recent_path() is not None

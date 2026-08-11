@@ -58,6 +58,17 @@ class VideoEncodingPreset(StrEnum):
     ORIGINAL_CODEC = "original_codec"
 
 
+BETA_UNAVAILABLE_PRESETS = {
+    VideoEncodingPreset.HIGH_COMPRESSION_H265: (
+        "Coming Soon. H.265 (HEVC) export is under development and is unavailable in the beta."
+    ),
+    VideoEncodingPreset.ORIGINAL_CODEC: (
+        "Coming Soon. Original Codec export is under development and is temporarily unavailable "
+        "in the beta."
+    ),
+}
+
+
 class ExportPipelineStage(StrEnum):
     PREPARE_TIMELINE = "Preparing Project"
     RENDER_AUDIO = "Rendering Audio"
@@ -259,7 +270,7 @@ def validate_export_presets(
         validations[VideoEncodingPreset.ORIGINAL_CODEC] = ExportPresetValidation(
             VideoEncodingPreset.ORIGINAL_CODEC, False, copy_message
         )
-        return validations
+        return _apply_beta_export_policy(validations)
 
     if capability_report is not None:
         can_stream_copy, stream_copy_message = (
@@ -296,7 +307,22 @@ def validate_export_presets(
             VideoEncodingPreset.ORIGINAL_CODEC,
             True,
             "Copies the original video codec into the MP4 output.",
+            (
+                f"{source_codec.upper()} is verified by FFmpeg but may require an AV1-capable "
+                "player on this device."
+                if source_codec == "av1"
+                else ""
+            ),
         )
+    return _apply_beta_export_policy(validations)
+
+
+def _apply_beta_export_policy(
+    validations: dict[VideoEncodingPreset, ExportPresetValidation],
+) -> dict[VideoEncodingPreset, ExportPresetValidation]:
+    """Keep experimental codecs visible but unavailable during the external beta."""
+    for preset, message in BETA_UNAVAILABLE_PRESETS.items():
+        validations[preset] = ExportPresetValidation(preset, False, message)
     return validations
 
 
@@ -354,6 +380,7 @@ class ExportEvent:
     frame: int | None = None
     fps: float | None = None
     encoded_time_seconds: float | None = None
+    elapsed_seconds: float | None = None
     remaining_seconds: float | None = None
     output_size_bytes: int | None = None
     speed: float | None = None
@@ -512,6 +539,7 @@ class ExportManager(QObject):
         except Exception as exc:
             stage = self._current_stage_for_failure()
             if self._cancelled:
+                output_path.unlink(missing_ok=True)
                 self._emit_event(stage, "cancelled", 0, "Export cancelled", error=str(exc))
                 self.exportCancelled.emit()
                 raise ExportManagerError(str(exc)) from exc
@@ -644,6 +672,8 @@ class ExportManager(QObject):
             message_parts.append(f"{progress.fps:.1f} fps")
         if progress.encoded_time_seconds is not None:
             message_parts.append(f"encoded {_format_seconds(progress.encoded_time_seconds)}")
+        if progress.elapsed_seconds is not None:
+            message_parts.append(f"elapsed {_format_seconds(progress.elapsed_seconds)}")
         if progress.remaining_seconds is not None:
             message_parts.append(f"remaining {_format_seconds(progress.remaining_seconds)}")
         if progress.output_size_bytes is not None:
@@ -658,6 +688,7 @@ class ExportManager(QObject):
             frame=progress.frame,
             fps=progress.fps,
             encoded_time_seconds=progress.encoded_time_seconds,
+            elapsed_seconds=progress.elapsed_seconds,
             remaining_seconds=progress.remaining_seconds,
             output_size_bytes=progress.output_size_bytes,
             speed=progress.speed,
@@ -675,6 +706,7 @@ class ExportManager(QObject):
         frame: int | None = None,
         fps: float | None = None,
         encoded_time_seconds: float | None = None,
+        elapsed_seconds: float | None = None,
         remaining_seconds: float | None = None,
         output_size_bytes: int | None = None,
         speed: float | None = None,
@@ -689,6 +721,7 @@ class ExportManager(QObject):
             frame,
             fps,
             encoded_time_seconds,
+            elapsed_seconds,
             remaining_seconds,
             output_size_bytes,
             speed,

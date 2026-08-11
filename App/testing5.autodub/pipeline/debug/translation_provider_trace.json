@@ -1,9 +1,0 @@
-{
-  "provider_id": "nbwcode",
-  "provider_class": "NBWCodeTranslationProvider",
-  "provider_module": "automatedub_studio.providers.translation.nbwcode",
-  "selected_provider_id": "nbwcode",
-  "model": "gpt-5.5",
-  "base_url": "https://ai.aiclick.cc",
-  "wire_api": "responses"
-}
