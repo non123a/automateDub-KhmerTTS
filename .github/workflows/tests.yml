@@ -11,8 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
-      - name: Install system media tools
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Install Linux media and Qt runtime
+        run: >-
+          sudo apt-get update && sudo apt-get install -y
+          ffmpeg libegl1 libgl1 libxkbcommon0 libxkbcommon-x11-0
       - name: Run tests
         run: uv run pytest
       - name: Run Ruff
