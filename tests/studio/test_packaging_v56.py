@@ -88,10 +88,12 @@ def test_packaging_paths_are_resolved_from_the_repository_root():
     assert 'str(ROOT / "automatedub_studio" / "main.py")' in spec
     assert 'name="AutomateDub.app"' in spec
     assert "automatedub-studio.icns" in spec
+    assert 'VERSION_INFO = ROOT / "packaging" / "version_info.txt"' in spec
+    assert 'version=str(VERSION_INFO)' in spec
+    assert (ROOT / "packaging" / "version_info.txt").is_file()
     assert (
         ROOT / "automatedub_studio" / "resources" / "icons" / "automatedub-studio.icns"
     ).is_file()
-    assert "version=APP_VERSION" not in spec
     assert '"CFBundleShortVersionString": APP_VERSION' in spec
     assert 'APP="${ROOT}/dist/macos/AutomateDub.app"' in macos
     assert 'APPDIR="${ROOT}/dist/linux/AppDir"' in linux

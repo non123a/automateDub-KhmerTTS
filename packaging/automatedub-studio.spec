@@ -12,6 +12,7 @@ ROOT = SPEC_DIR.parent
 MACOS_ICON = (
     ROOT / "automatedub_studio" / "resources" / "icons" / "automatedub-studio.icns"
 )
+VERSION_INFO = ROOT / "packaging" / "version_info.txt"
 
 a = Analysis(
     [str(ROOT / "automatedub_studio" / "main.py")],
@@ -53,6 +54,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    version=str(VERSION_INFO),
 )
 
 app = BUNDLE(
