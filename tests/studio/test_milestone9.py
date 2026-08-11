@@ -27,11 +27,12 @@ from automatedub.vertical_slice.mix import MixSpeechTrack, build_mix_filter_comp
 from automatedub_studio.backend.export_service import (
     ExportEncoderCapabilities,
     ExportError,
-    FFmpegProgress,
     ExportOptions,
     ExportResult,
     ExportStage,
     ExportStreamSummary,
+    FFmpegProgress,
+    _run_ffmpeg_with_progress,
     build_export_speech_tracks,
     build_mux_command,
     build_tts_only_mix_command,
@@ -40,7 +41,6 @@ from automatedub_studio.backend.export_service import (
     probe_export_system_capabilities,
     probe_output_streams,
     probe_stream_copy_capability,
-    _run_ffmpeg_with_progress,
 )
 from automatedub_studio.backend.export_worker import ExportJob, ExportRunner
 from automatedub_studio.project.editable_project import EditableSegment
@@ -352,11 +352,12 @@ def test_build_mux_command_can_reencode_video_to_h265(tmp_path):
     assert cmd[cmd.index("-c:v") + 1] == "libx265"
     assert cmd[cmd.index("-pix_fmt") + 1] == "yuv420p"
     assert cmd[cmd.index("-crf") + 1] == "30"
-    assert cmd[cmd.index("-allow_sw") + 1] == "1" if "-allow_sw" in cmd else True
+    if "-allow_sw" in cmd:
+        assert cmd[cmd.index("-allow_sw") + 1] == "1"
 
 
 def test_hardware_h264_balanced_uses_source_relative_bitrate(tmp_path):
-    cmd = build_mux_command(
+    balanced = build_mux_command(
         "ffmpeg",
         tmp_path / "v.mp4",
         tmp_path / "a.wav",
@@ -366,17 +367,40 @@ def test_hardware_h264_balanced_uses_source_relative_bitrate(tmp_path):
         source_video_bitrate=1_400_000,
     )
 
-    assert cmd[cmd.index("-b:v") + 1] == "1400000"
-    assert "5M" not in cmd
+    small = build_mux_command(
+        "ffmpeg",
+        tmp_path / "v.mp4",
+        tmp_path / "a.wav",
+        tmp_path / "small.mp4",
+        video_encoder="h264_videotoolbox",
+        video_quality="Small File",
+        source_video_bitrate=1_400_000,
+    )
+
+    assert balanced[balanced.index("-b:v") + 1] == "1400000"
+    assert small[small.index("-b:v") + 1] == "980000"
+    assert "5M" not in balanced
+
+
+def test_hevc_videotoolbox_allows_software_fallback(tmp_path):
+    cmd = build_mux_command(
+        "ffmpeg",
+        tmp_path / "v.mp4",
+        tmp_path / "a.wav",
+        tmp_path / "o.mp4",
+        video_encoder="hevc_videotoolbox",
+        video_quality="Balanced",
+    )
+
+    assert cmd[cmd.index("-allow_sw") + 1] == "1"
 
 
 def test_stream_copy_capability_uses_ffmpeg_result(tmp_path, monkeypatch):
     source = tmp_path / "source.mp4"
     source.write_bytes(b"source")
-    output = tmp_path / "stream-copy-check.mp4"
 
     def fake_run(command, **_kwargs):
-        output.write_bytes(b"mp4")
+        Path(command[-1]).write_bytes(b"mp4")
         return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
     monkeypatch.setattr(subprocess, "run", fake_run)

@@ -80,6 +80,50 @@ non-empty output file and a successful FFprobe read with exactly one video
 stream and exactly one audio stream. Export metadata and the completion state
 are written only after those checks pass.
 
+## Forensic Export Audit
+
+The export command is the single video-render boundary: source video and the
+mixed WAV are muxed once into the final MP4. No intermediate video is produced
+or re-encoded. The output maps exactly `0:v:0` and `1:a:0`, so it has one video
+and one rendered AAC audio stream.
+
+On the audited macOS project, the source AV1 stream was about `1.4M` video
+bitrate but the Balanced hardware H.264 command set `h264_videotoolbox -b:v
+5M`. That fixed target bitrate, rather than duplicate streams or a second
+encode, caused the 25 MB source to become an approximately 84 MB export.
+Hardware encoding now derives its target from the measured source video bitrate:
+
+| Quality | H.264/HEVC VideoToolbox target | Software encoder setting |
+| --- | --- | --- |
+| Highest Quality | 1.5x source bitrate | H.264 CRF 16 / H.265 CRF 18 |
+| High | 1.2x source bitrate | H.264 CRF 18 / H.265 CRF 22 |
+| Balanced | 1.0x source bitrate | H.264 CRF 22 / H.265 CRF 26 |
+| Small File | 0.7x source bitrate | H.264 CRF 28 / H.265 CRF 30 |
+
+All re-encodes use `yuv420p`; software encoding uses `-preset medium`. H.264
+and HEVC VideoToolbox use a target bitrate because those encoders do not expose
+the equivalent x264/x265 CRF behavior. The wizard diagnostics show the selected
+quality, target CRF/bitrate, actual encoder, planned command, size estimate,
+and expected compatibility.
+
+HEVC's `hevc_videotoolbox` was present but its first live command failed with
+VideoToolbox error `-12908` while creating a hardware compression session. The
+valid command is retained and adds FFmpeg's supported `-allow_sw 1` fallback;
+this succeeded in a local MP4 probe. Failures write the complete command, exit
+code, and FFmpeg stderr to `exports/last_export_debug.json`.
+
+Copy presets are no longer decided from a codec allow-list. Capability detection
+runs a one-second temporary MP4 probe using `-c:v copy`. The preset is available
+only when that exact command creates a non-empty MP4; otherwise its FFmpeg error
+is displayed as the reason.
+
+During video encoding, FFmpeg runs with `-progress pipe:1`. The progress window
+shows its percent, frame, FPS, encoded duration, estimated remaining time,
+output size, speed, and current encoder command. Cancel terminates the active
+FFmpeg process. The expandable Details section retains selected settings,
+current command, encoder telemetry, output path/size, stage, and recent FFmpeg
+message.
+
 ## Export Presets
 
 `ExportWizard` presents editor-oriented strategies instead of raw FFmpeg

@@ -76,6 +76,7 @@ class FFmpegProgress:
     remaining_seconds: float | None = None
     output_size_bytes: int | None = None
     speed: float | None = None
+    command: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -448,7 +449,7 @@ def build_output_probe_command(ffprobe: str, output_path: Path) -> list[str]:
         "error",
         "-show_entries",
         (
-            "stream=index,codec_type,codec_name,width,height,pix_fmt,nb_frames,"
+            "stream=index,codec_type,codec_name,width,height,pix_fmt,bit_rate,nb_frames,"
             "r_frame_rate,avg_frame_rate,time_base,duration:stream_tags=rotate:"
             "format=duration,format_name:format_tags=major_brand,compatible_brands"
         ),
@@ -607,6 +608,7 @@ def _run_ffmpeg_with_progress(
     command: list[str],
     duration_seconds: float | None,
     on_progress: Callable[[FFmpegProgress], None],
+    is_cancelled: Callable[[], bool] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run FFmpeg while consuming its key/value progress pipe."""
     if command and command[-1] != "-progress":
@@ -622,6 +624,9 @@ def _run_ffmpeg_with_progress(
     values: dict[str, str] = {}
     if process.stdout is not None:
         for line in process.stdout:
+            if is_cancelled is not None and is_cancelled():
+                process.terminate()
+                break
             line = line.strip()
             if not line or "=" not in line:
                 continue
@@ -653,6 +658,7 @@ def _run_ffmpeg_with_progress(
                     remaining_seconds=remaining,
                     output_size_bytes=_int_or_none(values.get("total_size")),
                     speed=_parse_speed(values.get("speed")),
+                    command=tuple(command),
                 )
             )
     stdout, stderr = process.communicate()
@@ -805,10 +811,24 @@ def export_project(
         try:
             if on_progress is not None:
                 duration = _duration_seconds(source_stream_summary)
-                mux_result = _run_ffmpeg_with_progress(mux_command, duration, on_progress)
+                mux_result = _run_ffmpeg_with_progress(
+                    mux_command,
+                    duration,
+                    on_progress,
+                    _cancelled,
+                )
             else:
                 mux_result = subprocess.run(mux_command, check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as exc:
+            _write_export_failure_debug(
+                project.project_path,
+                mux_command,
+                output_path,
+                exc.returncode,
+                exc.stderr if isinstance(exc.stderr, str) else "",
+            )
+            if _cancelled():
+                raise ExportError("export cancelled") from exc
             msg = exc.stderr.strip() or exc.stdout.strip() or f"ffmpeg exited with {exc.returncode}"
             raise ExportError(f"video render failed: {msg}") from exc
 
@@ -908,6 +928,30 @@ def _write_export_debug(
                     "audio": stream_summary.audio_streams,
                     "raw": stream_summary.raw_streams,
                 },
+            },
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+
+def _write_export_failure_debug(
+    project_path: Path,
+    command: list[str],
+    output_path: Path,
+    exit_code: int,
+    stderr: str,
+) -> None:
+    debug_path = project_path / "exports" / "last_export_debug.json"
+    debug_path.parent.mkdir(parents=True, exist_ok=True)
+    debug_path.write_text(
+        json.dumps(
+            {
+                "ffmpeg_command": command,
+                "output_path": str(output_path),
+                "exit_code": exit_code,
+                "ffmpeg_stderr": stderr,
             },
             indent=2,
             ensure_ascii=False,

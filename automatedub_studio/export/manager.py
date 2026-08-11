@@ -208,19 +208,9 @@ def validate_export_presets(
     """Describe which export strategies are safe for the current project."""
     source_video = project.export_video_path if project is not None else None
     source_codec = project.source_codec.lower() if project and project.source_codec else None
-    source_summary = ExportStreamSummary(
-        video_streams=1 if source_codec else 0,
-        audio_streams=0,
-        raw_streams=(
-            [{"codec_type": "video", "codec_name": source_codec}]
-            if source_codec
-            else []
-        ),
-    )
     has_video_edits = _timeline_has_video_edits(timeline)
     if capability_report is not None:
         source_video = capability_report.source_video
-        source_summary = capability_report.source_streams
         source_codec = capability_report.source_codec
         has_video_edits = capability_report.has_video_edits
         encoder_capabilities = ExportEncoderCapabilities(
@@ -367,6 +357,7 @@ class ExportEvent:
     remaining_seconds: float | None = None
     output_size_bytes: int | None = None
     speed: float | None = None
+    command: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -451,7 +442,6 @@ class ExportManager(QObject):
 
     def cancel(self) -> None:
         self._cancelled = True
-        self.exportCancelled.emit()
 
     def run_sync(self) -> ManagedExportResult:
         output_path = self.configuration.output_path
@@ -521,6 +511,10 @@ class ExportManager(QObject):
             self._write_metadata(metadata_path, rendered.output_path, subtitle_path)
         except Exception as exc:
             stage = self._current_stage_for_failure()
+            if self._cancelled:
+                self._emit_event(stage, "cancelled", 0, "Export cancelled", error=str(exc))
+                self.exportCancelled.emit()
+                raise ExportManagerError(str(exc)) from exc
             event = self._emit_event(stage, "failed", 0, str(exc), error=str(exc))
             self.failure = event
             self.exportFailed.emit(event)
@@ -660,13 +654,14 @@ class ExportManager(QObject):
             ExportPipelineStage.ENCODE_VIDEO,
             "progress",
             progress.percent,
-            " · ".join(message_parts) or "Encoding video",
+            f"{progress.percent}% · " + (" · ".join(message_parts) or "Encoding video"),
             frame=progress.frame,
             fps=progress.fps,
             encoded_time_seconds=progress.encoded_time_seconds,
             remaining_seconds=progress.remaining_seconds,
             output_size_bytes=progress.output_size_bytes,
             speed=progress.speed,
+            command=progress.command,
         )
 
     def _emit_event(
@@ -683,6 +678,7 @@ class ExportManager(QObject):
         remaining_seconds: float | None = None,
         output_size_bytes: int | None = None,
         speed: float | None = None,
+        command: tuple[str, ...] = (),
     ) -> ExportEvent:
         event = ExportEvent(
             stage,
@@ -696,6 +692,7 @@ class ExportManager(QObject):
             remaining_seconds,
             output_size_bytes,
             speed,
+            command,
         )
         self._current_stage = stage
         self.eventEmitted.emit(event)
