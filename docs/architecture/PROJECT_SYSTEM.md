@@ -81,6 +81,21 @@ Video discovery accepts project metadata first, then supported video files in th
 
 Export continues to reference the source video. Preview loads the editor video.
 
+The project loader resolves media through one `MediaAsset` model:
+
+- `source_video`: original source used for export
+- `proxy_video`: editor-safe preview media
+- `extracted_audio`: source audio used by timeline tracks
+
+These paths are stored as absolute `Path` values on `Project.media`. The
+compatibility fields on `Project` remain available for older serialization,
+but new subsystems use `source_video_path`, `preview_video_path`,
+`export_video_path`, and `extracted_audio_path`.
+
+Metadata stores project-relative paths. This is important for source files
+under `source/`; storing only a basename causes a reopened project to resolve
+the source incorrectly while the proxy still works.
+
 ## Persistence Rules
 
 - Save current timeline edits to `timeline.edited.json`.

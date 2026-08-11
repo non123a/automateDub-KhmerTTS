@@ -7,6 +7,7 @@ from pathlib import Path
 
 from automatedub.config import ToolConfig
 from automatedub_studio.project import video_proxy
+from automatedub_studio.project.loader import load_project
 from automatedub_studio.project.video_proxy import (
     EDITOR_PROXY_CODEC,
     PROXY_VIDEO_FILENAME,
@@ -123,3 +124,39 @@ def test_project_json_metadata_records_source_and_editor_video(monkeypatch, tmp_
     assert metadata["source_codec"] == "av1"
     assert metadata["editor_codec"] == EDITOR_PROXY_CODEC == "h264"
     assert result.editor_video == tmp_path / PROXY_VIDEO_FILENAME
+
+
+def test_nested_source_path_is_preserved_for_reopened_project(monkeypatch, tmp_path):
+    source = tmp_path / "source" / "movie.mp4"
+    source.parent.mkdir()
+    _touch(source, 100)
+    monkeypatch.setattr(video_proxy, "resolve_executable", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(
+        video_proxy,
+        "probe_video",
+        lambda ffprobe, path: VideoProbe("av1", 1920, 1080, "30/1"),
+    )
+
+    def fake_run(command, check, capture_output, text):
+        (tmp_path / PROXY_VIDEO_FILENAME).write_bytes(b"proxy")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(video_proxy.subprocess, "run", fake_run)
+    (tmp_path / "audio.wav").write_bytes(b"audio")
+    (tmp_path / "translation.json").write_text(
+        json.dumps({"segments": []}), encoding="utf-8"
+    )
+    (tmp_path / "tts").mkdir()
+
+    prepare_editor_video(tmp_path, source, ToolConfig())
+    metadata = json.loads((tmp_path / "project.json").read_text(encoding="utf-8"))
+
+    assert metadata["source_video"] == "source/movie.mp4"
+    assert metadata["editor_video"] == PROXY_VIDEO_FILENAME
+
+    project = load_project(tmp_path)
+    assert project.media.source_video == source
+    assert project.media.proxy_video == tmp_path / PROXY_VIDEO_FILENAME
+    assert project.media.extracted_audio == tmp_path / "audio.wav"
+    assert project.preview_video_path == tmp_path / PROXY_VIDEO_FILENAME
+    assert project.export_video_path == source

@@ -29,13 +29,14 @@ class VideoProxyJob(QRunnable):
         self._tool_config = tool_config
 
     def run(self) -> None:
-        if self._project.video_path is None:
+        source_video = self._project.source_video_path
+        if source_video is None:
             self.signals.finished.emit(self._project)
             return
         try:
             result = prepare_editor_video(
                 self._project.project_path,
-                self._project.video_path,
+                source_video,
                 self._tool_config,
                 on_progress=self.signals.progressChanged.emit,
             )
@@ -48,5 +49,7 @@ class VideoProxyJob(QRunnable):
     def _apply_result(self, result: VideoProxyResult) -> None:
         self._project.video_path = result.source_video
         self._project.editor_video_path = result.editor_video
+        self._project.media.source_video = result.source_video
+        self._project.media.proxy_video = result.editor_video
         self._project.source_codec = result.source_codec
         self._project.editor_codec = result.editor_codec

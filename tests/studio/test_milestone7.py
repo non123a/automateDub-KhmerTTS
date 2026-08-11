@@ -311,8 +311,8 @@ def test_apply_locked_false_clears_lock(qapp):
     tl.apply_locked(seg.id, False)
 
     clips = tl._clips_by_segment[seg.id]
-    original_clip = next(clip for clip in clips if clip.lane == 2)
-    khmer_clip = next(clip for clip in clips if clip.lane == 3)
+    original_clip = next(clip for clip in clips if clip.lane == 1)
+    khmer_clip = next(clip for clip in clips if clip.lane == 2)
     assert original_clip.locked is True
     assert khmer_clip.locked is False
 

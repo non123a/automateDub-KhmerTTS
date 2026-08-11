@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QHBoxLayout,
@@ -15,7 +15,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from automatedub_studio.export.manager import ExportEvent, ExportManager, ManagedExportResult
+from automatedub_studio.export.manager import (
+    ExportEvent,
+    ExportManager,
+    ManagedExportResult,
+)
 
 
 class ExportProgressWindow(QWidget):
@@ -24,11 +28,17 @@ class ExportProgressWindow(QWidget):
         self.export_manager = export_manager
         self.output_path: Path | None = None
         self.setWindowTitle("Export Progress")
+        self.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, False)
 
         layout = QVBoxLayout(self)
         self.status_label = QLabel("Waiting to start...")
         self.status_label.setObjectName("managed_export_status_label")
         layout.addWidget(self.status_label)
+        self.telemetry_label = QLabel("")
+        self.telemetry_label.setObjectName("managed_export_telemetry_label")
+        self.telemetry_label.setWordWrap(True)
+        layout.addWidget(self.telemetry_label)
         self.progress = QProgressBar()
         self.progress.setObjectName("managed_export_progress")
         self.progress.setRange(0, 100)
@@ -43,9 +53,10 @@ class ExportProgressWindow(QWidget):
         self.retry_button.setEnabled(False)
         self.retry_button.clicked.connect(self.export_manager.retry)
         button_row.addWidget(self.retry_button)
-        self.cancel_button = QPushButton("Cancel")
-        self.cancel_button.clicked.connect(self.export_manager.cancel)
-        button_row.addWidget(self.cancel_button)
+        self.open_file_button = QPushButton("Open File")
+        self.open_file_button.setEnabled(False)
+        self.open_file_button.clicked.connect(self._open_file)
+        button_row.addWidget(self.open_file_button)
         self.open_folder_button = QPushButton("Open Folder")
         self.open_folder_button.setEnabled(False)
         self.open_folder_button.clicked.connect(self._open_folder)
@@ -62,33 +73,52 @@ class ExportProgressWindow(QWidget):
         self.export_manager.exportCancelled.connect(self._on_cancelled)
 
     def _on_event(self, event: ExportEvent) -> None:
+        if event.status == "started":
+            self.error_label.clear()
+            self.retry_button.setEnabled(False)
+            self.close_button.setEnabled(False)
         if event.status == "failed":
-            self.status_label.setText(f"{event.stage.value} failed")
+            self.status_label.setText("Export Failed")
             self.error_label.setText(event.error or event.message)
         else:
             self.status_label.setText(f"{event.stage.value}: {event.message or event.status}")
-        self.progress.setValue(event.progress)
+        if event.frame is not None or event.fps is not None:
+            self.telemetry_label.setText(event.message)
+        stage_index = self.export_manager.stages.index(event.stage)
+        stage_progress = stage_index * 100 + event.progress
+        self.progress.setValue(round(stage_progress / len(self.export_manager.stages)))
 
     def _on_completed(self, result: ManagedExportResult) -> None:
         self.output_path = result.output_path
         self.status_label.setText("Export Complete")
+        self.telemetry_label.setText("Output verified and ready.")
         self.progress.setValue(100)
-        self.cancel_button.setEnabled(False)
         self.retry_button.setEnabled(False)
+        self.open_file_button.setEnabled(True)
         self.open_folder_button.setEnabled(True)
         self.close_button.setEnabled(True)
 
     def _on_failed(self, event: ExportEvent) -> None:
-        self.status_label.setText(f"{event.stage.value} failed")
+        self.status_label.setText("Export Failed")
         self.error_label.setText(event.error or event.message)
+        self.telemetry_label.clear()
         self.retry_button.setEnabled(True)
-        self.cancel_button.setEnabled(True)
+        self.close_button.setEnabled(True)
 
     def _on_cancelled(self) -> None:
         self.status_label.setText("Export cancelled")
-        self.cancel_button.setEnabled(False)
         self.close_button.setEnabled(True)
 
     def _open_folder(self) -> None:
         if self.output_path is not None:
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.output_path.parent)))
+
+    def _open_file(self) -> None:
+        if self.output_path is not None:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.output_path)))
+
+    def closeEvent(self, event) -> None:
+        if self.export_manager.is_running:
+            event.ignore()
+            return
+        event.accept()

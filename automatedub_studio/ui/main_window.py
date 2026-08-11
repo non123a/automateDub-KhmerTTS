@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QSettings, Qt, QThreadPool
-from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QUndoStack
+from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence, QUndoStack
 from PySide6.QtWidgets import (
     QDialog,
     QDockWidget,
@@ -38,10 +38,12 @@ from automatedub_studio.backend.video_proxy_job import VideoProxyJob
 from automatedub_studio.edit.commands import (
     ClipClipboard,
     DeleteTimelineClipsCommand,
+    InsertTimelineClipCommand,
     MultiTimelineClipOffsetChangeCommand,
     MultiTimelineClipPropertyChangeCommand,
     PasteSegmentsCommand,
-    SplitSegmentCommand,
+    SplitTimelineClipCommand,
+    TimelineClipMoveCommand,
     TimelineClipOffsetChangeCommand,
     TimelineClipPropertyChangeCommand,
     TimelineClipTrimCommand,
@@ -185,10 +187,21 @@ class MainWindow(QMainWindow):
 
         edit_menu.addSeparator()
 
+        timeline_menu = menu_bar.addMenu("&Timeline")
+        self.insert_original_movie_audio_action = QAction(
+            "Insert Original Movie Audio Track", self
+        )
+        self.insert_original_movie_audio_action.triggered.connect(
+            self._insert_original_movie_audio_track
+        )
+        timeline_menu.addAction(self.insert_original_movie_audio_action)
+
+        timeline_menu.addSeparator()
+
         self.play_pause_action = QAction("Play/Pause", self)
         self.play_pause_action.setShortcut(QKeySequence(Qt.Key.Key_Space))
         self.play_pause_action.triggered.connect(self._toggle_play_pause)
-        edit_menu.addAction(self.play_pause_action)
+        timeline_menu.addAction(self.play_pause_action)
 
         self.delete_clip_action = QAction("Delete Clips", self)
         self.delete_clip_action.setShortcut(QKeySequence.StandardKey.Delete)
@@ -309,6 +322,20 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.mute_paint_action)
 
         toolbar.addSeparator()
+        self.selection_tool_action = QAction("Selection Tool", self)
+        self.selection_tool_action.setCheckable(True)
+        self.selection_tool_action.setChecked(True)
+        self.split_tool_action = QAction("Split Tool", self)
+        self.split_tool_action.setCheckable(True)
+        tool_group = QActionGroup(self)
+        tool_group.setExclusive(True)
+        tool_group.addAction(self.selection_tool_action)
+        tool_group.addAction(self.split_tool_action)
+        self.selection_tool_action.toggled.connect(self._on_selection_tool_toggled)
+        self.split_tool_action.toggled.connect(self._on_split_tool_toggled)
+        toolbar.addAction(self.selection_tool_action)
+        toolbar.addAction(self.split_tool_action)
+        toolbar.addSeparator()
         toolbar.addAction(self.play_pause_action)
 
         self.stop_action = QAction("Stop", self)
@@ -379,6 +406,8 @@ class MainWindow(QMainWindow):
         self.timeline.segmentTrimCommitted.connect(self._on_trim_committed)
         self.timeline.clipPlayRequested.connect(self._on_clip_play_requested)
         self.timeline.clipMutePaintRequested.connect(self._on_clip_mute_paint_requested)
+        self.timeline.clipSplitRequested.connect(self._on_clip_split_requested)
+        self.timeline.timelineClipMoveCommitted.connect(self._on_timeline_clip_move_committed)
         self.timeline.referenceClipActionBlocked.connect(self._show_reference_read_only_message)
         self.timeline.timelineChanged.connect(self._refresh_playback_sources)
 
@@ -461,6 +490,13 @@ class MainWindow(QMainWindow):
     def _fit_timeline(self) -> None:
         self.timeline.fit_timeline()
 
+    def _on_selection_tool_toggled(self, enabled: bool) -> None:
+        if enabled:
+            self.timeline.set_split_tool_enabled(False)
+
+    def _on_split_tool_toggled(self, enabled: bool) -> None:
+        self.timeline.set_split_tool_enabled(enabled)
+
     def _add_marker(self) -> None:
         comment, ok = QInputDialog.getText(
             self,
@@ -492,7 +528,7 @@ class MainWindow(QMainWindow):
         selected = [
             clip
             for clip in self.timeline.selected_timeline_clips
-            if clip.track_id not in REFERENCE_TRACK_IDS
+            if not clip.locked and clip.track_id not in REFERENCE_TRACK_IDS
         ]
         if not selected:
             self._show_reference_read_only_message()
@@ -718,6 +754,19 @@ class MainWindow(QMainWindow):
             self.inspector.set_timeline_clip(selected[0])
         self._refresh_playback_sources()
 
+    def _apply_timeline_clip_move(
+        self, clip_id: str, track_id: str, start_time: float
+    ) -> None:
+        self.timeline.move_timeline_clip(clip_id, track_id, start_time)
+        self._update_regenerate_actions()
+        self._refresh_playback_sources()
+
+    def _apply_split_timeline_clip(
+        self, remove_clip_ids: list[str], add_clips: list[TimelineClip]
+    ) -> None:
+        self.timeline.replace_timeline_clips(remove_clip_ids, add_clips)
+        self._refresh_playback_sources()
+
     def _apply_structural_timeline_edit(
         self, selected_ids: list[int] | None = None, flash: bool = False
     ) -> None:
@@ -725,7 +774,7 @@ class MainWindow(QMainWindow):
             return
         self.timeline.load_segments(
             self.project.segments,
-            audio_path=self.project.audio_path,
+            audio_path=self.project.extracted_audio_path,
             tts_directory=self.project.tts_directory,
         )
         self._seed_timeline_clips_from_import_editables()
@@ -893,25 +942,69 @@ class MainWindow(QMainWindow):
     def _split_selected_clip(self) -> None:
         if self.project is None:
             return
-        selected_clips = self.timeline.selected_timeline_clips
-        if selected_clips and all(clip.track_id in REFERENCE_TRACK_IDS for clip in selected_clips):
+        selected_clips = [
+            clip
+            for clip in self.timeline.selected_timeline_clips
+            if not clip.locked and clip.track_id != ORIGINAL_AUDIO_TRACK_ID
+        ]
+        if not selected_clips:
             self._show_reference_read_only_message()
             return
-        selected = self._selected_segments_from_timeline_clips()
-        if len(selected) != 1:
+        if len(selected_clips) != 1:
             return
-        segment = selected[0]
+        clip = selected_clips[0]
         split_seconds = self.timeline.playhead_ms / 1000.0
-        if not (segment.start < split_seconds < segment.end):
+        if not (clip.start_time < split_seconds < clip.end_time):
             return
-        new_segment_id = max((item.id for item in self.project.segments), default=-1) + 1
-        cmd = SplitSegmentCommand(
-            self.project.segments,
-            segment,
+        cmd = SplitTimelineClipCommand(
+            clip,
             split_seconds,
-            new_segment_id,
-            self._editables,
-            apply_cb=self._apply_structural_timeline_edit,
+            replace_cb=self._apply_split_timeline_clip,
+        )
+        self._undo_stack.push(cmd)
+
+    def _insert_original_movie_audio_track(self) -> None:
+        if self.project is None:
+            return
+        clip = self.timeline.insert_original_movie_audio_clip()
+        if clip is None:
+            self.statusBar().showMessage("Original Movie Audio already exists.", 2500)
+            return
+        cmd = InsertTimelineClipCommand(
+            clip,
+            add_cb=self.timeline.add_timeline_clip,
+            remove_cb=self.timeline.remove_timeline_clip,
+        )
+        self._undo_stack.push(cmd)
+
+    def _on_clip_split_requested(self, clip_id: str, split_seconds: float) -> None:
+        clip = next((item for item in self.timeline.timeline_clips if item.id == clip_id), None)
+        if clip is None or clip.locked:
+            return
+        if not (clip.start_time < split_seconds < clip.end_time):
+            return
+        cmd = SplitTimelineClipCommand(
+            clip,
+            split_seconds,
+            replace_cb=self._apply_split_timeline_clip,
+        )
+        self._undo_stack.push(cmd)
+
+    def _on_timeline_clip_move_committed(
+        self,
+        clip_id: str,
+        old_track_id: str,
+        old_start_time: float,
+        new_track_id: str,
+        new_start_time: float,
+    ) -> None:
+        cmd = TimelineClipMoveCommand(
+            clip_id,
+            old_track_id,
+            old_start_time,
+            new_track_id,
+            new_start_time,
+            apply_cb=self._apply_timeline_clip_move,
         )
         self._undo_stack.push(cmd)
 
@@ -1085,11 +1178,13 @@ class MainWindow(QMainWindow):
                 chosen_path = project.project_path / choice
                 save_video_selection(project.project_path, chosen_path)
                 project.video_path = chosen_path
+                project.media.source_video = chosen_path
+                project.media.proxy_video = None
                 project.video_candidates = []
         self._prepare_video_and_apply_project(project)
 
     def _prepare_video_and_apply_project(self, project: Project) -> None:
-        if project.video_path is None:
+        if project.source_video_path is None:
             self._apply_loaded_project(project)
             return
         if self._project_video_metadata_is_current(project):
@@ -1110,15 +1205,18 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _project_video_metadata_is_current(project: Project) -> bool:
+        source_video = project.source_video_path
+        preview_video = project.proxy_video_path or project.preview_video_path
         if (
-            project.editor_video_path is None
+            source_video is None
+            or preview_video is None
             or project.source_codec is None
             or project.editor_codec is None
-            or not project.editor_video_path.is_file()
+            or not preview_video.is_file()
         ):
             return False
         if project.source_codec.lower() in PROXY_REQUIRED_CODECS:
-            return project.editor_video_path.stat().st_mtime >= project.video_path.stat().st_mtime
+            return preview_video.stat().st_mtime >= source_video.stat().st_mtime
         return True
 
     def _on_video_proxy_progress(self, message: str) -> None:
@@ -1149,10 +1247,10 @@ class MainWindow(QMainWindow):
         self.export_video_action.setEnabled(True)
         self.setWindowTitle(f"{WINDOW_TITLE} - {project.project_path.name}")
         self.info_panel.set_project(project)
-        self.video_player.load_video(project.editor_video_path or project.video_path)
+        self.video_player.load_video(project.preview_video_path)
         self.timeline.load_segments(
             project.segments,
-            audio_path=project.audio_path,
+            audio_path=project.extracted_audio_path,
             tts_directory=project.tts_directory,
         )
         if edited_timeline := load_timeline_edits(project.project_path):
@@ -1223,6 +1321,10 @@ class MainWindow(QMainWindow):
         wizard = ExportWizard(
             default_output_folder=self.project.project_path / "exports",
             default_filename=default_name,
+            settings=self._settings,
+            project=self.project,
+            timeline=self.timeline.timeline,
+            tool_config=self._tool_config,
             parent=self,
         )
         if wizard.exec() != QDialog.DialogCode.Accepted:
@@ -1232,6 +1334,7 @@ class MainWindow(QMainWindow):
             editables=self._editables,
             tool_config=self._tool_config,
             configuration=wizard.configuration(),
+            timeline=self.timeline.timeline,
         )
         window = ExportProgressWindow(manager, self)
         manager.exportCompleted.connect(self._on_managed_export_finished)

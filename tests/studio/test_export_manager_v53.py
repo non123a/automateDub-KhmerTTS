@@ -5,8 +5,13 @@ from pathlib import Path
 
 import pytest
 
+import automatedub_studio.export.manager as export_manager
 from automatedub.config import ToolConfig
-from automatedub_studio.backend.export_service import ExportResult
+from automatedub_studio.backend.export_service import (
+    ExportEncoderCapabilities,
+    ExportResult,
+    ExportStreamSummary,
+)
 from automatedub_studio.export.manager import (
     AudioMode,
     ExportConfiguration,
@@ -14,6 +19,9 @@ from automatedub_studio.export.manager import (
     ExportManagerError,
     ExportPipelineStage,
     SubtitleMode,
+    VideoEncodingPreset,
+    validate_export_presets,
+    verify_export_output,
 )
 from automatedub_studio.project.models import Project, Segment
 
@@ -53,6 +61,7 @@ def _config(tmp_path: Path, **kwargs) -> ExportConfiguration:
         filename="dubbed",
         video_quality=kwargs.get("video_quality", "High"),
         codec=kwargs.get("codec", "h264"),
+        video_preset=kwargs.get("video_preset", VideoEncodingPreset.COMPATIBLE_H264),
         audio_mode=kwargs.get("audio_mode", AudioMode.MIXED),
         subtitle_mode=kwargs.get("subtitle_mode", SubtitleMode.NONE),
     )
@@ -64,10 +73,49 @@ def _renderer(project, _editables, _tool_config, configuration):
     return ExportResult(output_path=configuration.output_path)
 
 
+def _skip_verification(_tool_config: ToolConfig, _output_path: Path) -> None:
+    """Keep orchestration tests independent from a real media fixture."""
+
+
 def test_export_configuration_builds_mp4_output_path(tmp_path):
     config = ExportConfiguration(output_folder=tmp_path, filename="movie")
 
     assert config.output_path == tmp_path / "movie.mp4"
+
+
+def test_export_validation_disables_fastest_for_av1_source(tmp_path):
+    project = _project(tmp_path)
+    project.source_codec = "av1"
+
+    validations = validate_export_presets(project)
+
+    fastest = validations[VideoEncodingPreset.FASTEST]
+    assert not fastest.available
+    assert "AV1" in fastest.message
+    assert validations[VideoEncodingPreset.COMPATIBLE_H264].available
+    assert validations[VideoEncodingPreset.HIGH_COMPRESSION_H265].available
+
+
+def test_export_validation_disables_original_av1_codec_for_mp4(tmp_path):
+    project = _project(tmp_path)
+    project.source_codec = "av1"
+
+    validation = validate_export_presets(project)[VideoEncodingPreset.ORIGINAL_CODEC]
+
+    assert not validation.available
+    assert "not compatible" in validation.message
+
+
+def test_export_validation_disables_h265_without_a_supported_encoder(tmp_path):
+    validations = validate_export_presets(
+        _project(tmp_path),
+        encoder_capabilities=ExportEncoderCapabilities("libx264", None),
+    )
+
+    h265 = validations[VideoEncodingPreset.HIGH_COMPRESSION_H265]
+    assert not h265.available
+    assert "No supported H.265 encoder" in h265.message
+    assert validations[VideoEncodingPreset.COMPATIBLE_H264].available
 
 
 def test_export_manager_reports_all_pipeline_stages_and_writes_metadata(qapp, tmp_path):
@@ -77,6 +125,7 @@ def test_export_manager_reports_all_pipeline_stages_and_writes_metadata(qapp, tm
         tool_config=ToolConfig(),
         configuration=_config(tmp_path),
         renderer=_renderer,
+        verifier=_skip_verification,
     )
     events = []
     manager.eventEmitted.connect(events.append)
@@ -89,6 +138,7 @@ def test_export_manager_reports_all_pipeline_stages_and_writes_metadata(qapp, tm
     payload = json.loads(result.metadata_path.read_text(encoding="utf-8"))
     assert payload["configuration"]["audio_mode"] == "mixed"
     assert payload["configuration"]["codec"] == "h264"
+    assert payload["configuration"]["video_preset"] == "compatible_h264"
     completed_stages = [event.stage for event in events if event.status == "completed"]
     assert completed_stages == list(ExportPipelineStage)
 
@@ -100,6 +150,7 @@ def test_export_manager_generates_external_subtitles(qapp, tmp_path):
         tool_config=ToolConfig(),
         configuration=_config(tmp_path, subtitle_mode=SubtitleMode.EXTERNAL_SRT),
         renderer=_renderer,
+        verifier=_skip_verification,
     )
 
     result = manager.run_sync()
@@ -129,3 +180,120 @@ def test_export_manager_stops_and_reports_failed_stage(qapp, tmp_path):
     assert manager.failure is not None
     assert manager.failure.stage == ExportPipelineStage.ENCODE_VIDEO
     assert "encode failed" in manager.failure.error
+
+
+def test_export_manager_rechecks_encoder_availability_before_rendering(
+    qapp, tmp_path, monkeypatch
+):
+    manager = ExportManager(
+        project=_project(tmp_path),
+        editables={},
+        tool_config=ToolConfig(),
+        configuration=_config(
+            tmp_path,
+            codec="h265",
+            video_preset=VideoEncodingPreset.HIGH_COMPRESSION_H265,
+        ),
+        renderer=_renderer,
+        verifier=_skip_verification,
+    )
+    report = export_manager.inspect_export_capabilities(
+        manager.project,
+        manager.timeline,
+        manager.tool_config,
+    )
+    report = export_manager.ExportCapabilityReport(
+        source_video=report.source_video,
+        source_streams=report.source_streams,
+        source_container=report.source_container,
+        system=export_manager.ExportSystemCapabilities(
+            "ffmpeg test",
+            frozenset({"libx264"}),
+            frozenset({"mp4"}),
+            "libx264",
+            None,
+        ),
+        has_video_edits=report.has_video_edits,
+        has_audio_edits=report.has_audio_edits,
+        subtitle_mode=SubtitleMode.NONE,
+    )
+    monkeypatch.setattr(export_manager, "inspect_export_capabilities", lambda *_args: report)
+
+    with pytest.raises(ExportManagerError, match="No supported H.265 encoder"):
+        manager.run_sync()
+
+    assert manager.failure is not None
+    assert manager.failure.stage == ExportPipelineStage.PREPARE_TIMELINE
+
+
+def test_verify_export_output_requires_nonempty_file_and_one_video_and_audio_stream(
+    tmp_path, monkeypatch
+):
+    output_path = tmp_path / "dubbed.mp4"
+    output_path.write_bytes(b"media")
+    monkeypatch.setattr(export_manager, "_resolve_ffprobe", lambda _config: "ffprobe")
+    monkeypatch.setattr(
+        export_manager,
+        "validate_export_streams",
+        lambda _ffprobe, _path: ExportStreamSummary(
+            1,
+            1,
+            [{"codec_type": "video"}, {"codec_type": "audio"}],
+        ),
+    )
+
+    verify_export_output(ToolConfig(), output_path)
+
+
+@pytest.mark.parametrize("video_streams,audio_streams", [(0, 1), (1, 0), (2, 1), (1, 2)])
+def test_verify_export_output_rejects_anything_but_one_video_and_audio_stream(
+    tmp_path, monkeypatch, video_streams, audio_streams
+):
+    output_path = tmp_path / "dubbed.mp4"
+    output_path.write_bytes(b"media")
+    monkeypatch.setattr(export_manager, "_resolve_ffprobe", lambda _config: "ffprobe")
+    monkeypatch.setattr(
+        export_manager,
+        "validate_export_streams",
+        lambda _ffprobe, _path: ExportStreamSummary(video_streams, audio_streams, []),
+    )
+
+    with pytest.raises(ExportManagerError, match="verification failed"):
+        verify_export_output(ToolConfig(), output_path)
+
+
+def test_verify_export_output_rejects_missing_or_empty_output(tmp_path):
+    output_path = tmp_path / "dubbed.mp4"
+
+    with pytest.raises(ExportManagerError, match="did not produce"):
+        verify_export_output(ToolConfig(), output_path)
+
+    output_path.touch()
+    with pytest.raises(ExportManagerError, match="empty"):
+        verify_export_output(ToolConfig(), output_path)
+
+
+def test_export_manager_fails_at_verification_before_completion(qapp, tmp_path):
+    def failed_verification(_tool_config: ToolConfig, _output_path: Path) -> None:
+        raise ExportManagerError("unreadable MP4")
+
+    manager = ExportManager(
+        project=_project(tmp_path),
+        editables={},
+        tool_config=ToolConfig(),
+        configuration=_config(tmp_path),
+        renderer=_renderer,
+        verifier=failed_verification,
+    )
+    events = []
+    manager.eventEmitted.connect(events.append)
+
+    with pytest.raises(ExportManagerError, match="unreadable MP4"):
+        manager.run_sync()
+
+    assert manager.failure is not None
+    assert manager.failure.stage == ExportPipelineStage.VERIFY_OUTPUT
+    assert not any(
+        event.stage == ExportPipelineStage.VERIFY_OUTPUT and event.status == "completed"
+        for event in events
+    )

@@ -66,6 +66,13 @@ def test_video_player_has_video_is_false_on_creation(qapp):
     assert widget._has_video is False
 
 
+def test_video_player_embedded_audio_muted_on_creation(qapp):
+    widget = VideoPlayerWidget()
+
+    assert widget._audio_output.isMuted() is True
+    assert widget._audio_output.volume() == 0.0
+
+
 # ---------------------------------------------------------------------------
 # load_video(None)
 # ---------------------------------------------------------------------------
@@ -115,6 +122,38 @@ def test_load_video_path_switches_to_video_surface(qapp):
     widget = VideoPlayerWidget()
     widget.load_video(Path("/fake/video.mp4"))
     assert widget._stack.currentWidget() is widget._video_widget
+
+
+def test_load_video_keeps_embedded_audio_disabled(qapp):
+    widget = VideoPlayerWidget()
+    widget._audio_output.setMuted(False)
+    widget._audio_output.setVolume(1.0)
+
+    widget.load_video(Path("/fake/video.mp4"))
+
+    assert widget._audio_output.isMuted() is True
+    assert widget._audio_output.volume() == 0.0
+
+
+def test_set_audio_muted_cannot_enable_embedded_audio(qapp):
+    widget = VideoPlayerWidget()
+
+    widget.set_audio_muted(False)
+
+    assert widget._audio_output.isMuted() is True
+    assert widget._audio_output.volume() == 0.0
+
+
+def test_play_keeps_embedded_audio_disabled(qapp):
+    widget = VideoPlayerWidget()
+    widget.load_video(Path("/fake/video.mp4"))
+    widget._audio_output.setMuted(False)
+    widget._audio_output.setVolume(1.0)
+
+    widget.play()
+
+    assert widget._audio_output.isMuted() is True
+    assert widget._audio_output.volume() == 0.0
 
 
 def test_play_button_is_play_pause_toggle(qapp):

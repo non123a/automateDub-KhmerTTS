@@ -34,15 +34,15 @@ Timeline
 
 ```text
 Video
-Original Movie Audio
 Original Speech Segments
 Khmer TTS
 Draft Regeneration
-Audio Track 3
-Audio Track 4
 ```
 
-Reference tracks are read-only. Khmer TTS and Draft Regeneration clips remain editable.
+The default timeline omits the full Original Movie Audio track. It can be inserted
+explicitly through the Timeline menu when needed, where it behaves as an ordinary
+editable audio track. Original Speech Segments remain read-only reference clips.
+Khmer TTS, Draft Regeneration, and inserted Original Movie Audio clips remain editable.
 
 ## Responsibilities
 
@@ -56,12 +56,19 @@ Reference tracks are read-only. Khmer TTS and Draft Regeneration clips remain ed
 
 ## Reference Clip Rules
 
-Original Movie Audio and Original Speech Segments:
+Original Speech Segments:
 
 - can be selected
 - can open the inspector
 - can provide text/audio reference
 - cannot move, trim, regenerate, delete, or change duration
+
+Inserted Original Movie Audio clips:
+
+- can be selected
+- can open the inspector
+- can be moved, trimmed, split, muted, soloed, and deleted
+- are stored in timeline edits like any other editable audio track
 
 Blocked edit attempts emit a non-modal read-only status signal.
 

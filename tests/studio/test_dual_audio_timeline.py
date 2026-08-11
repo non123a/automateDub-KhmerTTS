@@ -4,6 +4,10 @@ from pathlib import Path
 
 from automatedub.vertical_slice.tts import tts_segment_output_path
 from automatedub_studio.project.models import Segment
+from automatedub_studio.timeline.timeline_clip import (
+    ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+    Timeline,
+)
 from automatedub_studio.timeline.timeline_widget import (
     BASE_PIXELS_PER_SECOND,
     KHMER_TTS_LANE,
@@ -44,17 +48,29 @@ def _write_tts_file(tts_dir: Path, segment_id: int) -> Path:
 def test_timeline_displays_reference_and_editable_audio_tracks(qapp):
     assert LANE_NAMES == (
         "Video",
-        "Original Movie Audio",
         "Original Speech Segments",
         "Khmer TTS",
         "Draft Regeneration",
         "Audio Track 3",
         "Audio Track 4",
+        "Original Movie Audio",
     )
     assert VIDEO_LANE == 0
-    assert ORIGINAL_MOVIE_AUDIO_LANE == 1
-    assert ORIGINAL_AUDIO_LANE == 2
-    assert KHMER_TTS_LANE == 3
+    assert ORIGINAL_AUDIO_LANE == 1
+    assert KHMER_TTS_LANE == 2
+    assert ORIGINAL_MOVIE_AUDIO_LANE == 6
+
+
+def test_default_timeline_has_no_original_movie_audio_track():
+    timeline = Timeline.default()
+
+    assert timeline.track_by_id(ORIGINAL_MOVIE_AUDIO_TRACK_ID) is None
+    assert [track.name for track in timeline.tracks] == [
+        "Video",
+        "Original Speech Segments",
+        "Khmer TTS",
+        "Draft Regeneration",
+    ]
 
 
 def test_original_track_generation_uses_transcript_segments(qapp, tmp_path: Path):
@@ -65,15 +81,13 @@ def test_original_track_generation_uses_transcript_segments(qapp, tmp_path: Path
 
     widget.load_segments(segments, audio_path=audio_path, tts_directory=tts_dir)
 
-    assert len(widget._clips) == len(segments) + 1
+    assert len(widget._clips) == len(segments)
     movie_clips = [
         clip for clip in widget.timeline_clips
-        if clip.track_id == "original_movie_audio"
+        if clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
     ]
-    assert len(movie_clips) == 1
-    assert movie_clips[0].start_time == 0.0
-    assert movie_clips[0].end_time == max(segment.end for segment in segments)
-    assert movie_clips[0].locked is True
+    assert movie_clips == []
+    assert widget.timeline.track_by_id(ORIGINAL_MOVIE_AUDIO_TRACK_ID) is None
     original_clips = [
         clip for clips in widget._clips_by_segment.values() for clip in clips
         if clip.lane == ORIGINAL_AUDIO_LANE
@@ -106,7 +120,7 @@ def test_original_clips_exist_for_segments_without_khmer_tts(qapp, tmp_path: Pat
     assert khmer_ids == [10]
 
 
-def test_continuous_original_movie_clip_fills_timing_gaps(qapp, tmp_path: Path):
+def test_original_movie_clip_is_inserted_explicitly(qapp, tmp_path: Path):
     audio_path = tmp_path / "audio.wav"
     tts_dir = tmp_path / "tts"
     segments = [
@@ -119,20 +133,60 @@ def test_continuous_original_movie_clip_fills_timing_gaps(qapp, tmp_path: Path):
     widget = TimelineWidget()
 
     widget.load_segments(segments, audio_path=audio_path, tts_directory=tts_dir)
+    clip = widget.insert_original_movie_audio_clip()
+    assert clip is not None
+    widget.add_timeline_clip(clip)
 
-    references = [
+    assert widget.timeline.track_by_id(ORIGINAL_MOVIE_AUDIO_TRACK_ID) is not None
+    movie_clips = [
         clip for clip in widget.timeline_clips
-        if clip.track_id == "original_movie_audio"
+        if clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
     ]
-    assert len(references) == 1
-    reference = references[0]
-    assert reference.segment_id is None
-    assert reference.start_time == 0.0
-    assert reference.end_time == 5.0
-    assert reference.locked is True
+    assert len(movie_clips) == 1
+    movie = movie_clips[0]
+    assert movie.segment_id is None
+    assert movie.start_time == 0.0
+    assert movie.end_time == 5.0
+    assert movie.locked is False
 
 
-def test_continuous_original_movie_clip_is_read_only(qapp, tmp_path: Path):
+def test_original_movie_audio_is_silent_until_inserted(qapp, tmp_path: Path):
+    widget = TimelineWidget()
+    widget.load_segments(_segments(), audio_path=tmp_path / "audio.wav")
+
+    assert widget.timeline.active_audio_clips(0) == []
+
+    clip = widget.insert_original_movie_audio_clip()
+    assert clip is not None
+    widget.add_timeline_clip(clip)
+
+    assert [
+        active.track_id for active in widget.timeline.active_audio_clips(0)
+    ] == [ORIGINAL_MOVIE_AUDIO_TRACK_ID]
+
+
+def test_repeated_original_movie_insert_creates_exactly_one_track(qapp, tmp_path: Path):
+    widget = TimelineWidget()
+    widget.load_segments(_segments(), audio_path=tmp_path / "audio.wav")
+
+    clip = widget.insert_original_movie_audio_clip()
+    assert clip is not None
+    widget.add_timeline_clip(clip)
+
+    assert widget.insert_original_movie_audio_clip() is None
+    tracks = [
+        track for track in widget.timeline.tracks
+        if track.id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
+    ]
+    clips = [
+        clip for clip in widget.timeline_clips
+        if clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
+    ]
+    assert len(tracks) == 1
+    assert len(clips) == 1
+
+
+def test_inserted_original_movie_clip_is_editable(qapp, tmp_path: Path):
     audio_path = tmp_path / "audio.wav"
     widget = TimelineWidget()
     segments = [
@@ -141,20 +195,20 @@ def test_continuous_original_movie_clip_is_read_only(qapp, tmp_path: Path):
     ]
 
     widget.load_segments(segments, audio_path=audio_path, tts_directory=tmp_path / "tts")
+    clip = widget.insert_original_movie_audio_clip()
+    assert clip is not None
+    widget.add_timeline_clip(clip)
 
-    reference = next(
+    movie = next(
         clip for clip in widget.timeline_clips
         if clip.track_id == "original_movie_audio"
     )
-    item = widget._clips_by_clip_id[reference.id]
-    assert reference.segment_id is None
-    assert reference.locked is True
+    item = widget._clips_by_clip_id[movie.id]
+    assert movie.segment_id is None
+    assert movie.locked is False
     assert item._id_label is None
-    old_volume = reference.volume
-    widget.set_timeline_clip_volume(reference.id, 0.25)
-    widget.set_timeline_clip_translation(reference.id, "must not edit")
-    assert reference.volume == old_volume
-    assert reference.khmer_text == ""
+    widget.set_timeline_clip_volume(movie.id, 0.25)
+    assert movie.volume == 0.25
 
 
 def test_reference_clip_never_creates_khmer_clip(qapp, tmp_path: Path):
@@ -173,11 +227,7 @@ def test_reference_clip_never_creates_khmer_clip(qapp, tmp_path: Path):
         for clip in widget.timeline_clips
         if clip.track_id == "khmer_tts"
     ] == ["khmer:1", "khmer:2"]
-    assert all(
-        clip.track_id != "khmer_tts"
-        for clip in widget.timeline_clips
-        if clip.track_id == "original_movie_audio"
-    )
+    assert all(clip.track_id != "original_movie_audio" for clip in widget.timeline_clips)
 
 
 def test_original_clip_timing_matches_transcript(qapp, tmp_path: Path):

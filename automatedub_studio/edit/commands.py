@@ -166,6 +166,33 @@ class MultiTimelineClipOffsetChangeCommand(QUndoCommand):
             self._apply_cb(clip_id, offset_ms)
 
 
+class TimelineClipMoveCommand(QUndoCommand):
+    """Record a track/time move for one independent TimelineClip."""
+
+    def __init__(
+        self,
+        clip_id: str,
+        old_track_id: str,
+        old_start_time: float,
+        new_track_id: str,
+        new_start_time: float,
+        apply_cb: Callable[[str, str, float], None],
+    ):
+        super().__init__(f"Move clip {clip_id}")
+        self._clip_id = clip_id
+        self._old_track_id = old_track_id
+        self._old_start_time = old_start_time
+        self._new_track_id = new_track_id
+        self._new_start_time = new_start_time
+        self._apply_cb = apply_cb
+
+    def undo(self) -> None:
+        self._apply_cb(self._clip_id, self._old_track_id, self._old_start_time)
+
+    def redo(self) -> None:
+        self._apply_cb(self._clip_id, self._new_track_id, self._new_start_time)
+
+
 class TimelineClipTrimCommand(QUndoCommand):
     """Record a trim change for one independent TimelineClip."""
 
@@ -191,6 +218,63 @@ class TimelineClipTrimCommand(QUndoCommand):
 
     def redo(self) -> None:
         self._apply_cb(self._clip_id, self._new_start, self._new_end)
+
+
+class InsertTimelineClipCommand(QUndoCommand):
+    """Insert one TimelineClip and remove it again on undo."""
+
+    def __init__(
+        self,
+        clip: TimelineClip,
+        add_cb: Callable[[TimelineClip], None],
+        remove_cb: Callable[[str], TimelineClip | None],
+    ):
+        super().__init__(f"Insert clip {clip.id}")
+        self._clip = deepcopy(clip)
+        self._add_cb = add_cb
+        self._remove_cb = remove_cb
+
+    def undo(self) -> None:
+        self._remove_cb(self._clip.id)
+
+    def redo(self) -> None:
+        self._add_cb(deepcopy(self._clip))
+
+
+class SplitTimelineClipCommand(QUndoCommand):
+    """Split one TimelineClip into two adjacent clips as one undoable edit."""
+
+    def __init__(
+        self,
+        clip: TimelineClip,
+        split_seconds: float,
+        replace_cb: Callable[[list[str], list[TimelineClip]], None],
+    ):
+        super().__init__(f"Split clip {clip.id}")
+        self._original = deepcopy(clip)
+        self._split_seconds = split_seconds
+        self._replace_cb = replace_cb
+        self._left, self._right = self._build_split_clips()
+
+    def undo(self) -> None:
+        self._replace_cb([self._left.id, self._right.id], [deepcopy(self._original)])
+
+    def redo(self) -> None:
+        self._replace_cb([self._original.id], [deepcopy(self._left), deepcopy(self._right)])
+
+    def _build_split_clips(self) -> tuple[TimelineClip, TimelineClip]:
+        left = deepcopy(self._original)
+        right = deepcopy(self._original)
+        left.id = f"{self._original.id}:left"
+        right.id = f"{self._original.id}:right"
+        left.end_time = self._split_seconds
+        right.start_time = self._split_seconds
+        right.source_offset = self._original.source_offset + max(
+            0.0, self._split_seconds - self._original.start_time
+        )
+        left.selected = False
+        right.selected = False
+        return left, right
 
 
 class OffsetChangeCommand(QUndoCommand):

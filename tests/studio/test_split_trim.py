@@ -1,15 +1,26 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtGui import QUndoStack
 
-from automatedub_studio.edit.commands import SplitSegmentCommand, TrimSegmentCommand
-from automatedub_studio.project.editable_project import EditableSegment
+from automatedub_studio.edit.commands import (
+    DeleteTimelineClipsCommand,
+    InsertTimelineClipCommand,
+    SplitTimelineClipCommand,
+    TimelineClipMoveCommand,
+    TimelineClipTrimCommand,
+)
 from automatedub_studio.project.models import Segment
-from automatedub_studio.timeline.clip_item import ClipItem
+from automatedub_studio.timeline.timeline_clip import (
+    DRAFT_REGENERATION_TRACK_ID,
+    KHMER_TTS_TRACK_ID,
+    ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+    TimelineClip,
+)
 from automatedub_studio.timeline.timeline_widget import (
     BASE_PIXELS_PER_SECOND,
     MIN_CLIP_DURATION_SECONDS,
@@ -33,144 +44,300 @@ def _segment(
     )
 
 
-def test_split_command_creates_two_adjacent_clips_preserving_properties(qapp):
-    segments = [_segment(1, 1.0, 3.0, offset_ms=120)]
-    editables = {1: EditableSegment(id=1, speed=1.2, volume=0.8, locked=True)}
-    calls = []
-    command = SplitSegmentCommand(
-        segments,
-        segments[0],
+def _timeline_clip(
+    clip_id: str = "clip:1",
+    track_id: str = KHMER_TTS_TRACK_ID,
+    start: float = 1.0,
+    end: float = 3.0,
+    source_offset: float = 0.25,
+    source_path: Path | None = None,
+    segment_id: int | None = 1,
+) -> TimelineClip:
+    return TimelineClip(
+        id=clip_id,
+        track_id=track_id,
+        start_time=start,
+        end_time=end,
+        source_path=source_path if source_path is not None else Path("clip.wav"),
+        source_offset=source_offset,
+        segment_id=segment_id,
+        source_text="source",
+        target_text="target",
+        khmer_text="target",
+    )
+
+
+def test_insert_original_movie_audio_track(qapp, tmp_path: Path):
+    widget = TimelineWidget()
+    widget.load_segments([_segment()], audio_path=tmp_path / "audio.wav")
+
+    clip = widget.insert_original_movie_audio_clip()
+    assert clip is not None
+
+    widget.add_timeline_clip(clip)
+
+    movie_clips = [
+        timeline_clip
+        for timeline_clip in widget.timeline_clips
+        if timeline_clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
+    ]
+    assert len(movie_clips) == 1
+    movie = movie_clips[0]
+    assert movie.start_time == 0.0
+    assert movie.end_time == 3.0
+    assert movie.locked is False
+    assert movie.source_path == tmp_path / "audio.wav"
+
+
+def test_prevent_duplicate_movie_audio_track(qapp, tmp_path: Path):
+    widget = TimelineWidget()
+    widget.load_segments([_segment()], audio_path=tmp_path / "audio.wav")
+
+    clip = widget.insert_original_movie_audio_clip()
+    assert clip is not None
+
+    stack = QUndoStack()
+    stack.push(
+        InsertTimelineClipCommand(
+            clip,
+            add_cb=widget.add_timeline_clip,
+            remove_cb=widget.remove_timeline_clip,
+        )
+    )
+
+    assert widget.insert_original_movie_audio_clip() is None
+
+    stack.undo()
+    assert widget.timeline.clip_by_id(clip.id) is None
+
+
+def test_split_timeline_clip_command(qapp):
+    original = _timeline_clip(
+        clip_id="clip:1",
+        track_id=KHMER_TTS_TRACK_ID,
+        start=1.0,
+        end=3.0,
+        source_offset=0.5,
+    )
+    clips = [original]
+    calls: list[tuple[list[str], list[TimelineClip]]] = []
+
+    def replace_cb(remove_ids: list[str], add_clips: list[TimelineClip]) -> None:
+        calls.append((list(remove_ids), list(add_clips)))
+        for clip_id in remove_ids:
+            clips[:] = [clip for clip in clips if clip.id != clip_id]
+        clips.extend(add_clips)
+
+    command = SplitTimelineClipCommand(
+        original,
         split_seconds=2.0,
-        new_segment_id=2,
-        editables=editables,
-        apply_cb=lambda: calls.append("applied"),
+        replace_cb=replace_cb,
     )
 
     command.redo()
 
-    assert [(segment.id, segment.start, segment.end) for segment in segments] == [
-        (1, 1.0, 2.0),
-        (2, 2.0, 3.0),
-    ]
-    assert segments[1].offset_ms == 120
-    assert editables[2].speed == 1.2
-    assert editables[2].volume == 0.8
-    assert editables[2].locked is True
-    assert calls == ["applied"]
+    left, right = calls[-1][1]
+    assert calls[-1][0] == ["clip:1"]
+    assert left.id == "clip:1:left"
+    assert right.id == "clip:1:right"
+    assert left.start_time == 1.0
+    assert left.end_time == 2.0
+    assert right.start_time == 2.0
+    assert right.end_time == 3.0
+    assert right.source_offset == 1.5
+    assert {clip.id for clip in clips} == {"clip:1:left", "clip:1:right"}
 
 
-def test_split_command_undo_redo(qapp):
-    segments = [_segment(1, 1.0, 3.0)]
-    editables: dict[int, EditableSegment] = {}
+def test_split_timeline_clip_undo_redo(qapp):
+    original = _timeline_clip(clip_id="clip:1", start=1.0, end=3.0)
+    target = [original]
+    history: list[tuple[list[str], list[TimelineClip]]] = []
+
+    def replace_cb(remove_ids: list[str], add_clips: list[TimelineClip]) -> None:
+        history.append((list(remove_ids), [clip for clip in add_clips]))
+        for clip_id in remove_ids:
+            target[:] = [clip for clip in target if clip.id != clip_id]
+        target.extend(add_clips)
+
     stack = QUndoStack()
-    command = SplitSegmentCommand(
-        segments,
-        segments[0],
-        split_seconds=2.0,
-        new_segment_id=2,
-        editables=editables,
-        apply_cb=lambda: None,
-    )
+    stack.push(SplitTimelineClipCommand(original, 2.0, replace_cb=replace_cb))
 
-    stack.push(command)
-    assert len(segments) == 2
+    assert {clip.id for clip in target} == {"clip:1:left", "clip:1:right"}
 
     stack.undo()
-    assert [(segment.id, segment.start, segment.end) for segment in segments] == [(1, 1.0, 3.0)]
+    assert [clip.id for clip in target] == ["clip:1"]
 
     stack.redo()
-    assert [(segment.id, segment.start, segment.end) for segment in segments] == [
-        (1, 1.0, 2.0),
-        (2, 2.0, 3.0),
-    ]
+    assert {clip.id for clip in target} == {"clip:1:left", "clip:1:right"}
+    assert history[0][0] == ["clip:1"]
 
 
-def test_left_trim_changes_start_and_preserves_end(qapp):
+def test_left_trim_changes_start_and_source_offset(qapp):
     widget = TimelineWidget()
-    segment = _segment(1, 1.0, 3.0)
-    widget.load_segments([segment], duration_ms=5000)
+    clip = _timeline_clip(
+        clip_id="movie:1",
+        track_id=ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+        start=1.0,
+        end=3.0,
+        source_offset=0.25,
+        source_path=Path("audio.wav"),
+        segment_id=None,
+    )
+    widget.timeline.add_clip(clip)
+    widget.load_timeline(widget.timeline)
 
-    widget.apply_trim(segment.id, 1.5, 3.0)
+    widget.apply_timeline_clip_trim(clip.id, 1.5, 3.0)
 
-    assert segment.start == 1.5
-    assert segment.end == 3.0
-    clip = widget._clips_by_segment[segment.id][0]
-    assert abs(clip.rect().width() - 1.5 * BASE_PIXELS_PER_SECOND) < 0.1
+    assert clip.start_time == 1.5
+    assert clip.end_time == 3.0
+    assert clip.source_offset == 0.75
+    item = widget._clips_by_clip_id[clip.id]
+    assert abs(item.rect().width() - 1.5 * BASE_PIXELS_PER_SECOND) < 0.1
 
 
-def test_right_trim_changes_end_and_preserves_start(qapp):
+def test_right_trim_changes_end_and_preserves_source_offset(qapp):
     widget = TimelineWidget()
-    segment = _segment(1, 1.0, 3.0)
-    widget.load_segments([segment], duration_ms=5000)
+    clip = _timeline_clip(
+        clip_id="movie:1",
+        track_id=ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+        start=1.0,
+        end=3.0,
+        source_offset=0.25,
+        source_path=Path("audio.wav"),
+        segment_id=None,
+    )
+    widget.timeline.add_clip(clip)
+    widget.load_timeline(widget.timeline)
 
-    widget.apply_trim(segment.id, 1.0, 2.4)
+    widget.apply_timeline_clip_trim(clip.id, 1.0, 2.25)
 
-    assert segment.start == 1.0
-    assert segment.end == 2.4
-    clip = widget._clips_by_segment[segment.id][0]
-    assert abs(clip.rect().width() - 1.4 * BASE_PIXELS_PER_SECOND) < 0.1
+    assert clip.start_time == 1.0
+    assert clip.end_time == 2.25
+    assert clip.source_offset == 0.25
+    item = widget._clips_by_clip_id[clip.id]
+    assert abs(item.rect().width() - 1.25 * BASE_PIXELS_PER_SECOND) < 0.1
 
 
 def test_trim_command_undo_redo(qapp):
-    segment = _segment(1, 1.0, 3.0)
-    calls: list[tuple[int, float, float]] = []
+    clip = _timeline_clip(clip_id="clip:1", start=1.0, end=3.0)
+    calls: list[tuple[str, float, float]] = []
     stack = QUndoStack()
-    command = TrimSegmentCommand(
-        segment,
+    command = TimelineClipTrimCommand(
+        clip.id,
         old_start=1.0,
         old_end=3.0,
         new_start=1.5,
         new_end=2.5,
-        apply_cb=lambda segment_id, start, end: calls.append((segment_id, start, end)),
+        apply_cb=lambda clip_id, start, end: calls.append((clip_id, start, end)),
     )
 
     stack.push(command)
-    assert (segment.start, segment.end) == (1.5, 2.5)
+    assert calls[-1] == ("clip:1", 1.5, 2.5)
 
     stack.undo()
-    assert (segment.start, segment.end) == (1.0, 3.0)
+    assert calls[-1] == ("clip:1", 1.0, 3.0)
 
     stack.redo()
-    assert (segment.start, segment.end) == (1.5, 2.5)
-    assert calls[-1] == (1, 1.5, 2.5)
+    assert calls[-1] == ("clip:1", 1.5, 2.5)
+
+
+def test_move_timeline_clip_command(qapp):
+    widget = TimelineWidget()
+    clip = _timeline_clip(
+        clip_id="clip:1",
+        track_id=KHMER_TTS_TRACK_ID,
+        start=1.0,
+        end=3.0,
+        segment_id=1,
+    )
+    widget.timeline.add_clip(clip)
+    widget.load_timeline(widget.timeline)
+
+    command = TimelineClipMoveCommand(
+        clip.id,
+        clip.track_id,
+        clip.start_time,
+        DRAFT_REGENERATION_TRACK_ID,
+        4.0,
+        apply_cb=lambda clip_id, track_id, start_time: widget.move_timeline_clip(
+            clip_id, track_id, start_time
+        ),
+    )
+    stack = QUndoStack()
+    stack.push(command)
+
+    assert clip.track_id == DRAFT_REGENERATION_TRACK_ID
+    assert clip.start_time == 4.0
+
+    stack.undo()
+    assert clip.track_id == KHMER_TTS_TRACK_ID
+    assert clip.start_time == 1.0
+
+
+def test_insert_timeline_clip_command_undo_redo(qapp):
+    widget = TimelineWidget()
+    clip = _timeline_clip(
+        clip_id="movie:1",
+        track_id=ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+        start=0.0,
+        end=3.0,
+        source_path=Path("audio.wav"),
+        segment_id=None,
+    )
+
+    stack = QUndoStack()
+    stack.push(
+        InsertTimelineClipCommand(
+            clip,
+            add_cb=widget.add_timeline_clip,
+            remove_cb=widget.remove_timeline_clip,
+        )
+    )
+    assert widget.timeline.clip_by_id(clip.id) is not None
+
+    stack.undo()
+    assert widget.timeline.clip_by_id(clip.id) is None
+
+    stack.redo()
+    assert widget.timeline.clip_by_id(clip.id) is not None
+
+
+def test_delete_timeline_clip_command_undo_redo(qapp):
+    widget = TimelineWidget()
+    clip = _timeline_clip(
+        clip_id="clip:1",
+        track_id=KHMER_TTS_TRACK_ID,
+        start=1.0,
+        end=3.0,
+        segment_id=1,
+    )
+    widget.timeline.add_clip(clip)
+    widget.load_timeline(widget.timeline)
+
+    stack = QUndoStack()
+    stack.push(
+        DeleteTimelineClipsCommand(
+            [clip.id],
+            remove_cb=widget.remove_timeline_clip,
+            restore_cb=widget.add_timeline_clip,
+        )
+    )
+    assert widget.timeline.clip_by_id(clip.id) is None
+
+    stack.undo()
+    assert widget.timeline.clip_by_id(clip.id) is clip
+
+    stack.redo()
+    assert widget.timeline.clip_by_id(clip.id) is None
 
 
 def test_invalid_trim_cannot_cross_zero_duration(qapp):
     widget = TimelineWidget()
-    segment = _segment(1, 1.0, 3.0)
-    widget.load_segments([segment], duration_ms=5000)
+    clip = _timeline_clip(start=1.0, end=3.0)
+    widget.timeline.add_clip(clip)
+    widget.load_timeline(widget.timeline)
 
-    start, end = widget.constrain_trim(segment.id, 3.5, 3.0)
+    start, end = widget.constrain_timeline_clip_trim(clip.id, 3.5, 3.0)
 
     assert end - start >= MIN_CLIP_DURATION_SECONDS - 1e-9
     assert start < end
-
-
-def test_invalid_trim_cannot_overlap_neighbor(qapp):
-    widget = TimelineWidget()
-    first = _segment(1, 1.0, 2.0)
-    second = _segment(2, 2.5, 4.0)
-    widget.load_segments([first, second], duration_ms=5000)
-
-    widget.apply_trim(first.id, 1.0, 3.0)
-
-    assert first.end == 2.5
-
-
-def test_invalid_trim_cannot_exceed_source_audio_length(qapp):
-    widget = TimelineWidget()
-    segment = _segment(1, 1.0, 3.0)
-    widget.load_segments([segment], duration_ms=3500)
-
-    widget.apply_trim(segment.id, 1.0, 4.0)
-
-    assert segment.end == 3.5
-
-
-def test_trim_handle_hit_testing(qapp):
-    segment = _segment()
-    clip = ClipItem(segment, 0, 0, 100, 40, lane=1)
-
-    assert clip.trim_handle_at(clip.rect().center()) is None
-    assert clip.trim_handle_at(clip.rect().topLeft()) == "left"
-    assert clip.trim_handle_at(clip.rect().topRight()) == "right"

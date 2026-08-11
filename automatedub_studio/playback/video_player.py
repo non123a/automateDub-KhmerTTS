@@ -70,6 +70,7 @@ class VideoPlayerWidget(QWidget):
         self._media_player = QMediaPlayer(self)
         self._audio_output = QAudioOutput(self)
         self._media_player.setAudioOutput(self._audio_output)
+        self._force_visual_only_audio()
 
         self._video_widget = QVideoWidget()
         self._media_player.setVideoOutput(self._video_widget)
@@ -127,6 +128,7 @@ class VideoPlayerWidget(QWidget):
         file surfaces as a friendly in-place message instead.
         """
         self._media_player.stop()
+        self._force_visual_only_audio()
 
         if video_path is None:
             self._has_video = False
@@ -140,6 +142,7 @@ class VideoPlayerWidget(QWidget):
         self._seek_slider.setRange(0, 0)
         self._time_label.setText(_DEFAULT_TIME_LABEL)
         self._media_player.setSource(QUrl.fromLocalFile(str(video_path)))
+        self._force_visual_only_audio()
 
     def toggle_play_pause(self) -> None:
         if self.is_playing:
@@ -148,6 +151,7 @@ class VideoPlayerWidget(QWidget):
             self.play()
 
     def play(self) -> None:
+        self._force_visual_only_audio()
         if self._has_video:
             self._media_player.play()
         self.playRequested.emit()
@@ -174,12 +178,17 @@ class VideoPlayerWidget(QWidget):
         self.seekRequested.emit(position_ms)
 
     def set_audio_muted(self, muted: bool) -> None:
-        """Mute/unmute the video's own embedded audio track.
+        """Keep the video's embedded audio disabled.
 
-        Used by `PlaybackController` to silence the embedded audio whenever
-        a separate audio source (Mixed/Khmer/Timeline Preview) is active.
+        Studio timeline playback is sourced only from `TimelineClip` audio
+        tracks. The video player is visual-only, so callers cannot unmute the
+        video's embedded audio and accidentally double the source audio.
         """
-        self._audio_output.setMuted(muted)
+        self._force_visual_only_audio()
+
+    def _force_visual_only_audio(self) -> None:
+        self._audio_output.setMuted(True)
+        self._audio_output.setVolume(0.0)
 
     def set_playback_rate(self, rate: float) -> None:
         rate = max(0.25, min(4.0, rate))

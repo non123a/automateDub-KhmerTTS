@@ -37,8 +37,19 @@ def _clip(
     )
 
 
-def test_timeline_model_serializes_and_deserializes_tracks(tmp_path: Path):
+def _timeline_with_generic_track() -> Timeline:
     timeline = Timeline.default()
+    timeline.ensure_track(AUDIO_TRACK_3_ID, "Audio Track 3")
+    return timeline
+
+
+def _add_generic_track_to_widget(widget: TimelineWidget) -> None:
+    widget.timeline.ensure_track(AUDIO_TRACK_3_ID, "Audio Track 3")
+    widget.load_timeline(widget.timeline)
+
+
+def test_timeline_model_serializes_and_deserializes_tracks(tmp_path: Path):
+    timeline = _timeline_with_generic_track()
     track = timeline.track_by_id(AUDIO_TRACK_3_ID)
     assert track is not None
     track.muted = True
@@ -58,7 +69,7 @@ def test_timeline_model_serializes_and_deserializes_tracks(tmp_path: Path):
 
 
 def test_playback_active_audio_clips_include_multiple_generic_tracks(tmp_path: Path):
-    timeline = Timeline.default()
+    timeline = _timeline_with_generic_track()
     original = timeline.track_by_id(ORIGINAL_AUDIO_TRACK_ID)
     khmer = timeline.track_by_id(KHMER_TTS_TRACK_ID)
     audio_3 = timeline.track_by_id(AUDIO_TRACK_3_ID)
@@ -75,7 +86,7 @@ def test_playback_active_audio_clips_include_multiple_generic_tracks(tmp_path: P
 
 
 def test_track_mute_prevents_playback_discovery(tmp_path: Path):
-    timeline = Timeline.default()
+    timeline = _timeline_with_generic_track()
     khmer = timeline.track_by_id(KHMER_TTS_TRACK_ID)
     audio_3 = timeline.track_by_id(AUDIO_TRACK_3_ID)
     assert khmer is not None
@@ -89,7 +100,7 @@ def test_track_mute_prevents_playback_discovery(tmp_path: Path):
 
 
 def test_track_solo_filters_playback_discovery(tmp_path: Path):
-    timeline = Timeline.default()
+    timeline = _timeline_with_generic_track()
     khmer = timeline.track_by_id(KHMER_TTS_TRACK_ID)
     audio_3 = timeline.track_by_id(AUDIO_TRACK_3_ID)
     assert khmer is not None
@@ -106,6 +117,7 @@ def test_widget_moves_clip_between_audio_tracks_preserving_timing(qapp):
     widget = TimelineWidget()
     segment = Segment(id=1, start=1.0, end=2.0, source_text="source", target_text="target")
     widget.load_segments([segment])
+    _add_generic_track_to_widget(widget)
     clip = widget._clips_by_clip_id["khmer:1"].timeline_clip
     assert clip is not None
 
@@ -118,7 +130,7 @@ def test_widget_moves_clip_between_audio_tracks_preserving_timing(qapp):
 
 
 def test_timeline_move_clip_updates_time_track_and_allows_overlap(tmp_path: Path):
-    timeline = Timeline.default()
+    timeline = _timeline_with_generic_track()
     khmer = timeline.track_by_id(KHMER_TTS_TRACK_ID)
     audio_3 = timeline.track_by_id(AUDIO_TRACK_3_ID)
     assert khmer is not None
@@ -143,6 +155,8 @@ def test_widget_move_clip_updates_time_track_and_emits_once(qapp):
     changes: list[None] = []
     widget.timelineChanged.connect(lambda: changes.append(None))
     widget.load_segments([segment])
+    _add_generic_track_to_widget(widget)
+    changes.clear()
 
     moved = widget.move_timeline_clip("khmer:1", AUDIO_TRACK_3_ID, 2.25)
 
@@ -158,6 +172,7 @@ def test_track_lock_prevents_clip_track_move(qapp):
     widget = TimelineWidget()
     segment = Segment(id=1, start=1.0, end=2.0, source_text="source", target_text="target")
     widget.load_segments([segment])
+    _add_generic_track_to_widget(widget)
     widget.set_track_locked(AUDIO_TRACK_3_ID, True)
 
     moved = widget.move_timeline_clip_to_track("khmer:1", AUDIO_TRACK_3_ID)
@@ -172,6 +187,7 @@ def test_widget_move_clip_rejects_locked_track_without_emit(qapp):
     changes: list[None] = []
     widget.timelineChanged.connect(lambda: changes.append(None))
     widget.load_segments([segment])
+    _add_generic_track_to_widget(widget)
     widget.set_track_locked(AUDIO_TRACK_3_ID, True)
     changes.clear()
 
@@ -190,6 +206,8 @@ def test_drop_signal_moves_clip_to_target_track_and_emits_change(qapp):
     changes: list[None] = []
     widget.timelineChanged.connect(lambda: changes.append(None))
     widget.load_segments([segment])
+    _add_generic_track_to_widget(widget)
+    changes.clear()
 
     widget._on_clip_track_change_requested("khmer:1", AUDIO_TRACK_3_ID)
 
@@ -201,6 +219,7 @@ def test_drag_preview_visibly_moves_clip_to_hovered_track(qapp):
     widget = TimelineWidget()
     segment = Segment(id=1, start=1.0, end=2.0, source_text="source", target_text="target")
     widget.load_segments([segment])
+    _add_generic_track_to_widget(widget)
     clip_item = widget._clips_by_clip_id["khmer:1"]
     widget._view._drag_clip = clip_item
 
@@ -216,7 +235,7 @@ def test_drag_preview_visibly_moves_clip_to_hovered_track(qapp):
 
 
 def test_playback_reflects_timeline_track_mutation(tmp_path: Path):
-    timeline = Timeline.default()
+    timeline = _timeline_with_generic_track()
     khmer = timeline.track_by_id(KHMER_TTS_TRACK_ID)
     audio_3 = timeline.track_by_id(AUDIO_TRACK_3_ID)
     assert khmer is not None
@@ -233,7 +252,7 @@ def test_playback_reflects_timeline_track_mutation(tmp_path: Path):
 
 
 def test_playback_controller_receives_mutated_timeline(qapp, tmp_path: Path):
-    timeline = Timeline.default()
+    timeline = _timeline_with_generic_track()
     khmer = timeline.track_by_id(KHMER_TTS_TRACK_ID)
     assert khmer is not None
     khmer.muted = True

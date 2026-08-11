@@ -282,7 +282,7 @@ class ClipItem(QGraphicsRectItem):
                 "Original Movie Audio\n"
                 f"Start: {timeline_clip.start_time:.3f}s\n"
                 f"End: {timeline_clip.end_time:.3f}s\n"
-                "Read-only reference audio"
+                f"Duration: {timeline_clip.duration:.3f}s"
             )
         if segment is None:
             return ""

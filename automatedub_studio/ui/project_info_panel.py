@@ -54,9 +54,11 @@ class ProjectInfoPanel(QWidget):
             return
 
         self.project_path_label.setText(str(project.project_path))
-        self.audio_label.setText(str(project.audio_path))
+        self.audio_label.setText(str(project.extracted_audio_path))
         self.translation_label.setText(str(project.translation_path))
         self.tts_directory_label.setText(str(project.tts_directory))
         self.segment_count_label.setText(str(project.segment_count))
         self.tts_count_label.setText(str(project.tts_file_count))
-        self.video_label.setText(str(project.video_path) if project.has_video else "Missing")
+        self.video_label.setText(
+            str(project.preview_video_path) if project.has_video else "Missing"
+        )

@@ -196,6 +196,34 @@ def test_project_metadata_video_takes_precedence(tmp_path):
     assert project.video_candidates == []
 
 
+def test_project_metadata_resolves_source_and_proxy_as_separate_assets(tmp_path):
+    project_dir = make_valid_project(tmp_path)
+    source = project_dir / "source" / "movie.mp4"
+    source.parent.mkdir()
+    source.write_bytes(_VIDEO_BYTES)
+    proxy = project_dir / "proxy_video.mp4"
+    proxy.write_bytes(_VIDEO_BYTES)
+    (project_dir / PROJECT_METADATA_FILENAME).write_text(
+        json.dumps(
+            {
+                "source_video": "source/movie.mp4",
+                "editor_video": "proxy_video.mp4",
+                "source_codec": "av1",
+                "editor_codec": "h264",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    project = load_project(project_dir)
+
+    assert project.source_video_path == source
+    assert project.proxy_video_path == proxy
+    assert project.preview_video_path == proxy
+    assert project.export_video_path == source
+    assert project.extracted_audio_path == project_dir / "audio.wav"
+
+
 def test_video_discovery_single_mkv(tmp_path):
     project_dir = make_valid_project(tmp_path)
     (project_dir / "clip.mkv").write_bytes(_VIDEO_BYTES)

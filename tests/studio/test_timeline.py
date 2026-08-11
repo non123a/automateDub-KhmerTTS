@@ -87,8 +87,7 @@ def test_load_segments_creates_clips(qapp):
 
     widget.load_segments(segments)
 
-    # One continuous reference clip plus dialogue clips.
-    assert len(widget._clips) == 5 * AUDIO_TRACK_COUNT + 1
+    assert len(widget._clips) == 5 * AUDIO_TRACK_COUNT
 
 
 def test_load_segments_creates_clip_items(qapp):
@@ -171,7 +170,7 @@ def test_reload_replaces_clips(qapp):
     widget = TimelineWidget()
     widget.load_segments(_make_segments(3))
     widget.load_segments(_make_segments(2))
-    assert len(widget._clips) == 2 * AUDIO_TRACK_COUNT + 1
+    assert len(widget._clips) == 2 * AUDIO_TRACK_COUNT
 
 
 # ---------------------------------------------------------------------------

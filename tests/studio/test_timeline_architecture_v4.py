@@ -95,17 +95,12 @@ def test_reference_clips_show_lock_icon_and_remain_selectable(qapp, tmp_path):
     widget = TimelineWidget()
     _write_tts_file(tmp_path, 10)
     widget.load_segments([_segment()], audio_path=tmp_path / "audio.wav", tts_directory=tmp_path)
-    movie = widget._clips_by_clip_id["original_movie:0"]
     original = widget._clips_by_clip_id["original:10"]
 
-    movie.setSelected(True)
     original.setSelected(True)
 
-    assert movie.locked is True
     assert original.locked is True
-    assert movie._lock_label is not None
     assert original._lock_label is not None
-    assert movie.isSelected() is True
     assert original.isSelected() is True
 
 

@@ -24,6 +24,11 @@ Related documents:
 - Avoid continuous seeking during normal playback drift.
 - Support frame stepping, previous/next segment jumps, playback speed, looped selection playback, and clip audition as separate transport concerns.
 
+The video player's `QAudioOutput` is permanently muted and set to zero volume,
+so embedded video audio cannot bypass the timeline. Timeline audio is the only
+audio source, and an Original Movie Audio clip exists only after the user
+explicitly inserts that track.
+
 ## Playback Source Of Truth
 
 Playback consumes:
@@ -36,6 +41,9 @@ Timeline
 ```
 
 Playback must not use imported segment ordering, `EditableSegment`, `MixSpeechTrack`, or legacy playback modes as the live preview source.
+
+Media resolution follows the `MediaAsset` contract in `PROJECT_SYSTEM.md`:
+preview uses the proxy video, while timeline audio uses extracted audio.
 
 ## Reference Tracks
 

@@ -11,7 +11,6 @@ from automatedub_studio.project.timeline_edits import save_timeline_edits
 from automatedub_studio.timeline.timeline_clip import (
     KHMER_TTS_TRACK_ID,
     ORIGINAL_AUDIO_TRACK_ID,
-    ORIGINAL_MOVIE_AUDIO_TRACK_ID,
     Timeline,
     TimelineClip,
 )
@@ -26,15 +25,12 @@ def build_initial_timeline(
 ) -> Timeline:
     segments = load_segments(translation_path)
     timeline = Timeline.default()
-    original_movie_track = timeline.track_by_id(ORIGINAL_MOVIE_AUDIO_TRACK_ID)
     original_track = timeline.track_by_id(ORIGINAL_AUDIO_TRACK_ID)
     khmer_track = timeline.track_by_id(KHMER_TTS_TRACK_ID)
-    if original_movie_track is None or original_track is None or khmer_track is None:
+    if original_track is None or khmer_track is None:
         return timeline
 
     ordered_segments = sorted(segments, key=lambda item: (item.start, item.id))
-    video_end = max((segment.end for segment in ordered_segments), default=0.0)
-    original_movie_track.clips = _build_reference_clips(video_end, audio_path)
     original_track.clips = _build_original_speech_clips(ordered_segments, audio_path)
     khmer_track.clips = _build_existing_khmer_clips(
         ordered_segments,
@@ -42,22 +38,6 @@ def build_initial_timeline(
     )
     save_timeline_edits(timeline, project_path / "timeline")
     return timeline
-
-
-def _build_reference_clips(video_end: float, audio_path: Path) -> list[TimelineClip]:
-    if video_end <= 0:
-        return []
-    return [
-        TimelineClip(
-            id="original_movie:0",
-            track_id=ORIGINAL_MOVIE_AUDIO_TRACK_ID,
-            start_time=0.0,
-            end_time=video_end,
-            source_path=audio_path,
-            source_offset=0.0,
-            locked=True,
-        )
-    ]
 
 
 def _build_original_speech_clips(

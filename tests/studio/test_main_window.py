@@ -222,6 +222,29 @@ def test_open_project_with_video_switches_to_video_surface(qapp, tmp_path):
     assert window.video_player._stack.currentWidget() is window.video_player._video_widget
 
 
+def test_open_project_keeps_video_embedded_audio_muted(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, with_video=True)
+    window = MainWindow(settings=_memory_settings())
+
+    window.open_project_path(project_dir)
+
+    assert window.video_player._audio_output.isMuted() is True
+    assert window.video_player._audio_output.volume() == 0.0
+
+
+def test_insert_original_movie_audio_does_not_unmute_video_audio(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, with_video=True)
+    window = MainWindow(settings=_memory_settings())
+    window.open_project_path(project_dir)
+    window.video_player._audio_output.setMuted(False)
+    window.video_player._audio_output.setVolume(1.0)
+
+    window.insert_original_movie_audio_action.trigger()
+
+    assert window.video_player._audio_output.isMuted() is True
+    assert window.video_player._audio_output.volume() == 0.0
+
+
 def test_multiple_videos_prompt_once_and_remember_selection(qapp, tmp_path, monkeypatch):
     project_dir = make_valid_project(tmp_path)
     (project_dir / "alpha.mp4").write_bytes(b"\x00\x00\x00\x18ftypmp42")
@@ -379,9 +402,8 @@ def test_open_project_populates_dual_audio_tracks(qapp, tmp_path):
 
     window.open_project_path(project_dir)
 
-    assert len(window.playback_controller._timeline_clips) == 7
+    assert len(window.playback_controller._timeline_clips) == 6
     assert {clip.track_id for clip in window.playback_controller._timeline_clips} == {
-        "original_movie_audio",
         "original_audio",
         "khmer_tts",
     }

@@ -23,6 +23,21 @@ class Segment:
 
 
 @dataclass
+class MediaAsset:
+    source_video: Path | None = None
+    proxy_video: Path | None = None
+    extracted_audio: Path | None = None
+
+    @property
+    def preview_video(self) -> Path | None:
+        return self.proxy_video or self.source_video
+
+    @property
+    def export_video(self) -> Path | None:
+        return self.source_video
+
+
+@dataclass
 class Project:
     project_path: Path
     audio_path: Path
@@ -34,6 +49,7 @@ class Project:
     editor_codec: str | None = None
     mixed_audio_path: Path | None = None
     tts_combined_path: Path | None = None
+    media: MediaAsset = field(default_factory=MediaAsset)
     segments: list[Segment] = field(default_factory=list)
     tts_file_count: int = 0
     video_candidates: list[Path] = field(default_factory=list)
@@ -44,4 +60,24 @@ class Project:
 
     @property
     def has_video(self) -> bool:
-        return self.video_path is not None
+        return self.preview_video_path is not None
+
+    @property
+    def source_video_path(self) -> Path | None:
+        return self.media.source_video or self.video_path
+
+    @property
+    def proxy_video_path(self) -> Path | None:
+        return self.media.proxy_video or self.editor_video_path
+
+    @property
+    def preview_video_path(self) -> Path | None:
+        return self.media.preview_video or self.editor_video_path or self.video_path
+
+    @property
+    def export_video_path(self) -> Path | None:
+        return self.media.export_video or self.video_path
+
+    @property
+    def extracted_audio_path(self) -> Path:
+        return self.media.extracted_audio or self.audio_path

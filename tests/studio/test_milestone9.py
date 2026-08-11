@@ -25,13 +25,22 @@ from PySide6.QtCore import QEventLoop
 from automatedub.config import ToolConfig
 from automatedub.vertical_slice.mix import MixSpeechTrack, build_mix_filter_complex
 from automatedub_studio.backend.export_service import (
+    ExportEncoderCapabilities,
     ExportError,
+    FFmpegProgress,
     ExportOptions,
     ExportResult,
     ExportStage,
+    ExportStreamSummary,
     build_export_speech_tracks,
     build_mux_command,
+    build_tts_only_mix_command,
+    choose_export_video_encoder,
     export_project,
+    probe_export_system_capabilities,
+    probe_output_streams,
+    probe_stream_copy_capability,
+    _run_ffmpeg_with_progress,
 )
 from automatedub_studio.backend.export_worker import ExportJob, ExportRunner
 from automatedub_studio.project.editable_project import EditableSegment
@@ -209,6 +218,254 @@ def test_build_mux_command_maps_streams(tmp_path):
     assert "1:a:0" in cmd
 
 
+def test_build_mux_command_can_reencode_video_to_h264(tmp_path):
+    cmd = build_mux_command(
+        "ffmpeg",
+        tmp_path / "v.mp4",
+        tmp_path / "a.wav",
+        tmp_path / "o.mp4",
+        video_encoder="libx264",
+        video_quality="High",
+    )
+
+    assert cmd[cmd.index("-c:v") + 1] == "libx264"
+    assert cmd[cmd.index("-pix_fmt") + 1] == "yuv420p"
+    assert cmd[cmd.index("-crf") + 1] == "18"
+
+
+def test_av1_source_selects_h264_export_encoder():
+    summary = ExportStreamSummary(
+        video_streams=1,
+        audio_streams=1,
+        raw_streams=[{"codec_type": "video", "codec_name": "av1"}],
+    )
+
+    encoder, reason = choose_export_video_encoder(summary, "h264")
+
+    assert encoder == "libx264"
+    assert "av1" in reason
+
+
+def test_h264_source_can_be_stream_copied():
+    summary = ExportStreamSummary(
+        video_streams=1,
+        audio_streams=1,
+        raw_streams=[{"codec_type": "video", "codec_name": "h264"}],
+    )
+
+    encoder, _reason = choose_export_video_encoder(
+        summary,
+        "copy",
+        video_preset="fastest",
+    )
+
+    assert encoder == "copy"
+
+
+def test_h265_preset_requires_a_supported_encoder():
+    summary = ExportStreamSummary(video_streams=1, audio_streams=1, raw_streams=[])
+
+    with pytest.raises(ExportError, match="no supported H.265 encoder"):
+        choose_export_video_encoder(
+            summary,
+            "h265",
+            video_preset="high_compression_h265",
+            encoder_capabilities=ExportEncoderCapabilities("libx264", None),
+        )
+
+
+def test_export_system_capabilities_detects_encoders_and_mp4_muxer():
+    def fake_run(command, **_kwargs):
+        if "-version" in command:
+            return MagicMock(stdout="ffmpeg version test-build\n")
+        if "-encoders" in command:
+            return MagicMock(
+                stdout=" V..... libx264 H.264\n V..... hevc_videotoolbox HEVC\n"
+            )
+        return MagicMock(stdout="  E  mp4 MP4\n  E  mov MOV\n")
+
+    with patch("subprocess.run", side_effect=fake_run):
+        capabilities = probe_export_system_capabilities("ffmpeg")
+
+    assert capabilities.ffmpeg_version == "ffmpeg version test-build"
+    assert capabilities.h264_encoder == "libx264"
+    assert capabilities.h265_encoder == "hevc_videotoolbox"
+    assert capabilities.supports_mp4_muxing
+
+
+def test_tts_only_mix_does_not_use_pipeline_audio(tmp_path):
+    project = _make_project(tmp_path, segment_count=1)
+    tracks = build_export_speech_tracks(
+        project.segments, {}, project.tts_directory, _default_tool_config()
+    )
+
+    command = build_tts_only_mix_command("ffmpeg", tracks, tmp_path / "mixed.wav")
+
+    assert str(project.audio_path) not in command
+    assert "anullsrc=channel_layout=mono:sample_rate=16000" in command
+
+
+def test_compatible_preset_reencodes_h264_source_to_h264():
+    summary = ExportStreamSummary(
+        video_streams=1,
+        audio_streams=1,
+        raw_streams=[{"codec_type": "video", "codec_name": "h264"}],
+    )
+
+    encoder, reason = choose_export_video_encoder(
+        summary,
+        "h264",
+        video_preset="compatible_h264",
+    )
+
+    assert encoder == "libx264"
+    assert "Compatible" in reason
+
+
+def test_high_compression_preset_uses_h265_encoder():
+    summary = ExportStreamSummary(
+        video_streams=1,
+        audio_streams=1,
+        raw_streams=[{"codec_type": "video", "codec_name": "h264"}],
+    )
+
+    encoder, reason = choose_export_video_encoder(
+        summary,
+        "h265",
+        video_preset="high_compression_h265",
+    )
+
+    assert encoder == "libx265"
+    assert "H.265" in reason
+
+
+def test_build_mux_command_can_reencode_video_to_h265(tmp_path):
+    cmd = build_mux_command(
+        "ffmpeg",
+        tmp_path / "v.mp4",
+        tmp_path / "a.wav",
+        tmp_path / "o.mp4",
+        video_encoder="libx265",
+        video_quality="Small File",
+    )
+
+    assert cmd[cmd.index("-c:v") + 1] == "libx265"
+    assert cmd[cmd.index("-pix_fmt") + 1] == "yuv420p"
+    assert cmd[cmd.index("-crf") + 1] == "30"
+    assert cmd[cmd.index("-allow_sw") + 1] == "1" if "-allow_sw" in cmd else True
+
+
+def test_hardware_h264_balanced_uses_source_relative_bitrate(tmp_path):
+    cmd = build_mux_command(
+        "ffmpeg",
+        tmp_path / "v.mp4",
+        tmp_path / "a.wav",
+        tmp_path / "o.mp4",
+        video_encoder="h264_videotoolbox",
+        video_quality="Balanced",
+        source_video_bitrate=1_400_000,
+    )
+
+    assert cmd[cmd.index("-b:v") + 1] == "1400000"
+    assert "5M" not in cmd
+
+
+def test_stream_copy_capability_uses_ffmpeg_result(tmp_path, monkeypatch):
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"source")
+    output = tmp_path / "stream-copy-check.mp4"
+
+    def fake_run(command, **_kwargs):
+        output.write_bytes(b"mp4")
+        return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    supported, reason = probe_stream_copy_capability("ffmpeg", source)
+
+    assert supported
+    assert "verified" in reason
+
+
+def test_ffmpeg_progress_reports_frame_rate_time_size_and_speed(tmp_path):
+    output = tmp_path / "progress.mp4"
+    progress: list[FFmpegProgress] = []
+
+    _run_ffmpeg_with_progress(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-t",
+            "0.2",
+            "-i",
+            "testsrc=size=64x64:rate=5",
+            "-c:v",
+            "libx264",
+            "-f",
+            "mp4",
+            str(output),
+        ],
+        0.2,
+        progress.append,
+    )
+
+    assert output.is_file()
+    assert progress[-1].percent == 100
+    assert progress[-1].frame is not None
+    assert progress[-1].output_size_bytes and progress[-1].output_size_bytes > 0
+
+
+def test_probe_output_streams_counts_video_and_audio(monkeypatch, tmp_path):
+    output = tmp_path / "out.mp4"
+
+    def fake_run(command, check, capture_output, text):
+        assert "-show_entries" in command
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(
+                {
+                    "streams": [
+                        {"index": 0, "codec_type": "video", "codec_name": "h264"},
+                        {"index": 1, "codec_type": "audio", "codec_name": "aac"},
+                    ]
+                }
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    summary = probe_output_streams("ffprobe", output)
+
+    assert summary.video_streams == 1
+    assert summary.audio_streams == 1
+
+
+def test_probe_output_streams_detects_audio_only_output(monkeypatch, tmp_path):
+    output = tmp_path / "out.mp4"
+
+    def fake_run(command, check, capture_output, text):
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=json.dumps(
+                {"streams": [{"index": 0, "codec_type": "audio", "codec_name": "aac"}]}
+            ),
+            stderr="",
+        )
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    summary = probe_output_streams("ffprobe", output)
+
+    assert summary.video_streams == 0
+    assert summary.audio_streams == 1
+
+
 # ---------------------------------------------------------------------------
 # mix.py — per-segment volume/fade in filter graph
 # ---------------------------------------------------------------------------
@@ -315,6 +572,170 @@ def test_export_project_success(tmp_path):
     assert ExportStage.COMPLETED.value in stages
 
 
+def test_export_project_rejects_audio_only_mux_output(tmp_path):
+    project = _make_project(tmp_path)
+    output_path = tmp_path / "out.mp4"
+
+    def fake_run(cmd, **kwargs):
+        result = MagicMock()
+        result.returncode = 0
+        if "-show_entries" in cmd:
+            result.stdout = json.dumps(
+                {"streams": [{"index": 0, "codec_type": "audio", "codec_name": "aac"}]}
+            )
+            result.stderr = ""
+            return result
+        out = Path(cmd[-1])
+        if "-c:v" in cmd:
+            output_path.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+        else:
+            out.write_bytes(make_valid_wav_bytes())
+        return result
+
+    with patch("subprocess.run", side_effect=fake_run):
+        with pytest.raises(ExportError, match="missing required stream.*video"):
+            export_project(
+                project=project,
+                editables={},
+                tool_config=_default_tool_config(),
+                options=ExportOptions(output_path=output_path),
+            )
+
+    debug = json.loads(
+        (project.project_path / "exports" / "last_export_debug.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert debug["input_video"] == str(project.export_video_path)
+    assert debug["mapped_streams"] == ["0:v:0", "1:a:0"]
+    assert debug["output_streams"]["video"] == 0
+    assert debug["output_streams"]["audio"] == 1
+
+
+def test_export_project_reencodes_av1_source_to_h264(tmp_path):
+    project = _make_project(tmp_path)
+    output_path = tmp_path / "out.mp4"
+    mux_commands: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        result = MagicMock()
+        result.returncode = 0
+        if "-show_entries" in cmd:
+            if Path(cmd[-1]) == project.export_video_path:
+                result.stdout = json.dumps(
+                    {
+                        "streams": [
+                            {
+                                "index": 0,
+                                "codec_type": "video",
+                                "codec_name": "av1",
+                                "width": 1920,
+                                "height": 1080,
+                            },
+                            {"index": 1, "codec_type": "audio", "codec_name": "opus"},
+                        ]
+                    }
+                )
+            else:
+                result.stdout = json.dumps(
+                    {
+                        "streams": [
+                            {
+                                "index": 0,
+                                "codec_type": "video",
+                                "codec_name": "h264",
+                                "width": 1920,
+                                "height": 1080,
+                            },
+                            {"index": 1, "codec_type": "audio", "codec_name": "aac"},
+                        ]
+                    }
+                )
+            result.stderr = ""
+            return result
+        out = Path(cmd[-1])
+        if "-c:v" in cmd:
+            mux_commands.append(list(cmd))
+            output_path.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+        else:
+            out.write_bytes(make_valid_wav_bytes())
+        return result
+
+    with patch("subprocess.run", side_effect=fake_run):
+        export_project(
+            project=project,
+            editables={},
+            tool_config=_default_tool_config(),
+            options=ExportOptions(output_path=output_path, video_codec="h264"),
+        )
+
+    assert mux_commands
+    mux = mux_commands[0]
+    assert mux[mux.index("-c:v") + 1] == "libx264"
+    assert mux[mux.index("-pix_fmt") + 1] == "yuv420p"
+    debug = json.loads(
+        (project.project_path / "exports" / "last_export_debug.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert debug["video_encoder"] == "libx264"
+    assert debug["source_streams"]["raw"][0]["codec_name"] == "av1"
+    assert debug["output_streams"]["raw"][0]["codec_name"] == "h264"
+
+
+def test_small_file_preset_exports_playable_h265_mp4(tmp_path):
+    project = _make_project(tmp_path)
+    output_path = tmp_path / "out.mp4"
+    mux_commands: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        result = MagicMock()
+        result.returncode = 0
+        if "-show_entries" in cmd:
+            codec = "h264" if Path(cmd[-1]) == project.export_video_path else "hevc"
+            result.stdout = json.dumps(
+                {
+                    "streams": [
+                        {"index": 0, "codec_type": "video", "codec_name": codec},
+                        {"index": 1, "codec_type": "audio", "codec_name": "aac"},
+                    ]
+                }
+            )
+            result.stderr = ""
+            return result
+        out = Path(cmd[-1])
+        if "-c:v" in cmd:
+            mux_commands.append(list(cmd))
+            output_path.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+        else:
+            out.write_bytes(make_valid_wav_bytes())
+        return result
+
+    with patch("subprocess.run", side_effect=fake_run):
+        result = export_project(
+            project=project,
+            editables={},
+            tool_config=_default_tool_config(),
+            options=ExportOptions(
+                output_path=output_path,
+                video_codec="h265",
+                video_quality="Small File",
+                video_preset="high_compression_h265",
+            ),
+        )
+
+    assert result.output_path == output_path
+    assert mux_commands[0][mux_commands[0].index("-c:v") + 1] == "libx265"
+    assert mux_commands[0][mux_commands[0].index("-crf") + 1] == "30"
+    debug = json.loads(
+        (project.project_path / "exports" / "last_export_debug.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert debug["output_streams"]["video"] == 1
+    assert debug["output_streams"]["audio"] == 1
+
+
 def test_export_project_cleans_up_temp_wav_on_success(tmp_path):
     project = _make_project(tmp_path)
     output_path = tmp_path / "out.mp4"
@@ -323,6 +744,10 @@ def test_export_project_cleans_up_temp_wav_on_success(tmp_path):
     def fake_run(cmd, **kwargs):
         result = MagicMock()
         result.returncode = 0
+        if cmd[-1] == "-encoders":
+            return result
+        if "-show_entries" in cmd:
+            return result
         out = Path(cmd[-1])
         if "-c:v" in cmd:
             output_path.write_bytes(b"\x00\x00\x00\x18ftypmp42")
@@ -362,7 +787,10 @@ def test_export_project_missing_audio_raises(tmp_path):
             project=project,
             editables={},
             tool_config=_default_tool_config(),
-            options=ExportOptions(output_path=tmp_path / "out.mp4"),
+            options=ExportOptions(
+                output_path=tmp_path / "out.mp4",
+                include_original_movie_audio=True,
+            ),
         )
 
 
@@ -370,6 +798,8 @@ def test_export_project_ffmpeg_mix_failure_raises(tmp_path):
     project = _make_project(tmp_path)
 
     def fake_run(cmd, **kwargs):
+        if cmd[-1] == "-encoders":
+            return MagicMock(returncode=0)
         if "-c:v" not in cmd:
             raise subprocess.CalledProcessError(1, cmd, stderr="mix error")
         return MagicMock(returncode=0)

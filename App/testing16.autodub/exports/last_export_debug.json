@@ -1,0 +1,103 @@
+{
+  "project_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing16.autodub",
+  "project_name": "testing16.autodub",
+  "input_video": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing16.autodub/source/videoplayback3.mp4",
+  "input_audio": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing16.autodub/pipeline/audio.wav",
+  "mixed_audio": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing16.autodub/exports/tmphf_9eji_.wav",
+  "ffmpeg_command": [
+    "/opt/homebrew/bin/ffmpeg",
+    "-hide_banner",
+    "-loglevel",
+    "info",
+    "-y",
+    "-i",
+    "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing16.autodub/source/videoplayback3.mp4",
+    "-i",
+    "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing16.autodub/exports/tmphf_9eji_.wav",
+    "-c:v",
+    "h264_videotoolbox",
+    "-pix_fmt",
+    "yuv420p",
+    "-b:v",
+    "5M",
+    "-c:a",
+    "aac",
+    "-map",
+    "0:v:0",
+    "-map",
+    "1:a:0",
+    "-shortest",
+    "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing16.autodub/exports/testing16.19.autodub_dubbed.mp4"
+  ],
+  "ffmpeg_stdout": "",
+  "ffmpeg_stderr": "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from '/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing16.autodub/source/videoplayback3.mp4':\n  Metadata:\n    major_brand     : isom\n    minor_version   : 512\n    compatible_brands: isomav01iso2mp41\n    encoder         : Lavf62.3.100\n  Duration: 00:02:15.00, start: 0.000000, bitrate: 1507 kb/s\n  Stream #0:0[0x1](und): Video: av1 (libdav1d) (Main) (av01 / 0x31307661), yuv420p(tv, bt709), 1920x1080, 1388 kb/s, 25 fps, 25 tbr, 12800 tbn (default)\n    Metadata:\n      handler_name    : ISO Media file produced by Google Inc.\n      vendor_id       : [0][0][0][0]\n  Stream #0:1[0x2](eng): Audio: opus (Opus / 0x7375704F), 48000 Hz, stereo, fltp, 100 kb/s (default)\n    Metadata:\n      handler_name    : SoundHandler\n      vendor_id       : [0][0][0][0]\n[aist#1:0/pcm_s16le @ 0x123f0cda0] Guessed Channel Layout: mono\nInput #1, wav, from '/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing16.autodub/exports/tmphf_9eji_.wav':\n  Metadata:\n    encoder         : Lavf62.3.100\n  Duration: 10:50:37.72, bitrate: 256 kb/s\n  Stream #1:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 16000 Hz, mono, s16, 256 kb/s\nStream mapping:\n  Stream #0:0 -> #0:0 (av1 (libdav1d) -> h264 (h264_videotoolbox))\n  Stream #1:0 -> #0:1 (pcm_s16le (native) -> aac (native))\nPress [q] to stop, [?] for help\nOutput #0, mp4, to '/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing16.autodub/exports/testing16.19.autodub_dubbed.mp4':\n  Metadata:\n    major_brand     : isom\n    minor_version   : 512\n    compatible_brands: isomav01iso2mp41\n    encoder         : Lavf62.3.100\n  Stream #0:0(und): Video: h264 (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], q=2-31, 5000 kb/s, 25 fps, 12800 tbn (default)\n    Metadata:\n      encoder         : Lavc62.11.100 h264_videotoolbox\n      handler_name    : ISO Media file produced by Google Inc.\n      vendor_id       : [0][0][0][0]\n  Stream #0:1: Audio: aac (LC) (mp4a / 0x6134706D), 16000 Hz, mono, fltp, 69 kb/s\n    Metadata:\n      encoder         : Lavc62.11.100 aac\nframe=   54 fps=0.0 q=-0.0 size=    1280KiB time=00:00:02.12 bitrate=4946.3kbits/s speed= 4.2x elapsed=0:00:00.50    \nframe=  157 fps=155 q=-0.0 size=    3840KiB time=00:00:06.24 bitrate=5041.3kbits/s speed=6.18x elapsed=0:00:01.01    \nframe=  259 fps=171 q=-0.0 size=    6400KiB time=00:00:10.32 bitrate=5080.3kbits/s speed=6.82x elapsed=0:00:01.51    \nframe=  312 fps=155 q=-0.0 size=    7680KiB time=00:00:12.44 bitrate=5057.5kbits/s speed=6.17x elapsed=0:00:02.01    \nframe=  413 fps=164 q=-0.0 size=   10240KiB time=00:00:16.48 bitrate=5090.2kbits/s speed=6.55x elapsed=0:00:02.51    \nframe=  516 fps=171 q=-0.0 size=   12800KiB time=00:00:20.60 bitrate=5090.2kbits/s speed=6.82x elapsed=0:00:03.02    \nframe=  619 fps=176 q=-0.0 size=   15360KiB time=00:00:24.72 bitrate=5090.2kbits/s speed=7.01x elapsed=0:00:03.52    \nframe=  722 fps=179 q=-0.0 size=   17920KiB time=00:00:28.84 bitrate=5090.2kbits/s speed=7.15x elapsed=0:00:04.03    \nframe=  824 fps=182 q=-0.0 size=   20480KiB time=00:00:32.92 bitrate=5096.4kbits/s speed=7.26x elapsed=0:00:04.53    \nframe=  927 fps=184 q=-0.0 size=   23040KiB time=00:00:37.04 bitrate=5095.7kbits/s speed=7.35x elapsed=0:00:05.04    \nframe= 1030 fps=186 q=-0.0 size=   25600KiB time=00:00:41.16 bitrate=5095.1kbits/s speed=7.42x elapsed=0:00:05.54    \nframe= 1132 fps=187 q=-0.0 size=   28160KiB time=00:00:45.24 bitrate=5099.2kbits/s speed=7.48x elapsed=0:00:06.05    \nframe= 1234 fps=188 q=-0.0 size=   30720KiB time=00:00:49.32 bitrate=5102.6kbits/s speed=7.53x elapsed=0:00:06.55    \nframe= 1329 fps=188 q=-0.0 size=   33024KiB time=00:00:53.12 bitrate=5092.9kbits/s speed=7.53x elapsed=0:00:07.05    \nframe= 1432 fps=189 q=-0.0 size=   35584KiB time=00:00:57.24 bitrate=5092.7kbits/s speed=7.57x elapsed=0:00:07.56    \nframe= 1534 fps=190 q=-0.0 size=   37888KiB time=00:01:01.32 bitrate=5061.6kbits/s speed= 7.6x elapsed=0:00:08.06    \nframe= 1637 fps=191 q=-0.0 size=   40448KiB time=00:01:05.44 bitrate=5063.4kbits/s speed=7.64x elapsed=0:00:08.56    \nframe= 1739 fps=192 q=-0.0 size=   43008KiB time=00:01:09.52 bitrate=5067.9kbits/s speed=7.66x elapsed=0:00:09.07    \nframe= 1842 fps=192 q=-0.0 size=   45824KiB time=00:01:13.64 bitrate=5097.6kbits/s speed=7.69x elapsed=0:00:09.57    \nframe= 1945 fps=193 q=-0.0 size=   48384KiB time=00:01:17.76 bitrate=5097.2kbits/s speed=7.71x elapsed=0:00:10.08    \nframe= 2048 fps=193 q=-0.0 size=   50944KiB time=00:01:21.88 bitrate=5096.9kbits/s speed=7.73x elapsed=0:00:10.58    \nframe= 2150 fps=194 q=-0.0 size=   53504KiB time=00:01:25.96 bitrate=5098.9kbits/s speed=7.75x elapsed=0:00:11.09    \nframe= 2253 fps=194 q=-0.0 size=   55808KiB time=00:01:30.08 bitrate=5075.3kbits/s speed=7.77x elapsed=0:00:11.59    \nframe= 2355 fps=195 q=-0.0 size=   58368KiB time=00:01:34.16 bitrate=5078.1kbits/s speed=7.78x elapsed=0:00:12.10    \nframe= 2457 fps=195 q=-0.0 size=   60928KiB time=00:01:38.24 bitrate=5080.6kbits/s speed= 7.8x elapsed=0:00:12.60    \nframe= 2559 fps=195 q=-0.0 size=   63488KiB time=00:01:42.32 bitrate=5083.0kbits/s speed=7.81x elapsed=0:00:13.10    \nframe= 2658 fps=195 q=-0.0 size=   66048KiB time=00:01:46.28 bitrate=5090.9kbits/s speed= 7.8x elapsed=0:00:13.62    \nframe= 2765 fps=196 q=-0.0 size=   68608KiB time=00:01:50.56 bitrate=5083.5kbits/s speed=7.82x elapsed=0:00:14.13    \nframe= 2867 fps=196 q=-0.0 size=   71168KiB time=00:01:54.64 bitrate=5085.6kbits/s speed=7.83x elapsed=0:00:14.63    \nframe= 2969 fps=196 q=-0.0 size=   73728KiB time=00:01:58.72 bitrate=5087.4kbits/s speed=7.84x elapsed=0:00:15.13    \nframe= 3069 fps=196 q=-0.0 size=   76032KiB time=00:02:02.72 bitrate=5075.4kbits/s speed=7.85x elapsed=0:00:15.63    \nframe= 3169 fps=196 q=-0.0 size=   78592KiB time=00:02:07.42 bitrate=5052.6kbits/s speed=7.89x elapsed=0:00:16.14    \nframe= 3272 fps=197 q=-0.0 size=   81152KiB time=00:02:11.52 bitrate=5054.7kbits/s speed= 7.9x elapsed=0:00:16.64    \n[out#0/mp4 @ 0x123f0a0e0] video:83001KiB audio:901KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.071737%\nframe= 3375 fps=197 q=-0.0 Lsize=   83962KiB time=00:02:14.96 bitrate=5096.5kbits/s speed=7.87x elapsed=0:00:17.15    \n[aac @ 0x125005010] Qavg: 54784.531\n",
+  "mapped_streams": [
+    "0:v:0",
+    "1:a:0"
+  ],
+  "video_encoder": "h264_videotoolbox",
+  "video_encoder_reason": "Compatible preset re-encodes from av1 to H.264",
+  "output_path": "/Users/tangchhannon/Documents/Cluade/AutomateDub/App/testing16.autodub/exports/testing16.19.autodub_dubbed.mp4",
+  "source_streams": {
+    "video": 1,
+    "audio": 1,
+    "raw": [
+      {
+        "index": 0,
+        "codec_name": "av1",
+        "codec_type": "video",
+        "width": 1920,
+        "height": 1080,
+        "pix_fmt": "yuv420p",
+        "r_frame_rate": "25/1",
+        "avg_frame_rate": "25/1",
+        "time_base": "1/12800",
+        "duration": "135.000000",
+        "nb_frames": "3394",
+        "tags": {}
+      },
+      {
+        "index": 1,
+        "codec_name": "opus",
+        "codec_type": "audio",
+        "r_frame_rate": "0/0",
+        "avg_frame_rate": "0/0",
+        "time_base": "1/48000",
+        "duration": "135.001000",
+        "nb_frames": "7249",
+        "tags": {}
+      }
+    ]
+  },
+  "output_streams": {
+    "video": 1,
+    "audio": 1,
+    "raw": [
+      {
+        "index": 0,
+        "codec_name": "h264",
+        "codec_type": "video",
+        "width": 1920,
+        "height": 1080,
+        "pix_fmt": "yuv420p",
+        "r_frame_rate": "25/1",
+        "avg_frame_rate": "25/1",
+        "time_base": "1/12800",
+        "duration": "135.000000",
+        "nb_frames": "3375",
+        "tags": {}
+      },
+      {
+        "index": 1,
+        "codec_name": "aac",
+        "codec_type": "audio",
+        "r_frame_rate": "0/0",
+        "avg_frame_rate": "0/0",
+        "time_base": "1/16000",
+        "duration": "134.976000",
+        "nb_frames": "2110",
+        "tags": {}
+      }
+    ]
+  }
+}

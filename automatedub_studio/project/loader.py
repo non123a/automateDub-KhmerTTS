@@ -21,7 +21,7 @@ from automatedub.vertical_slice.paths import (
     tts_combined_output_path,
     tts_output_dir_path,
 )
-from automatedub_studio.project.models import Project, Segment
+from automatedub_studio.project.models import MediaAsset, Project, Segment
 
 # Supported source video extensions, matched case-insensitively.
 VIDEO_EXTENSIONS = (".mp4", ".mov", ".mkv", ".avi", ".webm")
@@ -179,8 +179,12 @@ def save_video_selection(project_dir: Path, video_path: Path) -> None:
     """Persist the user's video file choice in project metadata."""
     metadata_path = project_dir / PROJECT_METADATA_FILENAME
     payload = _read_json_file(metadata_path)
-    payload["video_filename"] = video_path.name
-    payload["source_video"] = video_path.name
+    try:
+        relative = video_path.relative_to(project_dir).as_posix()
+    except ValueError:
+        relative = video_path.name
+    payload["video_filename"] = relative
+    payload["source_video"] = relative
     metadata_path.write_text(
         json.dumps(payload, ensure_ascii=False), encoding="utf-8"
     )
@@ -240,6 +244,11 @@ def load_project(project_dir: Path) -> Project:
         editor_codec=editor_codec,
         mixed_audio_path=mixed_audio_path,
         tts_combined_path=tts_combined_path,
+        media=MediaAsset(
+            source_video=metadata_video_path or video_path,
+            proxy_video=editor_video_path,
+            extracted_audio=audio_path,
+        ),
         segments=segments,
         tts_file_count=tts_file_count,
         video_candidates=video_candidates,

@@ -203,13 +203,21 @@ def prepare_editor_video(
 def save_project_video_metadata(project_dir: Path, result: VideoProxyResult) -> None:
     metadata_path = project_dir / PROJECT_METADATA_FILENAME
     payload = _read_json_file(metadata_path)
+    try:
+        source_value = result.source_video.relative_to(project_dir).as_posix()
+    except ValueError:
+        source_value = result.source_video.name
+    try:
+        editor_value = result.editor_video.relative_to(project_dir).as_posix()
+    except ValueError:
+        editor_value = result.editor_video.name
     payload.update(
         {
-            "source_video": result.source_video.name,
-            "editor_video": result.editor_video.name,
+            "source_video": source_value,
+            "editor_video": editor_value,
             "editor_codec": result.editor_codec,
             "source_codec": result.source_codec,
-            "video_filename": result.source_video.name,
+            "video_filename": source_value,
         }
     )
     metadata_path.write_text(

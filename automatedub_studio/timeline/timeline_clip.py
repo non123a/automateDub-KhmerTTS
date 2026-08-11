@@ -19,9 +19,9 @@ AUDIO_TRACK_IDS = (
     DRAFT_REGENERATION_TRACK_ID,
     AUDIO_TRACK_3_ID,
     AUDIO_TRACK_4_ID,
+    ORIGINAL_MOVIE_AUDIO_TRACK_ID,
 )
 REFERENCE_TRACK_IDS = (
-    ORIGINAL_MOVIE_AUDIO_TRACK_ID,
     ORIGINAL_AUDIO_TRACK_ID,
 )
 
@@ -219,20 +219,12 @@ class Timeline:
             tracks=[
                 TimelineTrack(VIDEO_TRACK_ID, "Video", kind="video"),
                 TimelineTrack(
-                    ORIGINAL_MOVIE_AUDIO_TRACK_ID,
-                    "Original Movie Audio",
-                    locked=True,
-                    reference_only=True,
-                ),
-                TimelineTrack(
                     ORIGINAL_AUDIO_TRACK_ID,
                     "Original Speech Segments",
                     locked=True,
                 ),
                 TimelineTrack(KHMER_TTS_TRACK_ID, "Khmer TTS"),
                 TimelineTrack(DRAFT_REGENERATION_TRACK_ID, "Draft Regeneration"),
-                TimelineTrack(AUDIO_TRACK_3_ID, "Audio Track 3"),
-                TimelineTrack(AUDIO_TRACK_4_ID, "Audio Track 4"),
             ]
         )
 
@@ -272,6 +264,9 @@ class Timeline:
             locked=locked,
             reference_only=reference_only,
         )
+        if track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID:
+            self.tracks.append(track)
+            return track
         if kind == "video":
             self.tracks.append(track)
             return track
