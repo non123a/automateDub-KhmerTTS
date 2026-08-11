@@ -56,7 +56,7 @@ def test_release_artifact_names_are_consistent():
     )
 
 
-def test_packaging_build_commands_are_platform_specific():
+def test_packaging_build_commands_use_platform_dist_directories():
     build = _build_module()
 
     windows = build.package_command("windows", clean=True)
@@ -69,6 +69,32 @@ def test_packaging_build_commands_are_platform_specific():
     assert "--clean" not in macos
     assert str(ROOT / "dist" / "macos") in macos
     assert str(ROOT / "dist" / "linux") in linux
+
+
+def test_packaging_paths_are_resolved_from_the_repository_root():
+    spec = (ROOT / "packaging" / "automatedub-studio.spec").read_text(encoding="utf-8")
+    macos = (ROOT / "packaging" / "macos" / "create-dmg.sh").read_text(
+        encoding="utf-8"
+    )
+    linux = (ROOT / "packaging" / "linux" / "build-appimage.sh").read_text(
+        encoding="utf-8"
+    )
+    windows = (ROOT / "packaging" / "windows" / "AutomateDubStudio.iss").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'SPEC_DIR = Path(SPECPATH).resolve()' in spec
+    assert 'ROOT = SPEC_DIR.parent' in spec
+    assert 'str(ROOT / "automatedub_studio" / "main.py")' in spec
+    assert 'name="AutomateDub.app"' in spec
+    assert "automatedub-studio.icns" in spec
+    assert (
+        ROOT / "automatedub_studio" / "resources" / "icons" / "automatedub-studio.icns"
+    ).is_file()
+    assert 'APP="${ROOT}/dist/macos/AutomateDub.app"' in macos
+    assert 'APPDIR="${ROOT}/dist/linux/AppDir"' in linux
+    assert '"${ROOT}/dist/linux/AutomateDub Studio/"*' in linux
+    assert '{#SourcePath}\\..\\..\\dist\\windows\\AutomateDub Studio\\*' in windows
 
 
 def test_platform_packaging_metadata_declares_file_associations():

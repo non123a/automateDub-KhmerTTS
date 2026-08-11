@@ -17,7 +17,7 @@ SolidCompression=yes
 WizardStyle=modern
 
 [Files]
-Source: "..\..\dist\windows\AutomateDub Studio\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourcePath}\..\..\dist\windows\AutomateDub Studio\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\AutomateDub Studio"; Filename: "{app}\{#AppExeName}"

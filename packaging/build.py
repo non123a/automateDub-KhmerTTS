@@ -33,14 +33,9 @@ def package_command(platform_name: str, *, clean: bool = True) -> list[str]:
     if clean:
         command.append("--clean")
     command.extend(["--noconfirm", str(ROOT / "packaging" / "automatedub-studio.spec")])
-    if platform_name == "linux":
-        command.extend(["--distpath", str(DIST_DIR / "linux")])
-    elif platform_name == "windows":
-        command.extend(["--distpath", str(DIST_DIR / "windows")])
-    elif platform_name == "macos":
-        command.extend(["--distpath", str(DIST_DIR / "macos")])
-    else:
+    if platform_name not in {"linux", "windows", "macos"}:
         raise ValueError(f"unsupported platform: {platform_name}")
+    command.extend(["--distpath", str(DIST_DIR / platform_name)])
     return command
 
 

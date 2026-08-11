@@ -7,11 +7,14 @@ from pathlib import Path
 
 from automatedub_studio.metadata import APP_NAME, APP_VERSION
 
-ROOT = Path.cwd()
-ICON = ROOT / "automatedub_studio" / "resources" / "icons" / "automatedub-studio.svg"
+SPEC_DIR = Path(SPECPATH).resolve()
+ROOT = SPEC_DIR.parent
+MACOS_ICON = (
+    ROOT / "automatedub_studio" / "resources" / "icons" / "automatedub-studio.icns"
+)
 
 a = Analysis(
-    ["automatedub_studio/main.py"],
+    [str(ROOT / "automatedub_studio" / "main.py")],
     pathex=[str(ROOT)],
     binaries=[],
     datas=[
@@ -50,14 +53,13 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(ICON),
     version=APP_VERSION,
 )
 
 app = BUNDLE(
     exe,
-    name=f"{APP_NAME}.app",
-    icon=str(ICON),
+    name="AutomateDub.app",
+    icon=str(MACOS_ICON),
     bundle_identifier="com.automatedub.studio",
     info_plist={
         "CFBundleDisplayName": APP_NAME,
