@@ -23,3 +23,10 @@ build/
 
 # PyInstaller
 *.spec.bak
+# Local downloaded/runtime binaries
+runtime/
+
+# Local packaging staging
+packaging/runtime/
+packaging/build/
+packaging/dist/
