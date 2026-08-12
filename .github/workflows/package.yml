@@ -25,20 +25,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+      - name: Install Windows FFmpeg build runtime
+        if: matrix.platform == 'windows'
+        run: choco install ffmpeg -y --no-progress
+      - name: Install macOS FFmpeg build runtime
+        if: matrix.platform == 'macos'
+        run: brew install ffmpeg
       - name: Install Whisper.cpp build tools
-        if: matrix.platform == 'linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake build-essential
-      - name: Build bundled Whisper.cpp runtime
-        run: uv run python packaging/prepare_whisper_runtime.py --platform ${{ matrix.platform }}
-      - name: Verify bundled Whisper.cpp executable
-        run: uv run python packaging/verify_whisper_runtime.py --platform ${{ matrix.platform }}
-      - name: Install Linux media and Qt runtime
         if: matrix.platform == 'linux'
         run: >-
           sudo apt-get update && sudo apt-get install -y
-          ffmpeg libegl1 libgl1 libxkbcommon0 libxkbcommon-x11-0
+          cmake build-essential ffmpeg patchelf libegl1 libgl1 libxkbcommon0 libxkbcommon-x11-0
+      - name: Build bundled Whisper.cpp runtime
+        run: uv run python packaging/prepare_whisper_runtime.py --platform ${{ matrix.platform }}
+      - name: Stage bundled FFmpeg runtime
+        run: uv run python packaging/prepare_ffmpeg_runtime.py --platform ${{ matrix.platform }}
+      - name: Record bundled FFmpeg license
+        run: >-
+          ffmpeg -L > automatedub_studio/resources/runtime/FFMPEG_LICENSE_${{ matrix.platform }}.txt
+      - name: Verify bundled Whisper.cpp executable
+        run: uv run python packaging/verify_whisper_runtime.py --platform ${{ matrix.platform }}
       - name: Build package
         run: uv run --with pyinstaller python packaging/build.py --platform ${{ matrix.platform }}
+      - name: Verify packaged runtime files
+        run: uv run --with pyinstaller python packaging/verify_packaged_runtime.py --platform ${{ matrix.platform }}
       - name: Build macOS DMG
         if: matrix.platform == 'macos'
         run: packaging/macos/create-dmg.sh

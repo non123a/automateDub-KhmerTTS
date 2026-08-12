@@ -24,8 +24,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from automatedub.config import resolve_executable
 from automatedub_studio.providers.manager import ProviderManager
 from automatedub_studio.providers.registry import ProviderConfigField, ProviderDescriptor
+from automatedub_studio.runtime.whisper import WhisperRuntimeError, resolve_whisper_executable
 from automatedub_studio.settings.manager import SettingsManager
 
 
@@ -70,6 +72,7 @@ class SettingsWindow(QDialog):
         layout.addLayout(button_row)
 
         self._refresh_provider_config()
+        self._refresh_runtime_status()
 
     def _build_general_tab(self) -> QWidget:
         widget = QWidget()
@@ -125,6 +128,10 @@ class SettingsWindow(QDialog):
         self.tts_status_label.setObjectName("settings_tts_status_label")
         self.tts_status_label.setWordWrap(True)
         layout.addWidget(self.tts_status_label)
+        self.runtime_status_label = QLabel("Media runtime: Checking")
+        self.runtime_status_label.setObjectName("settings_runtime_status_label")
+        self.runtime_status_label.setWordWrap(True)
+        layout.addWidget(self.runtime_status_label)
         self.provider_version_label = QLabel("Provider version: unavailable")
         self.provider_version_label.setObjectName("settings_provider_version_label")
         layout.addWidget(self.provider_version_label)
@@ -410,6 +417,20 @@ class SettingsWindow(QDialog):
             self.stt_status_label.setText(f"STT status: {status}")
         elif descriptor.kind == "tts":
             self.tts_status_label.setText(f"TTS status: {status}")
+
+    def _refresh_runtime_status(self) -> None:
+        media_ready = all(resolve_executable(name) is not None for name in ("ffmpeg", "ffprobe"))
+        try:
+            resolve_whisper_executable()
+        except WhisperRuntimeError:
+            whisper_ready = False
+        else:
+            whisper_ready = True
+        media = "Ready" if media_ready else "Unavailable"
+        whisper = "Ready" if whisper_ready else "Unavailable"
+        self.runtime_status_label.setText(
+            f"Media runtime: {media} | Whisper.cpp: {whisper}"
+        )
 
     def refresh_cache_usage(self) -> None:
         self.cache_usage_label.setText(

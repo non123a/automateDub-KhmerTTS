@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import automatedub_studio.ui.settings_window as settings_window
 from automatedub.config import ToolConfig
 from automatedub_studio.providers.base.interfaces import SynthesizedSpeech, VoiceInfo
 from automatedub_studio.providers.manager import ProviderManager
@@ -172,6 +173,22 @@ def test_settings_window_sections_and_dynamic_provider_combos(qapp, tmp_path):
     assert window.translation_combo.itemText(0) == "Fake Translation"
     assert window.tts_combo.itemText(0) == "Fake TTS"
     assert window.stt_status_label.text() == "STT status: Not tested"
+    assert window.tts_status_label.text() == "TTS status: Not tested"
+
+
+def test_settings_runtime_status_is_independent_from_provider_status(qapp, tmp_path, monkeypatch):
+    monkeypatch.setattr(settings_window, "resolve_executable", lambda _name: "/runtime/tool")
+    monkeypatch.setattr(
+        settings_window,
+        "resolve_whisper_executable",
+        lambda: tmp_path / "whisper-cli",
+    )
+    window = SettingsWindow(
+        _settings(tmp_path),
+        ProviderManager(ToolConfig(), registry=_registry()),
+    )
+
+    assert window.runtime_status_label.text() == "Media runtime: Ready | Whisper.cpp: Ready"
     assert window.tts_status_label.text() == "TTS status: Not tested"
 
 

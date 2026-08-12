@@ -39,9 +39,8 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name="AutomateDub Studio",
     debug=False,
     bootloader_ignore_signals=False,
@@ -58,8 +57,15 @@ exe = EXE(
     version=str(VERSION_INFO),
 )
 
-app = BUNDLE(
+coll = COLLECT(
     exe,
+    a.binaries,
+    a.datas,
+    name="AutomateDub Studio",
+)
+
+app = BUNDLE(
+    coll,
     name="AutomateDub.app",
     icon=str(MACOS_ICON),
     bundle_identifier="com.automatedub.studio",

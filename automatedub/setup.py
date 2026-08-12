@@ -65,7 +65,10 @@ def run_setup(
 def require_executable(label: str, executable: str) -> str:
     path = resolve_executable(executable)
     if path is None:
-        raise SetupError(f"{label} is required but was not found on PATH: {executable}")
+        raise SetupError(
+            f"{label} is required but the AutomateDub runtime could not be found. "
+            "Please reinstall AutomateDub or configure a valid development runtime."
+        )
     return path
 
 

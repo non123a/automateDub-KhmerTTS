@@ -8,6 +8,8 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
+from automatedub.runtime import resolve_runtime_binary
+
 DEFAULT_TTS_MODEL = "mars-8.1-flash-beta"
 DEFAULT_CAMB_VOICE_ID = "170542"
 DEFAULT_TTS_SYNC_OFFSET_MS = 150
@@ -141,4 +143,7 @@ def parse_dotenv_line(line: str) -> tuple[str, str] | None:
 
 
 def resolve_executable(name: str) -> str | None:
+    tool = Path(name).name.lower().removesuffix(".exe")
+    if tool in {"ffmpeg", "ffprobe", "whisper-cli"}:
+        return resolve_runtime_binary(tool, name)
     return shutil.which(name)

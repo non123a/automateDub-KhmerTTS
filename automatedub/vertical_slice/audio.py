@@ -27,7 +27,7 @@ def validate_input_mp4(input_path: Path) -> Path:
 def validate_ffmpeg(tool_config: ToolConfig) -> str:
     ffmpeg = resolve_executable(tool_config.ffmpeg_path)
     if ffmpeg is None:
-        raise VS0Error("ffmpeg is not available on PATH")
+        raise VS0Error("AutomateDub media runtime is unavailable. Please reinstall AutomateDub.")
     return ffmpeg
 
 
@@ -75,4 +75,3 @@ def extract_audio(
         raise VS0Error(f"audio extraction did not create expected file: {destination}")
 
     return destination
-

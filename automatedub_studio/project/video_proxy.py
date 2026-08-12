@@ -72,7 +72,9 @@ def probe_video(ffprobe: str, video_path: Path) -> VideoProbe:
     try:
         result = subprocess.run(command, check=True, capture_output=True, text=True)
     except FileNotFoundError as exc:
-        raise VideoProxyError("ffprobe is not available on PATH") from exc
+        raise VideoProxyError(
+            "AutomateDub media runtime is unavailable. Please reinstall AutomateDub."
+        ) from exc
     except subprocess.CalledProcessError as exc:
         message = (
             exc.stderr.strip()
@@ -141,7 +143,9 @@ def prepare_editor_video(
 ) -> VideoProxyResult:
     ffprobe = resolve_executable(tool_config.ffprobe_path)
     if ffprobe is None:
-        raise VideoProxyError("ffprobe is not available on PATH")
+        raise VideoProxyError(
+            "AutomateDub media runtime is unavailable. Please reinstall AutomateDub."
+        )
     if on_progress is not None:
         on_progress("Preparing video for editing...")
     source_probe = probe_video(ffprobe, source_video)
@@ -171,7 +175,9 @@ def prepare_editor_video(
 
     ffmpeg = resolve_executable(tool_config.ffmpeg_path)
     if ffmpeg is None:
-        raise VideoProxyError("ffmpeg is not available on PATH")
+        raise VideoProxyError(
+            "AutomateDub media runtime is unavailable. Please reinstall AutomateDub."
+        )
 
     if on_progress is not None:
         on_progress("Optimizing video...")
@@ -179,7 +185,9 @@ def prepare_editor_video(
     try:
         subprocess.run(command, check=True, capture_output=True, text=True)
     except FileNotFoundError as exc:
-        raise VideoProxyError("ffmpeg is not available on PATH") from exc
+        raise VideoProxyError(
+            "AutomateDub media runtime is unavailable. Please reinstall AutomateDub."
+        ) from exc
     except subprocess.CalledProcessError as exc:
         message = (
             exc.stderr.strip()

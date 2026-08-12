@@ -80,7 +80,9 @@ def validate_audio_input(audio_path: Path) -> Path:
 def validate_whisper_cpp(tool_config: ToolConfig) -> str:
     binary = resolve_executable(tool_config.whisper_cpp_path)
     if binary is None:
-        raise VS1Error("whisper.cpp CLI is not available on PATH")
+        raise VS1Error(
+            "AutomateDub speech recognition runtime is unavailable. Please reinstall AutomateDub."
+        )
     return binary
 
 

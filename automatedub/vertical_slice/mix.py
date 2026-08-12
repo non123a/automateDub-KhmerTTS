@@ -149,14 +149,14 @@ def validate_source_audio(source_audio_path: Path) -> None:
 def validate_ffmpeg(tool_config: ToolConfig) -> str:
     ffmpeg = resolve_executable(tool_config.ffmpeg_path)
     if ffmpeg is None:
-        raise VS4Error("ffmpeg is not available on PATH")
+        raise VS4Error("AutomateDub media runtime is unavailable. Please reinstall AutomateDub.")
     return ffmpeg
 
 
 def validate_ffprobe(tool_config: ToolConfig) -> str:
     ffprobe = resolve_executable(tool_config.ffprobe_path)
     if ffprobe is None:
-        raise VS4Error("ffprobe is not available on PATH")
+        raise VS4Error("AutomateDub media runtime is unavailable. Please reinstall AutomateDub.")
     return ffprobe
 
 

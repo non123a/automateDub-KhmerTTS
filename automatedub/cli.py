@@ -289,7 +289,7 @@ def run_tts_sample(
 def validate_sample_ffmpeg(tool_config: ToolConfig) -> str:
     ffmpeg = resolve_executable(tool_config.ffmpeg_path)
     if ffmpeg is None:
-        raise VS3Error("ffmpeg is not available on PATH")
+        raise VS3Error("AutomateDub media runtime is unavailable. Please reinstall AutomateDub.")
     return ffmpeg
 
 
