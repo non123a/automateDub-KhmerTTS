@@ -18,6 +18,8 @@ assert _PACKAGING_MODULE.__spec__.loader is not None
 _PACKAGING_MODULE.__spec__.loader.exec_module(_PACKAGING_MODULE)
 _resolve_windows_binary = _PACKAGING_MODULE._resolve_windows_binary
 _windows_binary_candidates = _PACKAGING_MODULE._windows_binary_candidates
+_contains_chocolatey_reference = _PACKAGING_MODULE._contains_chocolatey_reference
+_clean_destination = _PACKAGING_MODULE._clean_destination
 
 
 @pytest.mark.parametrize(
@@ -93,7 +95,7 @@ def test_windows_staging_searches_real_binary_below_chocolatey_shim(tmp_path):
 
     candidates = _windows_binary_candidates("ffmpeg", shim)
 
-    assert candidates[0] == shim
+    assert candidates[-1] == shim
     assert real in candidates
 
 
@@ -105,3 +107,26 @@ def test_windows_staging_rejects_non_runnable_binary(monkeypatch, tmp_path):
 
     with pytest.raises(RuntimeError, match="not a runnable native Windows"):
         _resolve_windows_binary("ffmpeg", source)
+
+
+def test_windows_staging_rejects_chocolatey_reference(monkeypatch, tmp_path):
+    source = tmp_path / "ffmpeg.exe"
+    source.write_bytes(b"MZ ..\\lib\\ffmpeg\\tools\\ffmpeg\\bin\\ffmpeg.exe")
+    monkeypatch.setattr(_PACKAGING_MODULE, "_runs_without_path", lambda _path: True)
+
+    assert _contains_chocolatey_reference(source)
+    with pytest.raises(RuntimeError, match="not a runnable native Windows"):
+        _resolve_windows_binary("ffmpeg", source)
+
+
+def test_windows_staging_cleans_stale_destination(tmp_path):
+    destination = tmp_path / "runtime" / "bin" / "windows"
+    stale = destination / "ffmpeg.exe"
+    nested = destination / "lib" / "stale.dll"
+    nested.parent.mkdir(parents=True)
+    stale.write_bytes(b"shim")
+    nested.write_bytes(b"stale")
+
+    _clean_destination(destination)
+
+    assert list(destination.iterdir()) == []

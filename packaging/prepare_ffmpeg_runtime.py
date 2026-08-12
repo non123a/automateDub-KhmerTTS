@@ -52,9 +52,26 @@ def _runs_without_path(executable: Path) -> bool:
     return result.returncode == 0
 
 
+def _is_windows_pe(executable: Path) -> bool:
+    try:
+        with executable.open("rb") as file:
+            return file.read(2) == b"MZ"
+    except OSError:
+        return False
+
+
+def _contains_chocolatey_reference(executable: Path) -> bool:
+    try:
+        payload = executable.read_bytes()
+    except OSError:
+        return True
+    lowered = payload.lower()
+    return b"..\\lib\\ffmpeg" in lowered or b"chocolatey" in lowered
+
+
 def _windows_binary_candidates(name: str, source: Path) -> list[Path]:
     """Locate the package executable when ``source`` is a Chocolatey shim."""
-    candidates = [source]
+    candidates: list[Path] = []
     # Chocolatey exposes <root>/bin/<name>.exe as a launcher. Its distributable
     # executable is located under <root>/lib/<name>/tools/.../bin.
     chocolatey_root = source.parent.parent
@@ -67,16 +84,31 @@ def _windows_binary_candidates(name: str, source: Path) -> list[Path]:
                 reverse=True,
             )
         )
+    candidates.append(source)
     return candidates
 
 
 def _resolve_windows_binary(name: str, source: Path) -> Path:
     for candidate in _windows_binary_candidates(name, source):
-        if candidate.is_file() and _runs_without_path(candidate):
+        if (
+            candidate.is_file()
+            and _is_windows_pe(candidate)
+            and not _contains_chocolatey_reference(candidate)
+            and _runs_without_path(candidate)
+        ):
             return candidate
     raise RuntimeError(
         f"{name}.exe is not a runnable native Windows FFmpeg binary: {source}"
     )
+
+
+def _clean_destination(destination: Path) -> None:
+    destination.mkdir(parents=True, exist_ok=True)
+    for child in destination.iterdir():
+        if child.is_dir():
+            shutil.rmtree(child)
+        else:
+            child.unlink()
 
 
 def _macos_dependencies(binary: Path) -> list[Path]:
@@ -168,7 +200,7 @@ def _stage_linux_dependencies(binaries: list[Path], destination: Path) -> None:
 def prepare(*, system: str | None = None) -> list[Path]:
     target = platform_name(system)
     destination = ROOT / "automatedub_studio" / "resources" / "runtime" / "bin" / target
-    destination.mkdir(parents=True, exist_ok=True)
+    _clean_destination(destination)
     suffix = ".exe" if target == "windows" else ""
     staged: list[Path] = []
     for name in ("ffmpeg", "ffprobe"):

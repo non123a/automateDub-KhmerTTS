@@ -52,6 +52,10 @@ jobs:
             if ($bytes.Length -lt 2 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
               throw "Staged $name is not a native Windows PE executable"
             }
+            $text = [System.Text.Encoding]::ASCII.GetString($bytes)
+            if ($text -match "chocolatey|\.\.\\lib\\ffmpeg") {
+              throw "Staged $name contains a Chocolatey launcher reference"
+            }
             & $path -version
             if ($LASTEXITCODE -ne 0) { throw "Staged $name cannot execute" }
           }
