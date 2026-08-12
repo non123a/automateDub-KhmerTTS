@@ -12,6 +12,8 @@ single-clip preview path.
 from __future__ import annotations
 
 import json
+import os
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +25,8 @@ from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from automatedub_studio.playback.video_player import VideoPlayerWidget
 from automatedub_studio.timeline.timeline_clip import (
     ORIGINAL_AUDIO_TRACK_ID,
+    ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+    AudioClipIntervalIndex,
     Timeline,
     TimelineClip,
 )
@@ -30,6 +34,7 @@ from automatedub_studio.timeline.timeline_clip import (
 _SYNC_INTERVAL_MS = 100
 _DRIFT_THRESHOLD_MS = 500
 _LOADED = QMediaPlayer.MediaStatus.LoadedMedia
+_ORIGINAL_AUDIO_TRACE_ENABLED = "AUTOMATEDUB_ORIGINAL_AUDIO_TRACE"
 
 
 class PlaybackController(QObject):
@@ -42,15 +47,29 @@ class PlaybackController(QObject):
 
         self._timeline = Timeline.default()
         self._timeline_clips: list[TimelineClip] = []
+        self._audio_index = AudioClipIntervalIndex([])
         self._active_khmer_clip_ids: set[str] = set()
         self._playback_rate = 1.0
         self._loop_selection_enabled = False
 
-        self._original_audio_player, self._original_audio_output = self._make_audio_player()
+        # Original Movie Audio is optional and owns no player until inserted.
+        self._original_audio_player: QMediaPlayer | None = None
+        self._original_audio_output: QAudioOutput | None = None
         self._khmer_audio_player, self._khmer_audio_output = self._make_audio_player()
         self._audition_player, self._audition_output = self._make_audio_player()
+        self._available_audio_players: list[tuple[QMediaPlayer, QAudioOutput]] = [
+            (self._khmer_audio_player, self._khmer_audio_output)
+        ]
+        self._all_pool_players = list(self._available_audio_players)
         self._khmer_clip_players: dict[str, tuple[QMediaPlayer, QAudioOutput]] = {}
         self._clip_source_fingerprints: dict[str, tuple[Path, int | None, int | None]] = {}
+
+        # Opt-in performance counters.  These stay in memory during normal use
+        # and are sampled by the editor diagnostics layer when enabled.
+        self._tick_count = 0
+        self._tick_total_seconds = 0.0
+        self._tick_worst_seconds = 0.0
+        self._lookup_total_seconds = 0.0
 
         self._pending_seek_ms: dict[QMediaPlayer, int] = {}
         self._pending_play: set[QMediaPlayer] = set()
@@ -61,7 +80,6 @@ class PlaybackController(QObject):
         self._trace_original_audio_events: list[dict[str, Any]] = []
         self._trace_original_audio_sequence = 0
         for player, output, label in (
-            (self._original_audio_player, self._original_audio_output, "original_audio_player"),
             (self._khmer_audio_player, self._khmer_audio_output, "shared_timeline_audio_player"),
             (self._audition_player, self._audition_output, "audition_player"),
         ):
@@ -113,12 +131,10 @@ class PlaybackController(QObject):
 
     def _apply_playback_rate(self, rate: float) -> None:
         self._video_player.set_playback_rate(rate)
-        for player in (
-            self._original_audio_player,
-            self._khmer_audio_player,
-            self._audition_player,
-            *[player for player, _output in self._khmer_clip_players.values()],
-        ):
+        players = [self._audition_player, *[player for player, _ in self._all_pool_players]]
+        if self._original_audio_player is not None:
+            players.append(self._original_audio_player)
+        for player in players:
             if hasattr(player, "setPlaybackRate"):
                 player.setPlaybackRate(rate)
 
@@ -129,10 +145,35 @@ class PlaybackController(QObject):
         self._video_player.set_audio_muted(True)
         self._timeline = timeline
         self._timeline_clips = timeline.all_clips()
+        audio_tracks = [
+            track
+            for track in timeline.tracks
+            if track.is_audio and not track.reference_only and not track.muted
+        ]
+        soloed_track_ids = {track.id for track in audio_tracks if track.solo}
+        if soloed_track_ids:
+            audio_tracks = [
+                track for track in audio_tracks if track.id in soloed_track_ids
+            ]
+        self._audio_index = AudioClipIntervalIndex(
+            [
+                clip
+                for track in audio_tracks
+                for clip in track.clips
+                if clip.source_path is not None
+                and not clip.muted
+                and (clip.segment_id is None or clip.source_path.is_file())
+            ]
+        )
         self._ensure_original_audio_trace_path_from_timeline()
         self._apply_playback_rate(self._playback_rate)
-        self._configure_timeline_clip_players()
-        self._active_khmer_clip_ids = set()
+        valid_clip_ids = {
+            clip.id for clip in self._audio_index.active_at(self._video_player.position_ms)
+        }
+        for clip_id in list(self._khmer_clip_players):
+            if clip_id not in valid_clip_ids:
+                self._release_audio_player(clip_id)
+        self._active_khmer_clip_ids.clear()
         self._sync_audio_to_position(
             self._video_player.position_ms,
             start_playing=self._video_player.is_playing,
@@ -185,11 +226,13 @@ class PlaybackController(QObject):
         track = self._timeline.track_by_id(track_id)
         if track is not None:
             track.muted = muted
+            self.set_timeline(self._timeline)
 
     def set_track_solo(self, track_id: str, solo: bool) -> None:
         track = self._timeline.track_by_id(track_id)
         if track is not None:
             track.solo = solo
+            self.set_timeline(self._timeline)
 
     def play(self) -> None:
         self._video_player.play()
@@ -212,7 +255,8 @@ class PlaybackController(QObject):
     def play_clip(self, path: Path) -> None:
         """Play one clip in isolation for double-click audition."""
         self._sync_timer.stop()
-        self._pause_player(self._original_audio_player)
+        if self._original_audio_player is not None:
+            self._pause_player(self._original_audio_player)
         for player, _output in self._khmer_clip_players.values():
             self._pause_player(player)
         self._audition_output.setVolume(1.0)
@@ -295,6 +339,10 @@ class PlaybackController(QObject):
         clip: TimelineClip | None = None,
         **details: Any,
     ) -> None:
+        # This trace rewrites a growing JSON file for every Qt media signal.
+        # It is forensic instrumentation, never normal editor work.
+        if os.environ.get(_ORIGINAL_AUDIO_TRACE_ENABLED) != "1":
+            return
         if clip is not None and self._is_original_speech_clip(clip):
             self._ensure_original_audio_trace_path(clip)
         if self._trace_original_audio_path is None:
@@ -400,66 +448,73 @@ class PlaybackController(QObject):
         except OSError:
             pass
 
-    def _configure_timeline_clip_players(self) -> None:
-        playable_track_ids = {
-            track.id
-            for track in self._timeline.tracks
-            if track.is_audio and not track.reference_only
+    def performance_snapshot(self) -> dict[str, int | bool]:
+        """Return lightweight playback facts for opt-in editor diagnostics."""
+        players = list(self._khmer_clip_players.values())
+        active = self._active_audio_clips(self._video_player.position_ms)
+        return {
+            "video_players": 1,
+            "audio_players": (
+                2 + len(self._all_pool_players) + int(self._original_audio_player is not None)
+            ),
+            "timeline_clip_players": len(players),
+            "available_pooled_players": len(self._available_audio_players),
+            "active_audio_clips": len(active),
+            "original_audio_enabled": any(
+                clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID for clip in active
+            ),
+            "tts_enabled": any(clip.track_id == "khmer_tts" for clip in active),
+            "playback_tick_rate_hz": 1000 // _SYNC_INTERVAL_MS,
+            "maximum_simultaneous_overlap": self._audio_index.maximum_overlap,
+            "average_playback_tick_ms": round(
+                self._tick_total_seconds * 1000 / self._tick_count, 3
+            ) if self._tick_count else 0.0,
+            "worst_playback_tick_ms": round(self._tick_worst_seconds * 1000, 3),
+            "active_clip_lookup_ms_total": round(self._lookup_total_seconds * 1000, 3),
         }
-        audio_clips = [
-            clip
-            for clip in self._timeline_clips
-            if clip.track_id in playable_track_ids
-            and clip.source_path is not None
-            and (clip.segment_id is None or clip.source_path.is_file())
-        ]
-        wanted_ids = {clip.id for clip in audio_clips}
-        for clip_id in list(self._khmer_clip_players):
-            if clip_id not in wanted_ids:
-                player, _output = self._khmer_clip_players.pop(clip_id)
-                self._clip_source_fingerprints.pop(clip_id, None)
-                self._stop_player(player)
-                self._trace_qmedia_player_event(
-                    player,
-                    "setSource",
-                    removed_clip_id=clip_id,
-                    source="",
-                    clearing=True,
-                )
-                player.setSource(QUrl())
 
-        for clip in audio_clips:
-            if clip.id in self._khmer_clip_players:
-                player, _output = self._khmer_clip_players[clip.id]
-            elif not any(
-                player is self._khmer_audio_player
-                for player, _output in self._khmer_clip_players.values()
-            ):
-                player, output = self._khmer_audio_player, self._khmer_audio_output
-                self._khmer_clip_players[clip.id] = (player, output)
-            else:
-                player, output = self._make_audio_player()
+    def _release_all_clip_players(self) -> None:
+        for clip_id in list(self._khmer_clip_players):
+            self._release_audio_player(clip_id)
+        self._active_khmer_clip_ids.clear()
+
+    def _acquire_audio_player(self, clip: TimelineClip) -> tuple[QMediaPlayer, QAudioOutput]:
+        if clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID:
+            if self._original_audio_player is None or self._original_audio_output is None:
+                self._original_audio_player, self._original_audio_output = self._make_audio_player()
                 self._connect_audio_player(
-                    player, output, f"timeline_audio_player:{clip.id}"
+                    self._original_audio_player,
+                    self._original_audio_output,
+                    "original_movie_audio_player",
                 )
-                self._khmer_clip_players[clip.id] = (player, output)
-            url = QUrl.fromLocalFile(str(clip.source_path))
-            fingerprint = self._source_fingerprint(clip.source_path)
-            if player.source() != url or self._clip_source_fingerprints.get(clip.id) != fingerprint:
-                self._trace_player_replacement(player, clip)
-                self._stop_player(player)
-                self._pending_seek_ms[player] = 0
-                self._pending_play.discard(player)
-                self._trace_qmedia_player_event(
-                    player, "setSource", clip=clip, source="", clearing=True
-                )
-                player.setSource(QUrl())
-                self._trace_qmedia_player_event(
-                    player, "setSource", clip=clip, source=str(clip.source_path)
-                )
-                self._player_clip_ids[player] = clip.id
-                player.setSource(url)
-                self._clip_source_fingerprints[clip.id] = fingerprint
+            return self._original_audio_player, self._original_audio_output
+        if self._available_audio_players:
+            return self._available_audio_players.pop()
+        player, output = self._make_audio_player()
+        self._connect_audio_player(player, output, "timeline_audio_pool_player")
+        self._all_pool_players.append((player, output))
+        return player, output
+
+    def _release_audio_player(self, clip_id: str) -> None:
+        assignment = self._khmer_clip_players.pop(clip_id, None)
+        if assignment is None:
+            return
+        player, output = assignment
+        self._stop_player(player)
+        self._pending_seek_ms.pop(player, None)
+        self._pending_play.discard(player)
+        self._clip_source_fingerprints.pop(clip_id, None)
+        if player is self._original_audio_player:
+            player.setSource(QUrl())
+            self._audio_outputs_by_player.pop(player, None)
+            self._audio_player_labels.pop(player, None)
+            self._player_clip_ids.pop(player, None)
+            player.deleteLater()
+            output.deleteLater()
+            self._original_audio_player = None
+            self._original_audio_output = None
+            return
+        self._available_audio_players.append((player, output))
 
     @staticmethod
     def _source_fingerprint(path: Path) -> tuple[Path, int | None, int | None]:
@@ -556,8 +611,13 @@ class PlaybackController(QObject):
             self._maybe_loop(position_ms)
 
     def _on_sync_tick(self) -> None:
+        started = time.perf_counter()
         self._maybe_resync(self._video_player.position_ms)
         self._maybe_loop(self._video_player.position_ms)
+        elapsed = time.perf_counter() - started
+        self._tick_count += 1
+        self._tick_total_seconds += elapsed
+        self._tick_worst_seconds = max(self._tick_worst_seconds, elapsed)
 
     def _maybe_resync(self, position_ms: int) -> None:
         self._sync_audio_to_position(position_ms, start_playing=self._video_player.is_playing)
@@ -590,18 +650,21 @@ class PlaybackController(QObject):
     def _sync_timeline_audio(
         self, position_ms: int, *, start_playing: bool, force_seek: bool = False
     ) -> None:
+        lookup_started = time.perf_counter()
         current_active = {
             clip.id: clip
             for clip in self._active_audio_clips(position_ms)
             if clip.source_path is not None
         }
-        for clip_id, (player, _output) in self._khmer_clip_players.items():
+        self._lookup_total_seconds += time.perf_counter() - lookup_started
+        for clip_id in list(self._khmer_clip_players):
             if clip_id not in current_active:
-                self._stop_player(player)
+                self._release_audio_player(clip_id)
         for clip_id, clip in current_active.items():
-            player, output = self._khmer_clip_players.get(
-                clip_id, (self._khmer_audio_player, self._khmer_audio_output)
-            )
+            player, output = self._khmer_clip_players.get(clip_id, (None, None))
+            if player is None or output is None:
+                player, output = self._acquire_audio_player(clip)
+                self._khmer_clip_players[clip_id] = (player, output)
             self._audio_outputs_by_player.setdefault(player, output)
             self._player_clip_ids[player] = clip.id
             source_position_ms = clip.source_position_ms(position_ms)
@@ -615,7 +678,17 @@ class PlaybackController(QObject):
             output.setVolume(clip.volume_at(position_ms))
             if clip.source_path is not None:
                 url = QUrl.fromLocalFile(str(clip.source_path))
-                if player.source() != url:
+                fingerprint = self._source_fingerprint(clip.source_path)
+                known_fingerprint = self._clip_source_fingerprints.get(clip_id)
+                if (
+                    player.source() != url
+                    or (
+                        known_fingerprint is not None
+                        and known_fingerprint != fingerprint
+                    )
+                ):
+                    if player.source() == url:
+                        player.setSource(QUrl())
                     self._load_audio_source(
                         player,
                         clip.source_path,
@@ -623,7 +696,9 @@ class PlaybackController(QObject):
                         play=start_playing,
                         force_seek=True,
                     )
+                    self._clip_source_fingerprints[clip_id] = fingerprint
                     continue
+                self._clip_source_fingerprints[clip_id] = fingerprint
             if clip_id not in self._active_khmer_clip_ids:
                 self._seek_if_needed(player, source_position_ms, force=True)
             else:
@@ -633,7 +708,7 @@ class PlaybackController(QObject):
         self._active_khmer_clip_ids = set(current_active)
 
     def _active_audio_clips(self, position_ms: int) -> list[TimelineClip]:
-        return self._timeline.active_audio_clips(position_ms)
+        return self._audio_index.active_at(position_ms)
 
     def _seek_if_needed(self, player: QMediaPlayer, position_ms: int, *, force: bool) -> None:
         if player in self._pending_seek_ms:

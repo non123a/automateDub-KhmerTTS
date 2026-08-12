@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from automatedub_studio.project.manager import NewProjectRequest, project_folder_name
+from automatedub_studio.ui.responsive import set_responsive_window_size
 
 
 class ProjectDetailsPage(QWizardPage):
@@ -140,6 +141,11 @@ class NewProjectWizard(QWizard):
         self.summary_page = ProjectSummaryPage(self.details_page, self)
         self.addPage(self.details_page)
         self.addPage(self.summary_page)
+        set_responsive_window_size(
+            self,
+            minimum=QSize(500, 360),
+            preferred=QSize(700, 520),
+        )
 
     def request(self) -> NewProjectRequest:
         return self.details_page.request()

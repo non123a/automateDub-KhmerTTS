@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PySide6.QtCore import QEventLoop
+from PySide6.QtCore import QCoreApplication, QEventLoop, QSize
 
 from automatedub.config import ToolConfig
 from automatedub.vertical_slice.mix import MixSpeechTrack, build_mix_filter_complex
@@ -1106,3 +1106,15 @@ def test_export_progress_dialog_cancel_sets_flag(qapp):
     assert not dialog.is_cancelled()
     dialog._on_cancel()
     assert dialog.is_cancelled()
+
+
+@pytest.mark.parametrize("size", [QSize(420, 220), QSize(520, 280), QSize(900, 620)])
+def test_export_progress_dialog_reflows_with_visible_cancel(qapp, size):
+    dialog = ExportProgressDialog()
+    dialog.resize(size)
+    dialog.show()
+    QCoreApplication.processEvents()
+
+    assert dialog._cancel_button.geometry().bottom() <= dialog.contentsRect().bottom()
+    assert dialog.content_scroll.geometry().bottom() < dialog._cancel_button.geometry().top()
+    assert dialog._progress_bar.width() > 0

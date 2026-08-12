@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QSize, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog,
@@ -23,6 +23,7 @@ from automatedub_studio.metadata import (
     APP_VERSION,
     APP_WEBSITE_URL,
 )
+from automatedub_studio.ui.responsive import set_responsive_window_size
 
 
 class AboutDialog(QDialog):
@@ -52,3 +53,8 @@ class AboutDialog(QDialog):
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
         buttons.accepted.connect(self.accept)
         layout.addWidget(buttons)
+        set_responsive_window_size(
+            self,
+            minimum=QSize(360, 240),
+            preferred=QSize(480, 320),
+        )

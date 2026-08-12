@@ -17,6 +17,8 @@ from automatedub_studio.project.models import Segment
 from automatedub_studio.timeline.timeline_clip import (
     KHMER_TTS_TRACK_ID,
     ORIGINAL_AUDIO_TRACK_ID,
+    ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+    AudioClipIntervalIndex,
     Timeline,
     TimelineClip,
     active_clips,
@@ -157,7 +159,7 @@ def test_active_clips_respects_track_and_clip_mute(tmp_path):
     assert active_clips([original, khmer], KHMER_TTS_TRACK_ID, 500) == [khmer]
 
 
-def test_playback_preloads_khmer_sources_without_boundary_set_source(qapp, tmp_path):
+def test_playback_assigns_players_only_to_currently_active_khmer_clips(qapp, tmp_path):
     first_path = tmp_path / "0000.wav"
     second_path = tmp_path / "0001.wav"
     first_path.write_bytes(b"placeholder")
@@ -180,12 +182,85 @@ def test_playback_preloads_khmer_sources_without_boundary_set_source(qapp, tmp_p
     controller.set_timeline(Timeline.from_clips([first_clip, second_clip]))
 
     first_player = controller._khmer_clip_players["khmer:0"][0]
-    second_player = controller._khmer_clip_players["khmer:1"][0]
-
     assert first_player.source() == QUrl.fromLocalFile(str(first_path))
-    assert second_player.source() == QUrl.fromLocalFile(str(second_path))
+    assert set(controller._khmer_clip_players) == {"khmer:0"}
     controller._sync_timeline_audio(1200, start_playing=False)
+    second_player = controller._khmer_clip_players["khmer:1"][0]
+    assert second_player is first_player
     assert second_player.source() == QUrl.fromLocalFile(str(second_path))
+
+
+def test_audio_interval_index_handles_boundaries_and_overlaps(tmp_path):
+    clips = [
+        TimelineClip("a", KHMER_TTS_TRACK_ID, 0.0, 2.0, tmp_path / "a.wav"),
+        TimelineClip("b", KHMER_TTS_TRACK_ID, 1.0, 3.0, tmp_path / "b.wav"),
+        TimelineClip("c", KHMER_TTS_TRACK_ID, 2.0, 4.0, tmp_path / "c.wav"),
+    ]
+    index = AudioClipIntervalIndex(clips)
+
+    assert [clip.id for clip in index.active_at(0)] == ["a"]
+    assert [clip.id for clip in index.active_at(1000)] == ["a", "b"]
+    assert [clip.id for clip in index.active_at(2000)] == ["b", "c"]
+    assert [clip.id for clip in index.active_at(500)] == ["a"]
+    assert index.maximum_overlap == 2
+
+
+def test_playback_pool_scales_with_overlap_not_timeline_clip_count(qapp, tmp_path):
+    paths = []
+    clips = []
+    for number in range(50):
+        path = tmp_path / f"{number:04d}.wav"
+        path.write_bytes(b"placeholder")
+        paths.append(path)
+        clips.append(
+            TimelineClip(
+                f"khmer:{number}",
+                KHMER_TTS_TRACK_ID,
+                float(number),
+                float(number + 1),
+                path,
+            )
+        )
+    controller = PlaybackController(VideoPlayerWidget())
+    controller.set_timeline(Timeline.from_clips(clips))
+
+    assert len(controller._all_pool_players) == 1
+    assert set(controller._khmer_clip_players) == {"khmer:0"}
+    controller._sync_timeline_audio(10_200, start_playing=False)
+    assert len(controller._all_pool_players) == 1
+    assert set(controller._khmer_clip_players) == {"khmer:10"}
+
+
+def test_playback_pool_assigns_a_player_per_current_overlap(qapp, tmp_path):
+    clips = []
+    for number in range(3):
+        path = tmp_path / f"overlap-{number}.wav"
+        path.write_bytes(b"placeholder")
+        clips.append(
+            TimelineClip(
+                f"khmer:{number}", KHMER_TTS_TRACK_ID, 0.0, 2.0, path
+            )
+        )
+    controller = PlaybackController(VideoPlayerWidget())
+    controller.set_timeline(Timeline.from_clips(clips))
+
+    assert len(controller._khmer_clip_players) == 3
+    assert len({id(player) for player, _output in controller._khmer_clip_players.values()}) == 3
+    assert controller._audio_index.maximum_overlap == 3
+
+
+def test_original_movie_audio_player_is_created_only_when_inserted(qapp, tmp_path):
+    controller = PlaybackController(VideoPlayerWidget())
+    controller.set_timeline(Timeline.default())
+    assert controller._original_audio_player is None
+
+    path = tmp_path / "movie.wav"
+    path.write_bytes(b"placeholder")
+    clip = TimelineClip(
+        "movie:0", ORIGINAL_MOVIE_AUDIO_TRACK_ID, 0.0, 2.0, path
+    )
+    controller.set_timeline(Timeline.from_clips([clip]))
+    assert controller._original_audio_player is not None
 
 
 def test_inspector_does_not_edit_read_only_original_clip(qapp, tmp_path):

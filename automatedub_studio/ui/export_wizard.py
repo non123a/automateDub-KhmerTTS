@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt
+from PySide6.QtCore import QSettings, QSize, Qt
 from PySide6.QtWidgets import (
     QButtonGroup,
     QComboBox,
@@ -18,7 +18,9 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QRadioButton,
+    QSizePolicy,
     QVBoxLayout,
+    QWidget,
 )
 
 from automatedub.config import ToolConfig
@@ -38,6 +40,7 @@ from automatedub_studio.export.manager import (
 )
 from automatedub_studio.project.models import Project
 from automatedub_studio.timeline.timeline_clip import Timeline
+from automatedub_studio.ui.responsive import scrollable_content, set_responsive_window_size
 
 _SETTINGS_PREFIX = "export/"
 
@@ -129,13 +132,22 @@ class ExportWizard(QDialog):
         self._preset_descriptions: dict[VideoEncodingPreset, QLabel] = {}
         self.setWindowTitle("Export Video")
         layout = QVBoxLayout(self)
+        content = QWidget()
+        content.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        content_layout = QVBoxLayout(content)
         form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
         remembered_folder = self._setting_value("output_folder", str(default_output_folder))
         self.output_folder_edit = QLineEdit(remembered_folder)
+        self.output_folder_edit.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
         self.output_folder_edit.setObjectName("export_output_folder_edit")
         folder_row = QHBoxLayout()
-        folder_row.addWidget(self.output_folder_edit)
+        folder_row.addWidget(self.output_folder_edit, 1)
         browse = QPushButton("Browse...")
         browse.clicked.connect(self._browse_output_folder)
         folder_row.addWidget(browse)
@@ -159,6 +171,9 @@ class ExportWizard(QDialog):
             self._preset_buttons[preset] = button
             description = QLabel(str(details["description"]))
             description.setWordWrap(True)
+            description.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+            )
             description.setObjectName(f"export_preset_{preset.value}_description")
             preset_layout.addWidget(description)
             self._preset_descriptions[preset] = description
@@ -166,6 +181,9 @@ class ExportWizard(QDialog):
         self.validation_label = QLabel()
         self.validation_label.setObjectName("export_preset_validation_message")
         self.validation_label.setWordWrap(True)
+        self.validation_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         form.addRow("Why is this unavailable?", self.validation_label)
 
         self.quality_combo = QComboBox()
@@ -211,11 +229,17 @@ class ExportWizard(QDialog):
         self.subtitle_description = QLabel()
         self.subtitle_description.setObjectName("export_subtitle_mode_description")
         self.subtitle_description.setWordWrap(True)
+        self.subtitle_description.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         form.addRow("", self.subtitle_description)
 
         self.diagnostics_group = QGroupBox("Export Diagnostics")
         self.diagnostics_group.setObjectName("export_diagnostics_panel")
         diagnostics_form = QFormLayout(self.diagnostics_group)
+        diagnostics_form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        diagnostics_form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        diagnostics_form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self.diagnostics_source_label = QLabel()
         self.diagnostics_system_label = QLabel()
         self.diagnostics_presets_label = QLabel()
@@ -229,6 +253,8 @@ class ExportWizard(QDialog):
             self.diagnostics_selected_label,
             self.diagnostics_command_label,
         ):
+            label.setWordWrap(True)
+            label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         diagnostics_form.addRow("Source Video", self.diagnostics_source_label)
         diagnostics_form.addRow("System", self.diagnostics_system_label)
@@ -245,8 +271,15 @@ class ExportWizard(QDialog):
         self.filename_edit.textChanged.connect(lambda *_: self._update_estimates())
         self._update_estimates()
 
-        layout.addLayout(form)
-        layout.addWidget(self.diagnostics_group)
+        content_layout.addLayout(form)
+        content_layout.addWidget(self.diagnostics_group)
+        content_layout.addStretch(1)
+        self.content_scroll = scrollable_content(content)
+        self.content_scroll.setObjectName("export_content_scroll")
+        self.content_scroll.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        layout.addWidget(self.content_scroll, 1)
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Ok
         )
@@ -256,6 +289,11 @@ class ExportWizard(QDialog):
         self.export_button.setObjectName("export_confirm_button")
         self._update_estimates()
         layout.addWidget(buttons)
+        set_responsive_window_size(
+            self,
+            minimum=QSize(460, 420),
+            preferred=QSize(720, 760),
+        )
 
     def configuration(self) -> ExportConfiguration:
         config = ExportConfiguration(

@@ -6,7 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QSettings, Qt, QThreadPool
+from PySide6.QtCore import QSettings, QSize, Qt, QThreadPool
 from PySide6.QtGui import QAction, QActionGroup, QCloseEvent, QKeySequence, QUndoStack
 from PySide6.QtWidgets import (
     QDialog,
@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QProgressDialog,
+    QSizePolicy,
     QSplitter,
     QToolBar,
     QVBoxLayout,
@@ -50,6 +51,7 @@ from automatedub_studio.edit.commands import (
 )
 from automatedub_studio.export.manager import ExportManager
 from automatedub_studio.inspector.segment_inspector import SegmentInspectorWidget
+from automatedub_studio.performance import EditorPerformanceDiagnostics
 from automatedub_studio.playback.playback_controller import PlaybackController
 from automatedub_studio.playback.video_player import VideoPlayerWidget
 from automatedub_studio.project.editable_project import EditableSegment
@@ -85,6 +87,11 @@ from automatedub_studio.ui.about_dialog import AboutDialog
 from automatedub_studio.ui.export_progress_window import ExportProgressWindow
 from automatedub_studio.ui.export_wizard import ExportWizard
 from automatedub_studio.ui.project_info_panel import ProjectInfoPanel
+from automatedub_studio.ui.responsive import (
+    restore_visible_geometry,
+    scrollable_content,
+    set_responsive_window_size,
+)
 
 WINDOW_TITLE = "AutomateDub Studio"
 _GEOMETRY_KEY = "main_window/geometry"
@@ -109,6 +116,7 @@ class MainWindow(QMainWindow):
         self._progress_dialog: QProgressDialog | None = None
         self._video_proxy_dialog: QProgressDialog | None = None
         self._video_proxy_job: VideoProxyJob | None = None
+        self._open_diagnostics: EditorPerformanceDiagnostics | None = None
         self._regen_completed = 0
         self._regen_total = 0
         self._regen_errors: list[str] = []
@@ -116,6 +124,11 @@ class MainWindow(QMainWindow):
         self._restoring_inspector_selection = False
 
         self.setWindowTitle(WINDOW_TITLE)
+        set_responsive_window_size(
+            self,
+            minimum=QSize(800, 600),
+            preferred=QSize(1280, 820),
+        )
         self._build_menu_bar()
         self._build_toolbar()
         self._build_status_bar()
@@ -384,6 +397,7 @@ class MainWindow(QMainWindow):
 
         self.timeline = TimelineWidget()
         video_container = QWidget()
+        video_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         video_layout = QVBoxLayout(video_container)
         video_layout.setContentsMargins(0, 0, 0, 0)
         video_layout.addWidget(self.video_player, 1)
@@ -393,6 +407,8 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self.timeline)
         splitter.setStretchFactor(0, 2)
         splitter.setStretchFactor(1, 1)
+        splitter.setChildrenCollapsible(False)
+        self.editor_splitter = splitter
 
         self.video_player.videoPositionChanged.connect(self.timeline.set_playhead_position)
         self.timeline.timelineSeekRequested.connect(self._on_timeline_seek_requested)
@@ -415,13 +431,13 @@ class MainWindow(QMainWindow):
 
     def _build_info_dock(self) -> None:
         self.info_panel = ProjectInfoPanel()
-        dock = QDockWidget("Project Info", self)
-        dock.setWidget(self.info_panel)
-        dock.setFeatures(
+        self.info_dock = QDockWidget("Project Info", self)
+        self.info_dock.setWidget(scrollable_content(self.info_panel))
+        self.info_dock.setFeatures(
             QDockWidget.DockWidgetFeature.DockWidgetMovable
             | QDockWidget.DockWidgetFeature.DockWidgetFloatable
         )
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.info_dock)
 
     def _build_inspector_dock(self) -> None:
         self.inspector = SegmentInspectorWidget()
@@ -437,13 +453,13 @@ class MainWindow(QMainWindow):
         self.inspector.clipSaveRequested.connect(self._on_clip_save_requested)
         self.inspector.clipRegenerateRequested.connect(self._regenerate_timeline_clip)
 
-        dock = QDockWidget("Segment Inspector", self)
-        dock.setWidget(self.inspector)
-        dock.setFeatures(
+        self.inspector_dock = QDockWidget("Segment Inspector", self)
+        self.inspector_dock.setWidget(scrollable_content(self.inspector))
+        self.inspector_dock.setFeatures(
             QDockWidget.DockWidgetFeature.DockWidgetMovable
             | QDockWidget.DockWidgetFeature.DockWidgetFloatable
         )
-        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, dock)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.inspector_dock)
 
     # ------------------------------------------------------------------
     # Signal handlers — timeline
@@ -1159,11 +1175,26 @@ class MainWindow(QMainWindow):
         self.open_project_path(Path(directory))
 
     def open_project_path(self, project_dir: Path) -> None:
+        self._open_diagnostics = EditorPerformanceDiagnostics(project_dir)
         try:
-            project = load_project(project_dir)
+            project = load_project(
+                project_dir,
+                on_stage=lambda stage, details: self._open_diagnostics.mark(
+                    stage, **details
+                )
+                if self._open_diagnostics is not None
+                else None,
+            )
         except ProjectLoadError as exc:
             QMessageBox.critical(self, "Failed to Open Project", str(exc))
             return
+        self._open_diagnostics.mark(
+            "project_loaded",
+            segments=project.segment_count,
+            tts_files=project.tts_file_count,
+            source_video=str(project.source_video_path) if project.source_video_path else None,
+            editor_video=str(project.preview_video_path) if project.preview_video_path else None,
+        )
         if project.video_candidates:
             names = [p.name for p in project.video_candidates]
             choice, ok = QInputDialog.getItem(
@@ -1185,9 +1216,13 @@ class MainWindow(QMainWindow):
 
     def _prepare_video_and_apply_project(self, project: Project) -> None:
         if project.source_video_path is None:
+            if self._open_diagnostics is not None:
+                self._open_diagnostics.mark("video_preparation_skipped")
             self._apply_loaded_project(project)
             return
         if self._project_video_metadata_is_current(project):
+            if self._open_diagnostics is not None:
+                self._open_diagnostics.mark("video_preparation_reused")
             self._apply_loaded_project(project)
             return
 
@@ -1197,6 +1232,8 @@ class MainWindow(QMainWindow):
         self._video_proxy_dialog.setCancelButton(None)
         self._video_proxy_dialog.setWindowModality(Qt.WindowModality.WindowModal)
         self._video_proxy_job = VideoProxyJob(project, self._tool_config)
+        if self._open_diagnostics is not None:
+            self._open_diagnostics.mark("video_proxy_started")
         self._video_proxy_job.signals.progressChanged.connect(self._on_video_proxy_progress)
         self._video_proxy_job.signals.finished.connect(self._on_video_proxy_finished)
         self._video_proxy_job.signals.errorOccurred.connect(self._on_video_proxy_error)
@@ -1229,6 +1266,8 @@ class MainWindow(QMainWindow):
             self._video_proxy_dialog.close()
             self._video_proxy_dialog = None
         self._video_proxy_job = None
+        if self._open_diagnostics is not None:
+            self._open_diagnostics.mark("video_proxy_finished")
         self._apply_loaded_project(project)
 
     def _on_video_proxy_error(self, message: str) -> None:
@@ -1248,18 +1287,46 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{WINDOW_TITLE} - {project.project_path.name}")
         self.info_panel.set_project(project)
         self.video_player.load_video(project.preview_video_path)
-        self.timeline.load_segments(
-            project.segments,
-            audio_path=project.extracted_audio_path,
-            tts_directory=project.tts_directory,
-        )
-        if edited_timeline := load_timeline_edits(project.project_path):
-            self.timeline.load_timeline(edited_timeline)
+        if self._open_diagnostics is not None:
+            self._open_diagnostics.mark("video_player_source_set")
+        edited_timeline = load_timeline_edits(project.project_path)
+        if edited_timeline is not None:
+            self.timeline.load_timeline(
+                edited_timeline,
+                segments=project.segments,
+                audio_path=project.extracted_audio_path,
+                tts_directory=project.tts_directory,
+            )
+            if self._open_diagnostics is not None:
+                self._open_diagnostics.mark(
+                    "edited_timeline_loaded",
+                    timeline_clips=len(self.timeline.timeline_clips),
+                    scene_items=len(self.timeline._scene.items()),
+                )
+        else:
+            self.timeline.load_segments(
+                project.segments,
+                audio_path=project.extracted_audio_path,
+                tts_directory=project.tts_directory,
+            )
+            if self._open_diagnostics is not None:
+                self._open_diagnostics.mark(
+                    "timeline_initial_scene_built",
+                    timeline_clips=len(self.timeline.timeline_clips),
+                    scene_items=len(self.timeline._scene.items()),
+                )
         self._seed_timeline_clips_from_import_editables()
         self.inspector.set_timeline_clip(None)
         self.statusBar().showMessage(self._status_message(project))
         self._update_regenerate_actions()
         self._refresh_playback_sources()
+        if self._open_diagnostics is not None:
+            self._open_diagnostics.mark("playback_initialized")
+            self._open_diagnostics.write(
+                editor_ready=True,
+                playback=self.playback_controller.performance_snapshot(),
+            )
+            self._open_diagnostics = None
 
     def _seed_timeline_clips_from_import_editables(self) -> None:
         """Seed TimelineClip state from legacy import/export metadata."""
@@ -1426,8 +1493,7 @@ class MainWindow(QMainWindow):
 
     def _restore_geometry(self) -> None:
         geometry = self._settings.value(_GEOMETRY_KEY)
-        if geometry is not None:
-            self.restoreGeometry(geometry)
+        restore_visible_geometry(self, geometry)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self._settings.setValue(_GEOMETRY_KEY, self.saveGeometry())

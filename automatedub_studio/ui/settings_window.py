@@ -6,7 +6,7 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import QSize, Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -29,6 +29,7 @@ from automatedub_studio.providers.manager import ProviderManager
 from automatedub_studio.providers.registry import ProviderConfigField, ProviderDescriptor
 from automatedub_studio.runtime.whisper import WhisperRuntimeError, resolve_whisper_executable
 from automatedub_studio.settings.manager import SettingsManager
+from automatedub_studio.ui.responsive import scrollable_content, set_responsive_window_size
 
 
 class SettingsWindow(QDialog):
@@ -52,13 +53,16 @@ class SettingsWindow(QDialog):
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
 
-        self.tabs.addTab(self._build_general_tab(), "General")
-        self.tabs.addTab(self._build_ai_providers_tab(), "AI Providers")
-        self.tabs.addTab(self._build_voices_tab(), "Voices")
-        self.tabs.addTab(self._build_models_tab(), "Models")
-        self.tabs.addTab(self._build_cache_tab(), "Cache")
-        self.tabs.addTab(self._build_logs_tab(), "Logs")
-        self.tabs.addTab(self._build_advanced_tab(), "Advanced")
+        for content, title in (
+            (self._build_general_tab(), "General"),
+            (self._build_ai_providers_tab(), "AI Providers"),
+            (self._build_voices_tab(), "Voices"),
+            (self._build_models_tab(), "Models"),
+            (self._build_cache_tab(), "Cache"),
+            (self._build_logs_tab(), "Logs"),
+            (self._build_advanced_tab(), "Advanced"),
+        ):
+            self.tabs.addTab(scrollable_content(content), title)
 
         button_row = QHBoxLayout()
         button_row.addStretch(1)
@@ -70,6 +74,12 @@ class SettingsWindow(QDialog):
         close_button.clicked.connect(self.accept)
         button_row.addWidget(close_button)
         layout.addLayout(button_row)
+
+        set_responsive_window_size(
+            self,
+            minimum=QSize(480, 380),
+            preferred=QSize(720, 620),
+        )
 
         self._refresh_provider_config()
         self._refresh_runtime_status()

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import pytest
 from conftest import make_valid_project
-from PySide6.QtCore import QSettings
+from PySide6.QtCore import QCoreApplication, QSettings, QSize
 from PySide6.QtWidgets import QMenu
 
 from automatedub_studio.ui import main_window as main_window_module
@@ -93,6 +94,48 @@ def test_geometry_persists_across_instances(qapp, tmp_path):
 
     assert abs(window2.size().width() - 800) <= 5
     assert abs(window2.size().height() - 600) <= 5
+
+
+def test_main_window_has_practical_minimum_size_and_resizable_editor(qapp):
+    window = MainWindow(settings=_memory_settings())
+
+    assert window.minimumSize() == QSize(800, 600)
+    assert window.maximumWidth() > window.minimumWidth()
+    assert window.maximumHeight() > window.minimumHeight()
+    window.resize(1280, 720)
+    assert window.size() == QSize(1280, 720)
+    assert window.centralWidget().childrenCollapsible() is False
+
+
+@pytest.mark.parametrize("size", [QSize(1280, 720), QSize(1366, 768), QSize(1920, 1080)])
+def test_editor_regions_resize_with_main_window(qapp, size):
+    window = MainWindow(settings=_memory_settings())
+    window.show()
+    QCoreApplication.processEvents()
+    initial_video_width = window.video_player.width()
+
+    window.resize(size)
+    QCoreApplication.processEvents()
+    large_video_width = window.video_player.width()
+    assert large_video_width > initial_video_width
+    assert window.timeline.width() == window.editor_splitter.width()
+    assert window.video_player.height() > 0
+    assert window.timeline.height() >= window.timeline.minimumHeight()
+
+    window.resize(800, 600)
+    QCoreApplication.processEvents()
+    assert window.video_player.width() < large_video_width
+    assert window.timeline.width() == window.editor_splitter.width()
+    assert window.timeline.height() >= window.timeline.minimumHeight()
+
+
+def test_editor_side_panels_scroll_instead_of_forcing_large_docks(qapp):
+    from PySide6.QtWidgets import QScrollArea
+
+    window = MainWindow(settings=_memory_settings())
+
+    assert isinstance(window.info_dock.widget(), QScrollArea)
+    assert isinstance(window.inspector_dock.widget(), QScrollArea)
 
 
 def test_open_project_path_updates_window_title(qapp, tmp_path):

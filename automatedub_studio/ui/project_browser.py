@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import QSize
 from PySide6.QtWidgets import QLabel, QMainWindow, QPushButton, QVBoxLayout, QWidget
 
 from automatedub_studio.project.browser import ProjectBrowser
+from automatedub_studio.ui.responsive import set_responsive_window_size
 
 
 class ProjectBrowserWindow(QMainWindow):
@@ -20,6 +22,11 @@ class ProjectBrowserWindow(QMainWindow):
         self.project_path = Path(project_path)
         self.browser = browser if browser is not None else ProjectBrowser()
         self.setWindowTitle("Project Browser")
+        set_responsive_window_size(
+            self,
+            minimum=QSize(420, 320),
+            preferred=QSize(560, 460),
+        )
 
         central = QWidget(self)
         layout = QVBoxLayout(central)

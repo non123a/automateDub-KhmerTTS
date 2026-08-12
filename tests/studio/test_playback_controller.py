@@ -323,7 +323,8 @@ def test_original_segment_23_seeks_into_pipeline_audio_at_source_offset(qapp, tm
     assert fake_player.position() == 52320
 
 
-def test_original_audio_playback_trace_records_qmediaplayer_seek(qapp, tmp_path):
+def test_original_audio_playback_trace_records_qmediaplayer_seek(qapp, tmp_path, monkeypatch):
+    monkeypatch.setenv("AUTOMATEDUB_ORIGINAL_AUDIO_TRACE", "1")
     audio_path = tmp_path / "pipeline" / "audio.wav"
     audio_path.parent.mkdir()
     make_wav(audio_path, seconds=1.0)

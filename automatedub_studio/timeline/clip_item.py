@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QRectF, Qt
@@ -75,6 +76,7 @@ class ClipItem(QGraphicsRectItem):
         wav_start_seconds: float = 0.0,
         wav_end_seconds: float | None = None,
         waveform_bucket_count: int = DEFAULT_BUCKET_COUNT,
+        waveform_ready_callback: Callable[[], None] | None = None,
         timeline_clip: TimelineClip | None = None,
     ):
         super().__init__(x, y, width, height)
@@ -90,6 +92,7 @@ class ClipItem(QGraphicsRectItem):
         self._wav_start_seconds = wav_start_seconds
         self._wav_end_seconds = wav_end_seconds
         self._waveform_bucket_count = waveform_bucket_count
+        self._waveform_ready_callback = waveform_ready_callback
 
         is_background = bool(timeline_clip and timeline_clip.is_background)
         is_reference = bool(
@@ -146,14 +149,23 @@ class ClipItem(QGraphicsRectItem):
         if self._wav_path is None or self._waveform_cache is None:
             self._paint_trim_handles(painter)
             return
-        try:
-            peaks = self._waveform_cache.get_or_compute(
-                self._wav_path,
-                bucket_count=self._waveform_bucket_count,
-                start_seconds=self._wav_start_seconds,
-                end_seconds=self._wav_end_seconds,
-            )
-        except WaveformError:
+        peaks = self._waveform_cache.get(
+            self._wav_path,
+            bucket_count=self._waveform_bucket_count,
+            start_seconds=self._wav_start_seconds,
+            end_seconds=self._wav_end_seconds,
+        )
+        if peaks is None:
+            try:
+                self._waveform_cache.request_async(
+                    self._wav_path,
+                    bucket_count=self._waveform_bucket_count,
+                    start_seconds=self._wav_start_seconds,
+                    end_seconds=self._wav_end_seconds,
+                    callback=lambda _peaks: self._notify_waveform_ready(),
+                )
+            except WaveformError:
+                pass
             self._paint_trim_handles(painter)
             return
         rect = self.rect().adjusted(
@@ -161,6 +173,10 @@ class ClipItem(QGraphicsRectItem):
         )
         paint_waveform(painter, rect, peaks)
         self._paint_trim_handles(painter)
+
+    def _notify_waveform_ready(self) -> None:
+        if self._waveform_ready_callback is not None:
+            self._waveform_ready_callback()
 
     def trim_handle_at(self, pos) -> str | None:
         """Return 'left'/'right' when a local item position is over a trim handle."""

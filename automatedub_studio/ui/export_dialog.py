@@ -5,17 +5,20 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QLabel,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
+    QWidget,
 )
 
 from automatedub_studio.backend.export_service import ExportResult, ExportStage
+from automatedub_studio.ui.responsive import scrollable_content, set_responsive_window_size
 
 _STAGES = [
     ExportStage.PREPARING,
@@ -33,7 +36,11 @@ class ExportProgressDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Exporting…")
-        self.setMinimumWidth(420)
+        set_responsive_window_size(
+            self,
+            minimum=QSize(420, 220),
+            preferred=QSize(520, 280),
+        )
         self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowCloseButtonHint)
 
         self._start_time: float = time.monotonic()
@@ -41,20 +48,29 @@ class ExportProgressDialog(QDialog):
         self._finished = False
 
         layout = QVBoxLayout(self)
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
 
         self._stage_label = QLabel("Preparing…")
-        layout.addWidget(self._stage_label)
+        self._stage_label.setWordWrap(True)
+        self._stage_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        content_layout.addWidget(self._stage_label)
 
         self._progress_bar = QProgressBar()
         self._progress_bar.setRange(0, len(_STAGES) - 1)
         self._progress_bar.setValue(0)
-        layout.addWidget(self._progress_bar)
+        self._progress_bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        content_layout.addWidget(self._progress_bar)
 
         time_row = QHBoxLayout()
         self._elapsed_label = QLabel("Elapsed: 0s")
         time_row.addWidget(self._elapsed_label)
         time_row.addStretch()
-        layout.addLayout(time_row)
+        content_layout.addLayout(time_row)
+        content_layout.addStretch(1)
+        self.content_scroll = scrollable_content(content)
+        self.content_scroll.setObjectName("legacy_export_progress_content_scroll")
+        layout.addWidget(self.content_scroll, 1)
 
         self._cancel_button = QPushButton("Cancel")
         self._cancel_button.clicked.connect(self._on_cancel)

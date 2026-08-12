@@ -21,7 +21,7 @@ from automatedub_studio.timeline.timeline_widget import (
     SCENE_MARGIN_H,
     TimelineWidget,
 )
-from automatedub_studio.timeline.waveform_cache import WaveformError, WaveformPeaks
+from automatedub_studio.timeline.waveform_cache import WaveformError
 
 
 def _render_clip(clip: ClipItem) -> None:
@@ -412,20 +412,22 @@ def test_paint_skips_waveform_when_no_cache(qapp):
     _render_clip(clip)  # should not raise
 
 
-def test_paint_calls_get_or_compute_with_wav_path(qapp):
+def test_paint_queues_waveform_without_sync_compute(qapp):
     cache = MagicMock()
-    cache.get_or_compute.return_value = WaveformPeaks(peaks=())
+    cache.get.return_value = None
     clip = _make_clip(qapp, wav_path="fake.wav", waveform_cache=cache)
 
     _render_clip(clip)
 
-    cache.get_or_compute.assert_called_once()
-    assert cache.get_or_compute.call_args.args[0] == "fake.wav"
+    cache.get.assert_called_once()
+    cache.request_async.assert_called_once()
+    cache.get_or_compute.assert_not_called()
 
 
 def test_paint_swallows_waveform_error(qapp):
     cache = MagicMock()
-    cache.get_or_compute.side_effect = WaveformError("bad wav")
+    cache.get.return_value = None
+    cache.request_async.side_effect = WaveformError("bad wav")
     clip = _make_clip(qapp, wav_path="fake.wav", waveform_cache=cache)
 
     _render_clip(clip)  # should not raise

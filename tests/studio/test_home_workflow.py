@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from PySide6.QtWidgets import QScrollArea
+
 from automatedub_studio.app import create_initial_window
 from automatedub_studio.pipeline.manager import PipelineManager
 from automatedub_studio.project.manager import NewProjectRequest
@@ -83,3 +85,5 @@ def test_processing_window_shows_placeholder_stages(qapp, tmp_path):
         "Generating Khmer Speech",
         "Timeline Generation",
     ]
+    assert isinstance(window.content_scroll, QScrollArea)
+    assert window.cancel_button.parentWidget() is not window.content_scroll.widget()

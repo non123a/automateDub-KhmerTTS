@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from bisect import bisect_right
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -368,6 +369,61 @@ class Timeline:
             markers=[TimelineMarker.from_dict(item) for item in data.get("markers", [])],
         )
 
+
+class AudioClipIntervalIndex:
+    """Immutable interval lookup for timeline audio clips.
+
+    The index stores clips ordered by start time.  A cursor advances in O(k)
+    for normal forward playback; seeks use a binary search and examine only
+    earlier clips that can still overlap the requested point.
+    """
+
+    def __init__(self, clips: list[TimelineClip]) -> None:
+        self._clips = tuple(sorted(clips, key=lambda clip: (clip.start_time, clip.id)))
+        self._starts = tuple(clip.start_time for clip in self._clips)
+        self._cursor_position: float | None = None
+        self._cursor_active: dict[str, TimelineClip] = {}
+        self._cursor_next = 0
+
+    def active_at(self, position_ms: int) -> list[TimelineClip]:
+        position = position_ms / 1000.0
+        if self._cursor_position is not None and position >= self._cursor_position:
+            while self._cursor_next < len(self._clips):
+                clip = self._clips[self._cursor_next]
+                if clip.start_time > position:
+                    break
+                if clip.end_time > position:
+                    self._cursor_active[clip.id] = clip
+                self._cursor_next += 1
+            self._cursor_active = {
+                clip_id: clip
+                for clip_id, clip in self._cursor_active.items()
+                if clip.end_time > position
+            }
+        else:
+            upper = bisect_right(self._starts, position)
+            self._cursor_active = {
+                clip.id: clip for clip in self._clips[:upper] if clip.end_time > position
+            }
+            self._cursor_next = upper
+        self._cursor_position = position
+        return sorted(
+            self._cursor_active.values(),
+            key=lambda clip: (clip.start_time, clip.track_id, clip.id),
+        )
+
+    @property
+    def maximum_overlap(self) -> int:
+        events = sorted(
+            [(clip.start_time, 1) for clip in self._clips]
+            + [(clip.end_time, -1) for clip in self._clips],
+            key=lambda event: (event[0], event[1]),
+        )
+        active = maximum = 0
+        for _position, delta in events:
+            active += delta
+            maximum = max(maximum, active)
+        return maximum
 
 def active_clips(
     clips: list[TimelineClip], track_id: str, position_ms: int

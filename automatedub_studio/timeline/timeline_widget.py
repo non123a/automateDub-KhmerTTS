@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QGraphicsScene,
     QGraphicsTextItem,
     QGraphicsView,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -665,9 +666,12 @@ class TimelineWidget(QWidget):
     timelineSeekRequested = Signal(int)
     timelineChanged = Signal()
     referenceClipActionBlocked = Signal()
+    waveformReady = Signal()
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setMinimumHeight(180)
         self._zoom = 1.0
         self._duration_ms = 0
         self._playhead_ms = 0
@@ -685,6 +689,7 @@ class TimelineWidget(QWidget):
 
         self._scene = QGraphicsScene(self)
         self._scene.selectionChanged.connect(self._on_selection_changed)
+        self.waveformReady.connect(self._scene.update)
 
         self._ruler = TimelineRulerWidget(
             pixels_per_second=BASE_PIXELS_PER_SECOND,
@@ -693,6 +698,7 @@ class TimelineWidget(QWidget):
         self._ruler.seekRequested.connect(self._on_seek_requested)
 
         self._view = _TimelineView()
+        self._view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._view.setScene(self._scene)
         self._view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self._view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -747,8 +753,26 @@ class TimelineWidget(QWidget):
         self._rebuild_scene(segments)
         self._ruler.set_duration(self._duration_ms)
 
-    def load_timeline(self, timeline: Timeline) -> None:
+    def load_timeline(
+        self,
+        timeline: Timeline,
+        *,
+        segments: list[Segment] | None = None,
+        audio_path: Path | None = None,
+        tts_directory: Path | None = None,
+    ) -> None:
         self._migrate_loaded_timeline(timeline)
+        if segments is not None:
+            self._segments = segments
+        if audio_path is not None:
+            self._audio_path = audio_path
+        if tts_directory is not None:
+            self._tts_directory = tts_directory
+        if segments is not None:
+            self._duration_ms = max(
+                self._duration_ms,
+                int(max((segment.end for segment in segments), default=0.0) * 1000),
+            )
         self._timeline = timeline
         self._timeline_clips = self._timeline.all_clips()
         self._sync_view_track_order()
@@ -1505,6 +1529,7 @@ class TimelineWidget(QWidget):
                 wav_start_seconds=wav_start,
                 wav_end_seconds=wav_end,
                 timeline_clip=timeline_clip,
+                waveform_ready_callback=self._on_waveform_ready,
             )
             self._scene.addItem(clip)
             clip.set_locked(
@@ -1516,6 +1541,11 @@ class TimelineWidget(QWidget):
             if segment is not None:
                 self._clips_by_segment.setdefault(segment.id, []).append(clip)
             self._clips_by_clip_id[timeline_clip.id] = clip
+
+    def _on_waveform_ready(self) -> None:
+        # This signal is safe to emit from the cache worker and delivers the
+        # repaint to the widget's GUI thread.
+        self.waveformReady.emit()
 
     def _draw_markers(self) -> None:
         for marker in self._timeline.markers:

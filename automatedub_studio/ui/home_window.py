@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QUrl, Signal
+from PySide6.QtCore import QSize, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -40,6 +40,7 @@ from automatedub_studio.ui.new_project_wizard import NewProjectWizard
 from automatedub_studio.ui.notifications import NotificationCenter
 from automatedub_studio.ui.processing_window import ProcessingWindow
 from automatedub_studio.ui.project_browser import ProjectBrowserWindow
+from automatedub_studio.ui.responsive import set_responsive_window_size
 from automatedub_studio.ui.settings_window import SettingsWindow
 
 
@@ -77,6 +78,11 @@ class HomeWindow(QMainWindow):
         self.project_browser_windows: list[ProjectBrowserWindow] = []
 
         self.setWindowTitle("AutomateDub Studio")
+        set_responsive_window_size(
+            self,
+            minimum=QSize(520, 420),
+            preferred=QSize(780, 620),
+        )
         self.setAcceptDrops(True)
         central = QWidget(self)
         layout = QVBoxLayout(central)

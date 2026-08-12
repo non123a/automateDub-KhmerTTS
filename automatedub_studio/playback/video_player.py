@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QSlider,
     QStackedWidget,
     QVBoxLayout,
@@ -63,6 +64,7 @@ class VideoPlayerWidget(QWidget):
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self._slider_pressed = False
         self._has_video = False
@@ -73,12 +75,16 @@ class VideoPlayerWidget(QWidget):
         self._force_visual_only_audio()
 
         self._video_widget = QVideoWidget()
+        self._video_widget.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         self._media_player.setVideoOutput(self._video_widget)
 
         self._message_label = QLabel(NO_VIDEO_MESSAGE)
         self._message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self._stack = QStackedWidget()
+        self._stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._stack.addWidget(self._video_widget)
         self._stack.addWidget(self._message_label)
         self._stack.setCurrentWidget(self._message_label)
@@ -90,6 +96,7 @@ class VideoPlayerWidget(QWidget):
         self._seek_slider = QSlider(Qt.Orientation.Horizontal)
         self._seek_slider.setRange(0, 0)
         self._time_label = QLabel(_DEFAULT_TIME_LABEL)
+        self._time_label.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
 
         self._build_layout()
         self._wire_signals()
@@ -104,6 +111,7 @@ class VideoPlayerWidget(QWidget):
         controls_layout.addWidget(self._time_label)
 
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self._stack, 1)
         layout.addLayout(controls_layout)
 

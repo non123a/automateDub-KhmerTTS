@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtWidgets import (
-    QHBoxLayout,
+    QGridLayout,
     QLabel,
     QMainWindow,
     QProgressBar,
@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from automatedub_studio.pipeline.jobs import STAGE_TTS_GENERATION
 from automatedub_studio.pipeline.manager import PipelineEvent, PipelineManager, PipelineResult
+from automatedub_studio.ui.responsive import scrollable_content, set_responsive_window_size
 
 
 class ProcessingWindow(QMainWindow):
@@ -34,42 +35,48 @@ class ProcessingWindow(QMainWindow):
         self.setWindowTitle("Processing Project")
         central = QWidget(self)
         layout = QVBoxLayout(central)
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
 
         title = QLabel("Processing Project")
         title.setObjectName("processing_title")
         title.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(title)
+        content_layout.addWidget(title)
 
         self.status_label = QLabel("Waiting to start...")
         self.status_label.setObjectName("processing_status")
         self.status_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(self.status_label)
+        content_layout.addWidget(self.status_label)
 
         self.progress = QProgressBar()
         self.progress.setObjectName("processing_progress")
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
-        layout.addWidget(self.progress)
+        content_layout.addWidget(self.progress)
 
         self.stage_container = QWidget()
         self.stage_layout = QVBoxLayout(self.stage_container)
-        layout.addWidget(self.stage_container)
+        content_layout.addWidget(self.stage_container)
 
         self.error_label = QLabel("")
         self.error_label.setObjectName("processing_error")
         self.error_label.setWordWrap(True)
         self.error_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(self.error_label)
+        content_layout.addWidget(self.error_label)
+        content_layout.addStretch(1)
+        self.content_scroll = scrollable_content(content)
+        self.content_scroll.setObjectName("processing_content_scroll")
+        layout.addWidget(self.content_scroll, 1)
 
         button_row = QWidget()
-        button_layout = QHBoxLayout(button_row)
+        button_layout = QGridLayout(button_row)
         button_layout.setContentsMargins(0, 0, 0, 0)
 
         self.retry_button = QPushButton("Retry")
         self.retry_button.setObjectName("processing_retry_button")
         self.retry_button.setEnabled(False)
         self.retry_button.clicked.connect(self.pipeline_manager.retry)
-        button_layout.addWidget(self.retry_button)
+        button_layout.addWidget(self.retry_button, 0, 0)
 
         self.skip_tts_button = QPushButton("Skip TTS & Open Editor")
         self.skip_tts_button.setObjectName("processing_skip_tts_button")
@@ -77,29 +84,33 @@ class ProcessingWindow(QMainWindow):
         self.skip_tts_button.clicked.connect(
             self.pipeline_manager.skip_tts_and_open_editor
         )
-        button_layout.addWidget(self.skip_tts_button)
+        button_layout.addWidget(self.skip_tts_button, 0, 1)
 
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.setObjectName("processing_cancel_button")
         self.cancel_button.clicked.connect(self.pipeline_manager.cancel)
-        button_layout.addWidget(self.cancel_button)
+        button_layout.addWidget(self.cancel_button, 1, 0)
 
         self.open_editor_button = QPushButton("Open Editor")
         self.open_editor_button.setObjectName("processing_open_editor_button")
         self.open_editor_button.setEnabled(False)
         self.open_editor_button.clicked.connect(self._open_editor)
-        button_layout.addWidget(self.open_editor_button)
+        button_layout.addWidget(self.open_editor_button, 1, 1)
 
         self.close_button = QPushButton("Close")
         self.close_button.setObjectName("processing_close_button")
         self.close_button.setEnabled(False)
         self.close_button.clicked.connect(self.close)
-        button_layout.addWidget(self.close_button)
+        button_layout.addWidget(self.close_button, 1, 2)
 
         layout.addWidget(button_row)
-        layout.addStretch(1)
 
         self.setCentralWidget(central)
+        set_responsive_window_size(
+            self,
+            minimum=QSize(480, 360),
+            preferred=QSize(700, 620),
+        )
         self._initialize_stages()
         self._connect_manager()
 

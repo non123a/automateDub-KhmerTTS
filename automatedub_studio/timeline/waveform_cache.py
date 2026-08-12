@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import struct
 import wave
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -123,6 +125,8 @@ class WaveformCache:
 
     def __init__(self) -> None:
         self._store: dict[tuple, WaveformPeaks] = {}
+        self._pending: set[tuple] = set()
+        self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="waveform")
 
     def get(
         self,
@@ -147,6 +151,41 @@ class WaveformCache:
         peaks = compute_waveform_peaks(wav_path, bucket_count, start_seconds, end_seconds)
         self._store[key] = peaks
         return peaks
+
+    def request_async(
+        self,
+        wav_path: Path,
+        bucket_count: int = DEFAULT_BUCKET_COUNT,
+        start_seconds: float = 0.0,
+        end_seconds: float | None = None,
+        callback: Callable[[WaveformPeaks | None], None] | None = None,
+    ) -> bool:
+        """Compute a missing waveform off the GUI thread.
+
+        Returns ``True`` when work was queued and ``False`` when a cached or
+        already-pending request made queuing unnecessary.
+        """
+        key = self._key(wav_path, bucket_count, start_seconds, end_seconds)
+        if key in self._store or key in self._pending:
+            return False
+        self._pending.add(key)
+
+        def work() -> None:
+            result: WaveformPeaks | None = None
+            try:
+                result = compute_waveform_peaks(
+                    wav_path, bucket_count, start_seconds, end_seconds
+                )
+                self._store[key] = result
+            except WaveformError:
+                pass
+            finally:
+                self._pending.discard(key)
+                if callback is not None:
+                    callback(result)
+
+        self._executor.submit(work)
+        return True
 
     def invalidate(self, wav_path: Path) -> None:
         target = str(Path(wav_path))

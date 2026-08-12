@@ -7,10 +7,12 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QDoubleSpinBox,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QSizePolicy,
     QSlider,
     QSpinBox,
     QStackedWidget,
@@ -112,6 +114,9 @@ class SegmentInspectorWidget(QWidget):
         self._original_text_label.setAcceptRichText(False)
         self._original_text_label.setReadOnly(True)
         self._original_text_label.setMinimumHeight(70)
+        self._original_text_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         self._original_text_label.setTextInteractionFlags(
             Qt.TextInteractionFlag.TextSelectableByMouse
             | Qt.TextInteractionFlag.TextSelectableByKeyboard
@@ -126,6 +131,9 @@ class SegmentInspectorWidget(QWidget):
         self._khmer_text_edit = QTextEdit()
         self._khmer_text_edit.setAcceptRichText(False)
         self._khmer_text_edit.setMinimumHeight(90)
+        self._khmer_text_edit.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         self._translation_helper_label = QLabel(
             "Only the Khmer Translation is used when generating speech."
         )
@@ -204,23 +212,21 @@ class SegmentInspectorWidget(QWidget):
         form.addRow("Locked:", self._locked_check)
 
         layout.addLayout(form)
-        layout.addStretch()
-
         button_group = QGroupBox("Playback")
-        button_layout = QHBoxLayout(button_group)
+        button_layout = QGridLayout(button_group)
         self._play_original_button = QPushButton("Play Original")
         self._play_original_button.setEnabled(False)
         self._play_khmer_button = QPushButton("Play Khmer")
         self._play_khmer_button.setEnabled(False)
         self._compare_button = QPushButton("Compare")
         self._compare_button.setEnabled(False)
-        button_layout.addWidget(self._play_original_button)
-        button_layout.addWidget(self._play_khmer_button)
-        button_layout.addWidget(self._compare_button)
+        button_layout.addWidget(self._play_original_button, 0, 0)
+        button_layout.addWidget(self._play_khmer_button, 0, 1)
+        button_layout.addWidget(self._compare_button, 1, 0, 1, 2)
         layout.addWidget(button_group)
 
         actions_group = QGroupBox("Actions")
-        actions_layout = QHBoxLayout(actions_group)
+        actions_layout = QGridLayout(actions_group)
         self._save_translation_button = QPushButton("Save")
         self._save_translation_button.setEnabled(False)
         self._save_translation_button.clicked.connect(self.save_translation)
@@ -233,11 +239,11 @@ class SegmentInspectorWidget(QWidget):
         self._duplicate_button.setEnabled(False)
         self._delete_button = QPushButton("Delete Clip")
         self._delete_button.setEnabled(False)
-        actions_layout.addWidget(self._save_translation_button)
-        actions_layout.addWidget(self._regenerate_button)
-        actions_layout.addWidget(self._revert_button)
-        actions_layout.addWidget(self._duplicate_button)
-        actions_layout.addWidget(self._delete_button)
+        actions_layout.addWidget(self._save_translation_button, 0, 0)
+        actions_layout.addWidget(self._regenerate_button, 0, 1)
+        actions_layout.addWidget(self._revert_button, 1, 0)
+        actions_layout.addWidget(self._duplicate_button, 1, 1)
+        actions_layout.addWidget(self._delete_button, 2, 0, 1, 2)
         layout.addWidget(actions_group)
 
         self._connect_controls()

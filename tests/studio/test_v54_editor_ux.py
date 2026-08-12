@@ -82,12 +82,12 @@ def test_timeline_search_and_jump(qapp, tmp_path):
     assert widget.playhead_ms == 0
 
 
-def test_playback_rate_updates_video_and_audio_players(qapp):
+def test_playback_rate_updates_video_and_pooled_audio_players(qapp):
     controller = PlaybackController(VideoPlayerWidget())
     controller.set_playback_rate(1.5)
 
     assert controller._video_player.playback_rate == pytest.approx(1.5)
-    assert controller._original_audio_player.playbackRate() == pytest.approx(1.5)
+    assert controller._original_audio_player is None
     assert controller._khmer_audio_player.playbackRate() == pytest.approx(1.5)
 
 

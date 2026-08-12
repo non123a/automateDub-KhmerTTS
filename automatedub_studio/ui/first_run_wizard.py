@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import QSize
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from automatedub_studio.providers.manager import ProviderManager
 from automatedub_studio.settings.manager import SettingsManager
+from automatedub_studio.ui.responsive import set_responsive_window_size
 
 
 class ProjectFolderPage(QWizardPage):
@@ -69,6 +71,7 @@ class ProviderSetupPage(QWizardPage):
         layout.addRow("TTS Provider", self.tts_combo)
 
         self.status_label = QLabel("Connectivity has not been tested.")
+        self.status_label.setWordWrap(True)
         layout.addRow("Status", self.status_label)
         self.test_button = QPushButton("Test Connectivity")
         self.test_button.clicked.connect(self._test_connectivity)
@@ -100,6 +103,11 @@ class FirstRunWizard(QWizard):
         self.provider_page = ProviderSetupPage(settings_manager, self)
         self.addPage(self.project_folder_page)
         self.addPage(self.provider_page)
+        set_responsive_window_size(
+            self,
+            minimum=QSize(500, 340),
+            preferred=QSize(680, 480),
+        )
 
     def accept(self) -> None:
         folder = self.project_folder_page.folder_edit.text().strip()

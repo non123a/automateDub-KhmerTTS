@@ -10,6 +10,7 @@ does) rather than re-implementing JSON validation here.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 
 from automatedub.vertical_slice import mix
@@ -190,23 +191,40 @@ def save_video_selection(project_dir: Path, video_path: Path) -> None:
     )
 
 
-def load_project(project_dir: Path) -> Project:
+def load_project(
+    project_dir: Path,
+    on_stage: Callable[[str, dict[str, object]], None] | None = None,
+) -> Project:
+    def mark(stage: str, **details: object) -> None:
+        if on_stage is not None:
+            on_stage(stage, details)
+
     project_dir = Path(project_dir)
     validate_project_directory(project_dir)
+    mark("project_artifacts_validated")
 
     audio_path = _project_artifact_path(project_dir, AUDIO_FILENAME)
     translation_path = _project_artifact_path(project_dir, TRANSLATION_FILENAME)
     tts_directory = tts_output_dir_path(project_dir)
+    mark("media_paths_resolved", original_audio=str(audio_path))
 
     segments = load_segments(translation_path)
+    mark("translation_timeline_parsed", segments=len(segments))
     from automatedub_studio.project.edits import apply_edits
 
     apply_edits(segments, project_dir)
+    mark("legacy_edits_applied")
     tts_file_count = count_tts_files(tts_directory)
+    mark("tts_file_discovery", tts_files=tts_file_count)
 
     metadata_video_path = load_project_metadata_video(project_dir)
     editor_video_path = load_project_metadata_editor_video(project_dir)
     source_codec, editor_codec = load_project_video_codecs(project_dir)
+    mark(
+        "project_metadata_loaded",
+        source_codec=source_codec,
+        editor_codec=editor_codec,
+    )
     if metadata_video_path is not None:
         video_path = metadata_video_path
         video_candidates = []
@@ -225,6 +243,7 @@ def load_project(project_dir: Path) -> Project:
         else:
             video_path = None
             video_candidates = candidates
+    mark("source_video_resolved", candidates=len(video_candidates))
 
     mixed_audio_path = mixed_audio_output_path(project_dir)
     if not mixed_audio_path.is_file():
@@ -232,8 +251,9 @@ def load_project(project_dir: Path) -> Project:
     tts_combined_path = tts_combined_output_path(project_dir)
     if not tts_combined_path.is_file():
         tts_combined_path = None
+    mark("optional_audio_assets_resolved")
 
-    return Project(
+    project = Project(
         project_path=project_dir,
         audio_path=audio_path,
         translation_path=translation_path,
@@ -253,3 +273,5 @@ def load_project(project_dir: Path) -> Project:
         tts_file_count=tts_file_count,
         video_candidates=video_candidates,
     )
+    mark("project_model_ready")
+    return project

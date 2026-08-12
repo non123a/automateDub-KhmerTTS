@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from PySide6.QtCore import QSettings
-from PySide6.QtWidgets import QRadioButton
+from PySide6.QtCore import QCoreApplication, QSettings, QSize
+from PySide6.QtWidgets import QDialogButtonBox, QRadioButton, QScrollArea
 
 from automatedub.config import ToolConfig
 from automatedub_studio.backend.export_service import (
@@ -44,6 +44,36 @@ def test_export_wizard_builds_configuration(qapp, tmp_path):
     assert config.video_quality == "Balanced"
     assert config.audio_mode == AudioMode.KHMER_ONLY
     assert config.subtitle_mode == SubtitleMode.EXTERNAL_SRT
+
+
+def test_export_wizard_keeps_action_buttons_outside_scrollable_content(qapp, tmp_path):
+    wizard = ExportWizard(tmp_path, "dubbed")
+
+    assert isinstance(wizard.content_scroll, QScrollArea)
+    buttons = wizard.findChild(QDialogButtonBox)
+    assert buttons is not None
+    assert buttons.parentWidget() is wizard
+    assert wizard.minimumHeight() <= wizard.height()
+
+    wizard.resize(500, 420)
+    wizard.show()
+    QCoreApplication.processEvents()
+    assert buttons.geometry().bottom() <= wizard.contentsRect().bottom()
+    assert wizard.content_scroll.height() > 0
+
+
+@pytest.mark.parametrize("size", [QSize(480, 420), QSize(640, 520), QSize(1000, 780)])
+def test_export_wizard_reflows_content_and_keeps_footer_visible(qapp, tmp_path, size):
+    wizard = ExportWizard(tmp_path, "a deliberately long export filename for layout testing")
+    wizard.resize(size)
+    wizard.show()
+    QCoreApplication.processEvents()
+
+    buttons = wizard.export_button.parentWidget()
+    assert buttons.geometry().bottom() <= wizard.contentsRect().bottom()
+    assert wizard.content_scroll.geometry().bottom() < buttons.geometry().top()
+    assert wizard.output_folder_edit.width() > 0
+    assert wizard.diagnostics_command_label.wordWrap() is True
 
 
 def test_export_wizard_persists_last_used_preset(qapp, tmp_path):
@@ -264,9 +294,22 @@ def test_export_wizard_lists_available_and_unavailable_preset_reasons(qapp, tmp_
 
 
 def test_export_progress_window_observes_completion(qapp, tmp_path):
+    manager = _export_manager(tmp_path)
+    window = ExportProgressWindow(manager)
+
+    result = manager.run_sync()
+
+    assert window.status_label.text() == "Export Complete"
+    assert window.progress.value() == 100
+    assert window.output_path == result.output_path
+    assert window.open_file_button.isEnabled()
+    assert window.open_folder_button.isEnabled()
+
+
+def _export_manager(tmp_path) -> ExportManager:
     project_path = tmp_path / "project.autodub"
-    project_path.mkdir()
-    (project_path / "exports").mkdir()
+    project_path.mkdir(exist_ok=True)
+    (project_path / "exports").mkdir(exist_ok=True)
     audio_path = project_path / "audio.wav"
     audio_path.write_bytes(b"RIFF....WAVEfmt ")
     video_path = project_path / "video.mp4"
@@ -276,7 +319,7 @@ def test_export_progress_window_observes_completion(qapp, tmp_path):
         configuration.output_path.write_bytes(b"video")
         return ExportResult(output_path=configuration.output_path)
 
-    manager = ExportManager(
+    return ExportManager(
         project=Project(
             project_path=project_path,
             audio_path=audio_path,
@@ -291,15 +334,6 @@ def test_export_progress_window_observes_completion(qapp, tmp_path):
         renderer=renderer,
         verifier=lambda _tool_config, _output_path: None,
     )
-    window = ExportProgressWindow(manager)
-
-    result = manager.run_sync()
-
-    assert window.status_label.text() == "Export Complete"
-    assert window.progress.value() == 100
-    assert window.output_path == result.output_path
-    assert window.open_file_button.isEnabled()
-    assert window.open_folder_button.isEnabled()
 
 
 def test_export_progress_window_shows_failure_and_allows_retry(qapp, tmp_path):
@@ -340,3 +374,16 @@ def test_export_progress_window_shows_failure_and_allows_retry(qapp, tmp_path):
     assert window.close_button.isEnabled()
     assert not window.open_file_button.isEnabled()
     assert not window.open_folder_button.isEnabled()
+
+
+@pytest.mark.parametrize("size", [QSize(480, 320), QSize(620, 440), QSize(1000, 720)])
+def test_export_progress_window_reflows_and_keeps_cancel_visible(qapp, tmp_path, size):
+    manager = _export_manager(tmp_path)
+    window = ExportProgressWindow(manager)
+    window.resize(size)
+    window.show()
+    QCoreApplication.processEvents()
+
+    assert window.cancel_button.geometry().bottom() <= window.contentsRect().bottom()
+    assert window.content_scroll.geometry().bottom() < window.cancel_button.geometry().top()
+    assert window.status_label.wordWrap() is True

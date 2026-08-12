@@ -4,15 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import QSize, Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QFormLayout,
+    QGridLayout,
     QGroupBox,
-    QHBoxLayout,
     QLabel,
     QProgressBar,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -22,6 +23,7 @@ from automatedub_studio.export.manager import (
     ExportManager,
     ManagedExportResult,
 )
+from automatedub_studio.ui.responsive import scrollable_content, set_responsive_window_size
 
 
 class ExportProgressWindow(QWidget):
@@ -34,25 +36,33 @@ class ExportProgressWindow(QWidget):
         self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, False)
 
         layout = QVBoxLayout(self)
+        content = QWidget()
+        content.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        content_layout = QVBoxLayout(content)
         self.status_label = QLabel("Waiting to start...")
         self.status_label.setObjectName("managed_export_status_label")
-        layout.addWidget(self.status_label)
+        self.status_label.setWordWrap(True)
+        content_layout.addWidget(self.status_label)
         self.telemetry_label = QLabel("")
         self.telemetry_label.setObjectName("managed_export_telemetry_label")
         self.telemetry_label.setWordWrap(True)
-        layout.addWidget(self.telemetry_label)
+        content_layout.addWidget(self.telemetry_label)
         self.progress = QProgressBar()
         self.progress.setObjectName("managed_export_progress")
         self.progress.setRange(0, 100)
-        layout.addWidget(self.progress)
+        self.progress.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        content_layout.addWidget(self.progress)
         self.error_label = QLabel("")
         self.error_label.setObjectName("managed_export_error_label")
         self.error_label.setWordWrap(True)
-        layout.addWidget(self.error_label)
+        content_layout.addWidget(self.error_label)
         self.details_group = QGroupBox("Details")
         self.details_group.setCheckable(True)
         self.details_group.setChecked(False)
         details_layout = QFormLayout(self.details_group)
+        details_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        details_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        details_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
         self.details_settings_label = QLabel(self._settings_text())
         self.details_command_label = QLabel("")
         self.details_encoder_label = QLabel("")
@@ -71,6 +81,8 @@ class ExportProgressWindow(QWidget):
             self.details_stage_label,
             self.details_log_label,
         ):
+            label.setWordWrap(True)
+            label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
             label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         details_layout.addRow("Selected settings", self.details_settings_label)
         details_layout.addRow("FFmpeg command", self.details_command_label)
@@ -79,29 +91,42 @@ class ExportProgressWindow(QWidget):
         details_layout.addRow("Output", self.details_output_label)
         details_layout.addRow("Stage", self.details_stage_label)
         details_layout.addRow("Recent FFmpeg log", self.details_log_label)
-        layout.addWidget(self.details_group)
+        content_layout.addWidget(self.details_group)
+        content_layout.addStretch(1)
+        self.content_scroll = scrollable_content(content)
+        self.content_scroll.setObjectName("export_progress_content_scroll")
+        self.content_scroll.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        layout.addWidget(self.content_scroll, 1)
 
-        button_row = QHBoxLayout()
+        button_row = QGridLayout()
         self.retry_button = QPushButton("Retry")
         self.retry_button.setEnabled(False)
         self.retry_button.clicked.connect(self.export_manager.retry)
-        button_row.addWidget(self.retry_button)
+        button_row.addWidget(self.retry_button, 0, 0)
         self.cancel_button = QPushButton("Cancel")
         self.cancel_button.clicked.connect(self.export_manager.cancel)
-        button_row.addWidget(self.cancel_button)
+        button_row.addWidget(self.cancel_button, 0, 1)
         self.open_file_button = QPushButton("Open Video")
         self.open_file_button.setEnabled(False)
         self.open_file_button.clicked.connect(self._open_file)
-        button_row.addWidget(self.open_file_button)
+        button_row.addWidget(self.open_file_button, 1, 0)
         self.open_folder_button = QPushButton("Open Folder")
         self.open_folder_button.setEnabled(False)
         self.open_folder_button.clicked.connect(self._open_folder)
-        button_row.addWidget(self.open_folder_button)
+        button_row.addWidget(self.open_folder_button, 1, 1)
         self.close_button = QPushButton("Close")
         self.close_button.setEnabled(False)
         self.close_button.clicked.connect(self.close)
-        button_row.addWidget(self.close_button)
+        button_row.addWidget(self.close_button, 1, 2)
         layout.addLayout(button_row)
+        set_responsive_window_size(
+            self,
+            minimum=QSize(480, 300),
+            preferred=QSize(760, 560),
+        )
 
         self.export_manager.eventEmitted.connect(self._on_event)
         self.export_manager.exportCompleted.connect(self._on_completed)
