@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import platform
 import re
 import shutil
@@ -34,6 +35,48 @@ def _copy(source: Path, destination: Path) -> Path:
     if platform.system() != "Windows":
         destination.chmod(destination.stat().st_mode | 0o111)
     return destination
+
+
+def _runs_without_path(executable: Path) -> bool:
+    environment = {key: value for key, value in os.environ.items() if key.upper() != "PATH"}
+    try:
+        result = subprocess.run(
+            [str(executable), "-version"],
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+
+def _windows_binary_candidates(name: str, source: Path) -> list[Path]:
+    """Locate the package executable when ``source`` is a Chocolatey shim."""
+    candidates = [source]
+    # Chocolatey exposes <root>/bin/<name>.exe as a launcher. Its distributable
+    # executable is located under <root>/lib/<name>/tools/.../bin.
+    chocolatey_root = source.parent.parent
+    package_root = chocolatey_root / "lib" / name
+    if package_root.is_dir():
+        candidates.extend(
+            sorted(
+                package_root.glob(f"**/bin/{name}.exe"),
+                key=lambda path: path.stat().st_size,
+                reverse=True,
+            )
+        )
+    return candidates
+
+
+def _resolve_windows_binary(name: str, source: Path) -> Path:
+    for candidate in _windows_binary_candidates(name, source):
+        if candidate.is_file() and _runs_without_path(candidate):
+            return candidate
+    raise RuntimeError(
+        f"{name}.exe is not a runnable native Windows FFmpeg binary: {source}"
+    )
 
 
 def _macos_dependencies(binary: Path) -> list[Path]:
@@ -132,9 +175,12 @@ def prepare(*, system: str | None = None) -> list[Path]:
         source = shutil.which(f"{name}{suffix}")
         if source is None:
             raise RuntimeError(f"{name} is required to stage the packaged media runtime.")
-        staged.append(_copy(Path(source), destination / f"{name}{suffix}"))
+        source_path = Path(source)
         if target == "windows":
-            for dependency in Path(source).parent.glob("*.dll"):
+            source_path = _resolve_windows_binary(name, source_path)
+        staged.append(_copy(source_path, destination / f"{name}{suffix}"))
+        if target == "windows":
+            for dependency in source_path.parent.glob("*.dll"):
                 _copy(dependency, destination / dependency.name)
     if target == "macos":
         _stage_macos_dependencies(staged, destination)

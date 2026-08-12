@@ -20,6 +20,14 @@ def expected_members(platform: str) -> tuple[str, ...]:
     )
 
 
+def _is_windows_pe(path: Path) -> bool:
+    try:
+        with path.open("rb") as file:
+            return file.read(2) == b"MZ"
+    except OSError:
+        return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--platform", choices=("windows", "macos", "linux"), required=True)
@@ -52,6 +60,8 @@ def main() -> int:
     environment = {key: value for key, value in os.environ.items() if key.upper() != "PATH"}
     for member in expected_members(args.platform)[:2]:
         binary = resource_root / member
+        if args.platform == "windows" and not _is_windows_pe(binary):
+            raise RuntimeError(f"Bundled {binary.name} is not a native Windows executable")
         result = subprocess.run(
             [str(binary), "-version"],
             env=environment,

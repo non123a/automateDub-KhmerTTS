@@ -40,6 +40,21 @@ jobs:
         run: uv run python packaging/prepare_whisper_runtime.py --platform ${{ matrix.platform }}
       - name: Stage bundled FFmpeg runtime
         run: uv run python packaging/prepare_ffmpeg_runtime.py --platform ${{ matrix.platform }}
+      - name: Validate staged Windows FFmpeg binaries
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $runtime = "automatedub_studio/resources/runtime/bin/windows"
+          foreach ($name in @("ffmpeg.exe", "ffprobe.exe")) {
+            $path = Join-Path $runtime $name
+            if (-not (Test-Path $path)) { throw "Missing staged $name" }
+            $bytes = [System.IO.File]::ReadAllBytes($path)
+            if ($bytes.Length -lt 2 -or $bytes[0] -ne 0x4D -or $bytes[1] -ne 0x5A) {
+              throw "Staged $name is not a native Windows PE executable"
+            }
+            & $path -version
+            if ($LASTEXITCODE -ne 0) { throw "Staged $name cannot execute" }
+          }
       - name: Record bundled FFmpeg license
         run: >-
           ffmpeg -L > automatedub_studio/resources/runtime/FFMPEG_LICENSE_${{ matrix.platform }}.txt

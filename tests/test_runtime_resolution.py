@@ -1,8 +1,23 @@
 from __future__ import annotations
 
+import importlib.util
+from pathlib import Path
+
 import pytest
 
 from automatedub import config, runtime
+
+_PACKAGING_MODULE = importlib.util.module_from_spec(
+    importlib.util.spec_from_file_location(
+        "prepare_ffmpeg_runtime",
+        Path(__file__).parents[1] / "packaging" / "prepare_ffmpeg_runtime.py",
+    )
+)
+assert _PACKAGING_MODULE.__spec__ is not None
+assert _PACKAGING_MODULE.__spec__.loader is not None
+_PACKAGING_MODULE.__spec__.loader.exec_module(_PACKAGING_MODULE)
+_resolve_windows_binary = _PACKAGING_MODULE._resolve_windows_binary
+_windows_binary_candidates = _PACKAGING_MODULE._windows_binary_candidates
 
 
 @pytest.mark.parametrize(
@@ -57,3 +72,36 @@ def test_macos_frozen_runtime_resolves_frameworks_location(monkeypatch, tmp_path
     monkeypatch.setattr(runtime, "application_resource_directory", lambda: tmp_path / "resources")
 
     assert runtime.resolve_runtime_binary("ffmpeg", system="macos") == str(binary)
+
+
+def test_windows_staging_searches_real_binary_below_chocolatey_shim(tmp_path):
+    shim = tmp_path / "chocolatey" / "bin" / "ffmpeg.exe"
+    real = (
+        tmp_path
+        / "chocolatey"
+        / "lib"
+        / "ffmpeg"
+        / "tools"
+        / "ffmpeg"
+        / "bin"
+        / "ffmpeg.exe"
+    )
+    real.parent.mkdir(parents=True)
+    shim.parent.mkdir(parents=True)
+    shim.write_bytes(b"shim")
+    real.write_bytes(b"real")
+
+    candidates = _windows_binary_candidates("ffmpeg", shim)
+
+    assert candidates[0] == shim
+    assert real in candidates
+
+
+def test_windows_staging_rejects_non_runnable_binary(monkeypatch, tmp_path):
+    source = tmp_path / "bin" / "ffmpeg.exe"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"launcher reference")
+    monkeypatch.setattr(_PACKAGING_MODULE, "_runs_without_path", lambda _path: False)
+
+    with pytest.raises(RuntimeError, match="not a runnable native Windows"):
+        _resolve_windows_binary("ffmpeg", source)
