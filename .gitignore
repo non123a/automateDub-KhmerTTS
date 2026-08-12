@@ -17,3 +17,9 @@ models/*.bin
 *.mov
 *.mkv
 *.avi
+# Packaging/build output
+dist/
+build/
+
+# PyInstaller
+*.spec.bak
