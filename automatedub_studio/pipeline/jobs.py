@@ -41,6 +41,7 @@ STAGE_CREATE_PROJECT = "create_project"
 STAGE_COPY_SOURCE_VIDEO = "copy_source_video"
 STAGE_EXTRACT_AUDIO = "extract_audio"
 STAGE_TRANSCRIPTION = "transcription"
+STAGE_TRANSCRIPT_READY = "transcript_ready"
 STAGE_SPEECH_DETECTION = "speech_detection"
 STAGE_TRANSLATION = "translation"
 STAGE_TTS_GENERATION = "tts_generation"
@@ -83,6 +84,7 @@ class PipelineContext:
     tts_failed_segment_ids: list[int] = field(default_factory=list)
     tts_generation_summary: dict[str, object] = field(default_factory=dict)
     skip_tts: bool = False
+    regenerate_transcript: bool = False
 
     def __post_init__(self) -> None:
         if self.provider_manager is None:
@@ -178,15 +180,34 @@ class TranscriptionJob:
         progress(5, "Transcribing audio")
         audio_path = context.artifacts.get("audio", audio_output_path(context.pipeline_path))
         transcript_path = transcript_output_path(context.pipeline_path)
+        if transcript_path.is_file() and not context.regenerate_transcript:
+            context.artifacts["transcript"] = transcript_path
+            _update_metadata(
+                context,
+                {
+                    "transcript": transcript_path.relative_to(context.project_path).as_posix(),
+                    "pipeline": {"status": STAGE_TRANSCRIPT_READY},
+                },
+            )
+            progress(100, "Using saved transcript")
+            return
         if context.provider_manager is None:
             raise RuntimeError("provider manager is not configured")
         provider = context.provider_manager.stt_provider()
         provider.validate()
+        prepare = getattr(provider, "prepare", None)
+        if callable(prepare):
+            progress(10, "Preparing speech recognition...")
+            prepare(lambda message: progress(15, message))
+        progress(20, "Transcribing audio")
         provider.transcribe(audio_path=audio_path, transcript_path=transcript_path)
         context.artifacts["transcript"] = transcript_path
         _update_metadata(
             context,
-            {"transcript": transcript_path.relative_to(context.project_path).as_posix()},
+            {
+                "transcript": transcript_path.relative_to(context.project_path).as_posix(),
+                "pipeline": {"status": STAGE_TRANSCRIPT_READY},
+            },
         )
         progress(100, "Transcription complete")
 

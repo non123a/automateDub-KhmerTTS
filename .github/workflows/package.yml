@@ -25,6 +25,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
+      - name: Install Whisper.cpp build tools
+        if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential
+      - name: Build bundled Whisper.cpp runtime
+        run: uv run python packaging/prepare_whisper_runtime.py --platform ${{ matrix.platform }}
+      - name: Verify bundled Whisper.cpp executable
+        run: uv run python packaging/verify_whisper_runtime.py --platform ${{ matrix.platform }}
       - name: Install Linux media and Qt runtime
         if: matrix.platform == 'linux'
         run: >-

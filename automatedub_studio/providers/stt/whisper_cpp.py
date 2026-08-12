@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from automatedub.config import ToolConfig
-from automatedub.vertical_slice.transcription import (
-    WhisperCppTranscriber,
-    validate_model_path,
-    validate_whisper_cpp,
-)
+from automatedub.vertical_slice.transcription import WhisperCppTranscriber
 from automatedub_studio.providers.registry import (
     ProviderConfigField,
     ProviderDescriptor,
     provider_registry,
+)
+from automatedub_studio.runtime.whisper import (
+    ensure_whisper_model,
+    resolve_whisper_executable,
 )
 
 WHISPER_CPP_PROVIDER_ID = "whisper_cpp"
@@ -27,11 +28,18 @@ class WhisperCppSTTProvider:
         self.tool_config = tool_config
 
     def validate(self) -> None:
-        validate_whisper_cpp(self.tool_config)
-        validate_model_path(self.tool_config.whisper_model_path)
+        resolve_whisper_executable()
+
+    def prepare(self, progress=None) -> Path:
+        return ensure_whisper_model(progress=progress)
 
     def transcribe(self, audio_path: Path, transcript_path: Path) -> object:
-        return WhisperCppTranscriber(self.tool_config).transcribe(audio_path, transcript_path)
+        runtime_config = replace(
+            self.tool_config,
+            whisper_cpp_path=str(resolve_whisper_executable()),
+            whisper_model_path=self.prepare(),
+        )
+        return WhisperCppTranscriber(runtime_config).transcribe(audio_path, transcript_path)
 
 
 provider_registry.register_stt(
@@ -41,9 +49,8 @@ provider_registry.register_stt(
         kind="stt",
         factory=WhisperCppSTTProvider,
         config_fields=(
-            ProviderConfigField("executable", "Executable", default="whisper-cli"),
-            ProviderConfigField("model_path", "Model Path", default="models/ggml-small.bin"),
-            ProviderConfigField("threads", "Threads", default="auto"),
+            ProviderConfigField("runtime", "Runtime", default="Bundled Whisper.cpp"),
+            ProviderConfigField("model", "Model", default="Whisper small (downloads once)"),
         ),
     )
 )

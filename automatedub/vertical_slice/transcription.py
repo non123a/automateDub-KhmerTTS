@@ -22,6 +22,7 @@ class TranscriptSegment:
     start: float
     end: float
     text: str
+    edited_text: str | None = None
 
 
 @dataclass(frozen=True)
@@ -224,16 +225,20 @@ def transcript_to_json_dict(transcript: Transcript) -> dict[str, object]:
         "source_audio": transcript.source_audio,
         "engine": transcript.engine,
         "text": transcript.text,
-        "segments": [
-            {
-                "id": segment.id,
-                "start": segment.start,
-                "end": segment.end,
-                "text": segment.text,
-            }
-            for segment in transcript.segments
-        ],
+        "segments": [_transcript_segment_to_json(segment) for segment in transcript.segments],
     }
+
+
+def _transcript_segment_to_json(segment: TranscriptSegment) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "id": segment.id,
+        "start": segment.start,
+        "end": segment.end,
+        "text": segment.text,
+    }
+    if segment.edited_text is not None:
+        payload["edited_text"] = segment.edited_text
+    return payload
 
 
 def write_transcript(transcript_path: Path, transcript: Transcript) -> None:

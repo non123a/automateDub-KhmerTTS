@@ -28,6 +28,9 @@ class FakeSTTProvider:
     def validate(self) -> None:
         self.validated = True
 
+    def prepare(self, _progress) -> None:
+        return None
+
     def transcribe(self, audio_path: Path, transcript_path: Path) -> object:
         assert self.validated
         transcript_path.write_text(
@@ -61,6 +64,9 @@ class FakeTranslationProvider:
     ) -> None:
         assert self.validated
         assert transcript_path.is_file()
+        source_text = json.loads(transcript_path.read_text(encoding="utf-8"))["segments"][0].get(
+            "edited_text"
+        ) or json.loads(transcript_path.read_text(encoding="utf-8"))["segments"][0]["text"]
         prompt_path.write_text("prompt", encoding="utf-8")
         translation_path.write_text(
             json.dumps(
@@ -73,7 +79,7 @@ class FakeTranslationProvider:
                             "end": 1.0,
                             "source_language": "zh",
                             "target_language": "km",
-                            "source_text": "你好",
+                            "source_text": source_text,
                             "target_text": "សួស្តី",
                         }
                     ],
@@ -199,6 +205,56 @@ def test_pipeline_transcription_and_translation_use_provider_manager(tmp_path):
     assert trace["provider_id"] == "fake_translation"
     assert trace["provider_class"] == "FakeTranslationProvider"
     assert trace["provider_module"] == __name__
+
+
+def test_saved_edited_transcript_is_not_regenerated_without_explicit_action(tmp_path):
+    provider_manager = ProviderManager(
+        ToolConfig(
+            stt_provider="fake_stt",
+            translation_provider="fake_translation",
+            tts_provider="fake_tts",
+        ),
+        registry=_registry(),
+    )
+    context = PipelineContext(
+        request=_request(tmp_path),
+        project_manager=ProjectManager(),
+        tool_config=provider_manager.tool_config,
+        provider_manager=provider_manager,
+    )
+    CreateProjectJob().run(context, lambda _value, message="": None)
+    audio_path = context.pipeline_path / "audio.wav"
+    audio_path.write_bytes(b"RIFF....WAVEfmt ")
+    context.artifacts["audio"] = audio_path
+    transcript_path = context.pipeline_path / "transcript.json"
+    transcript_path.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "language": "zh",
+                "segments": [
+                    {
+                        "id": 0,
+                        "start": 0.0,
+                        "end": 1.0,
+                        "text": "recognized",
+                        "edited_text": "corrected",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    TranscriptionJob().run(context, lambda _value, message="": None)
+    TranslationJob().run(context, lambda _value, message="": None)
+
+    payload = json.loads(transcript_path.read_text(encoding="utf-8"))
+    assert payload["segments"][0]["edited_text"] == "corrected"
+    translation = json.loads(
+        (context.pipeline_path / "translation.json").read_text(encoding="utf-8")
+    )
+    assert translation["segments"][0]["source_text"] == "corrected"
 
 
 def test_nbwcode_translation_provider_validate_uses_authenticated_request_path(

@@ -20,6 +20,7 @@ a = Analysis(
     binaries=[],
     datas=[
         (str(ROOT / "automatedub_studio" / "resources" / "icons"), "automatedub_studio/resources/icons"),
+        (str(ROOT / "automatedub_studio" / "resources" / "runtime"), "runtime"),
     ],
     hiddenimports=[
         "automatedub_studio.providers.stt",

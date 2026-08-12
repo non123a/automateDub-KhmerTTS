@@ -171,6 +171,27 @@ def test_settings_window_sections_and_dynamic_provider_combos(qapp, tmp_path):
     assert window.stt_combo.itemText(1) == "Future STT"
     assert window.translation_combo.itemText(0) == "Fake Translation"
     assert window.tts_combo.itemText(0) == "Fake TTS"
+    assert window.stt_status_label.text() == "STT status: Not tested"
+    assert window.tts_status_label.text() == "TTS status: Not tested"
+
+
+def test_stt_test_does_not_change_tts_status(qapp, tmp_path):
+    settings = _settings(tmp_path)
+    provider_manager = ProviderManager(
+        ToolConfig(
+            stt_provider="fake_stt",
+            translation_provider="fake_translation",
+            tts_provider="fake_tts",
+        ),
+        registry=_registry(),
+    )
+    window = SettingsWindow(settings, provider_manager)
+    stt = provider_manager.available_stt_providers()[0]
+
+    window.test_provider(stt)
+
+    assert "Connected" in window.stt_status_label.text()
+    assert window.tts_status_label.text() == "TTS status: Not tested"
 
 
 def test_settings_window_switching_provider_rebuilds_dynamic_config(qapp, tmp_path):

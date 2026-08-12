@@ -117,6 +117,14 @@ class SettingsWindow(QDialog):
         self.connection_status_label.setObjectName("settings_connection_status_label")
         self.connection_status_label.setWordWrap(True)
         layout.addWidget(self.connection_status_label)
+        self.stt_status_label = QLabel("STT status: Not tested")
+        self.stt_status_label.setObjectName("settings_stt_status_label")
+        self.stt_status_label.setWordWrap(True)
+        layout.addWidget(self.stt_status_label)
+        self.tts_status_label = QLabel("TTS status: Not tested")
+        self.tts_status_label.setObjectName("settings_tts_status_label")
+        self.tts_status_label.setWordWrap(True)
+        layout.addWidget(self.tts_status_label)
         self.provider_version_label = QLabel("Provider version: unavailable")
         self.provider_version_label.setObjectName("settings_provider_version_label")
         layout.addWidget(self.provider_version_label)
@@ -325,6 +333,7 @@ class SettingsWindow(QDialog):
             self.connection_status_label.setText(
                 f"Connection status: Connection Failed - {exc}"
             )
+            self.tts_status_label.setText(f"TTS status: Connection Failed - {exc}")
             return
         if not voices:
             self.voice_status_label.setText("No voices available from this provider.")
@@ -362,6 +371,7 @@ class SettingsWindow(QDialog):
             self.connection_status_label.setText(
                 f"Connection status: Connection Failed - {exc}"
             )
+            self._set_provider_status(descriptor, f"Connection Failed - {exc}")
             return
         latency_ms = round((time.monotonic() - started) * 1000)
         extra = ""
@@ -381,6 +391,7 @@ class SettingsWindow(QDialog):
         self.connection_status_label.setText(
             f"Connection status: Connected, latency {latency_ms} ms"
         )
+        self._set_provider_status(descriptor, f"Connected, latency {latency_ms} ms")
         if voice_count is not None:
             self.voice_count_label.setText(f"Voices: {voice_count}")
         self.provider_version_label.setText(
@@ -393,6 +404,12 @@ class SettingsWindow(QDialog):
         if descriptor.kind == "translation":
             return self.provider_manager.translation_provider(descriptor.id)
         return self.provider_manager.tts_provider(descriptor.id)
+
+    def _set_provider_status(self, descriptor: ProviderDescriptor, status: str) -> None:
+        if descriptor.kind == "stt":
+            self.stt_status_label.setText(f"STT status: {status}")
+        elif descriptor.kind == "tts":
+            self.tts_status_label.setText(f"TTS status: {status}")
 
     def refresh_cache_usage(self) -> None:
         self.cache_usage_label.setText(

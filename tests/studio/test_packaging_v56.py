@@ -88,6 +88,7 @@ def test_packaging_paths_are_resolved_from_the_repository_root():
     assert 'str(ROOT / "automatedub_studio" / "main.py")' in spec
     assert 'name="AutomateDub.app"' in spec
     assert "automatedub-studio.icns" in spec
+    assert '"resources" / "runtime"' in spec
     assert 'VERSION_INFO = ROOT / "packaging" / "version_info.txt"' in spec
     assert 'version=str(VERSION_INFO)' in spec
     assert (ROOT / "packaging" / "version_info.txt").is_file()

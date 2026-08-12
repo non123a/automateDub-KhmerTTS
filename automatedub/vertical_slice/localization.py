@@ -276,7 +276,11 @@ def load_transcript(transcript_path: Path) -> list[TranscriptSegmentForLocalizat
         segment_id = raw_segment.get("id")
         start = raw_segment.get("start")
         end = raw_segment.get("end")
-        text = raw_segment.get("text")
+        text = (
+            raw_segment["edited_text"]
+            if isinstance(raw_segment.get("edited_text"), str)
+            else raw_segment.get("text")
+        )
         if not isinstance(segment_id, int):
             raise VS2Error("each transcript segment must contain integer id")
         if not isinstance(start, int | float) or not isinstance(end, int | float):

@@ -1,0 +1,4 @@
+([('AutomateDub Studio',
+   '/Users/tangchhannon/Documents/Cluade/AutomateDub/dist/macos/AutomateDub '
+   'Studio',
+   'EXECUTABLE')],)
