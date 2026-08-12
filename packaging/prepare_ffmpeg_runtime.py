@@ -72,18 +72,30 @@ def _contains_chocolatey_reference(executable: Path) -> bool:
 def _windows_binary_candidates(name: str, source: Path) -> list[Path]:
     """Locate the package executable when ``source`` is a Chocolatey shim."""
     candidates: list[Path] = []
-    # Chocolatey exposes <root>/bin/<name>.exe as a launcher. Its distributable
-    # executable is located under <root>/lib/<name>/tools/.../bin.
-    chocolatey_root = source.parent.parent
-    package_root = chocolatey_root / "lib" / name
-    if package_root.is_dir():
-        candidates.extend(
-            sorted(
-                package_root.glob(f"**/bin/{name}.exe"),
-                key=lambda path: path.stat().st_size,
-                reverse=True,
-            )
-        )
+    # Chocolatey exposes <root>/bin/<name>.exe as a launcher. The ffmpeg
+    # package normally owns both executables under <root>/lib/ffmpeg, so do
+    # not derive the package name from ``name`` (that misses ffprobe).
+    roots: list[Path] = []
+    configured_root = os.environ.get("ChocolateyInstall") or os.environ.get(
+        "ChocolateyToolsLocation"
+    )
+    if configured_root:
+        roots.append(Path(configured_root))
+    roots.extend(source.parents)
+    seen: set[Path] = set()
+    for root in roots:
+        root = root.resolve()
+        if root in seen:
+            continue
+        seen.add(root)
+        package_root = root / "lib" / "ffmpeg"
+        if package_root.is_dir():
+            candidates.extend(package_root.glob(f"**/bin/{name}.exe"))
+    candidates = sorted(
+        dict.fromkeys(candidates),
+        key=lambda path: path.stat().st_size if path.is_file() else 0,
+        reverse=True,
+    )
     candidates.append(source)
     return candidates
 
@@ -210,7 +222,9 @@ def prepare(*, system: str | None = None) -> list[Path]:
         source_path = Path(source)
         if target == "windows":
             source_path = _resolve_windows_binary(name, source_path)
-        staged.append(_copy(source_path, destination / f"{name}{suffix}"))
+        staged_path = _copy(source_path, destination / f"{name}{suffix}")
+        print(f"selected {name}: {source_path} -> {staged_path}")
+        staged.append(staged_path)
         if target == "windows":
             for dependency in source_path.parent.glob("*.dll"):
                 _copy(dependency, destination / dependency.name)

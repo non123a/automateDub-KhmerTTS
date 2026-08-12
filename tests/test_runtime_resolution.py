@@ -99,6 +99,29 @@ def test_windows_staging_searches_real_binary_below_chocolatey_shim(tmp_path):
     assert real in candidates
 
 
+def test_windows_staging_discovers_ffprobe_from_ffmpeg_package(tmp_path):
+    shim = tmp_path / "chocolatey" / "bin" / "ffprobe.exe"
+    native = (
+        tmp_path
+        / "chocolatey"
+        / "lib"
+        / "ffmpeg"
+        / "tools"
+        / "ffmpeg"
+        / "bin"
+        / "ffprobe.exe"
+    )
+    native.parent.mkdir(parents=True)
+    shim.parent.mkdir(parents=True)
+    shim.write_bytes(b"shim")
+    native.write_bytes(b"native")
+
+    candidates = _windows_binary_candidates("ffprobe", shim)
+
+    assert native in candidates
+    assert candidates[-1] == shim
+
+
 def test_windows_staging_rejects_non_runnable_binary(monkeypatch, tmp_path):
     source = tmp_path / "bin" / "ffmpeg.exe"
     source.parent.mkdir(parents=True)
