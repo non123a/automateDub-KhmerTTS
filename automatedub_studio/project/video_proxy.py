@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from automatedub import process
 from automatedub.config import ToolConfig, resolve_executable
 from automatedub_studio.project.loader import (
     PROJECT_METADATA_FILENAME,
@@ -70,7 +71,9 @@ def probe_video(ffprobe: str, video_path: Path) -> VideoProbe:
         str(video_path),
     ]
     try:
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
+        result = subprocess.run(
+            command, check=True, capture_output=True, text=True, **process.gui_subprocess_kwargs()
+        )
     except FileNotFoundError as exc:
         raise VideoProxyError(
             "AutomateDub media runtime is unavailable. Please reinstall AutomateDub."
@@ -183,7 +186,9 @@ def prepare_editor_video(
         on_progress("Optimizing video...")
     command = build_proxy_command(ffmpeg, source_video, proxy_video)
     try:
-        subprocess.run(command, check=True, capture_output=True, text=True)
+        subprocess.run(
+            command, check=True, capture_output=True, text=True, **process.gui_subprocess_kwargs()
+        )
     except FileNotFoundError as exc:
         raise VideoProxyError(
             "AutomateDub media runtime is unavailable. Please reinstall AutomateDub."

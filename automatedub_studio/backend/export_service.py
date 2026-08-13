@@ -14,6 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from automatedub import process
 from automatedub.config import ToolConfig
 from automatedub.vertical_slice.duration_report import (
     DurationReportError,
@@ -155,6 +156,7 @@ def _run_ffmpeg_capability_command(ffmpeg: str, *args: str) -> str | None:
             check=True,
             capture_output=True,
             text=True,
+            **process.gui_subprocess_kwargs(),
         )
     except (OSError, subprocess.CalledProcessError):
         return ""
@@ -252,7 +254,13 @@ def probe_stream_copy_capability(ffmpeg: str, source_video: Path) -> tuple[bool,
             str(probe_output),
         ]
         try:
-            subprocess.run(command, check=True, capture_output=True, text=True)
+            subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+                **process.gui_subprocess_kwargs(),
+            )
         except (OSError, subprocess.CalledProcessError) as exc:
             stderr = getattr(exc, "stderr", "")
             detail = stderr.strip() if isinstance(stderr, str) else ""
@@ -523,7 +531,9 @@ def build_output_probe_command(ffprobe: str, output_path: Path) -> list[str]:
 def probe_output_streams(ffprobe: str, output_path: Path) -> ExportStreamSummary:
     command = build_output_probe_command(ffprobe, output_path)
     try:
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
+        result = subprocess.run(
+            command, check=True, capture_output=True, text=True, **process.gui_subprocess_kwargs()
+        )
     except subprocess.CalledProcessError as exc:
         msg = exc.stderr.strip() or exc.stdout.strip() or f"ffprobe exited with {exc.returncode}"
         raise ExportError(f"export output probe failed: {msg}") from exc
@@ -675,18 +685,19 @@ def _run_ffmpeg_with_progress(
     if command and command[-1] != "-progress":
         command = [*command[:-1], "-progress", "pipe:1", "-nostats", command[-1]]
     started = time.monotonic()
-    process = subprocess.Popen(
+    ffmpeg_process = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
         bufsize=1,
+        **process.gui_subprocess_kwargs(),
     )
     values: dict[str, str] = {}
-    if process.stdout is not None:
-        for line in process.stdout:
+    if ffmpeg_process.stdout is not None:
+        for line in ffmpeg_process.stdout:
             if is_cancelled is not None and is_cancelled():
-                process.terminate()
+                ffmpeg_process.terminate()
                 break
             line = line.strip()
             if not line or "=" not in line:
@@ -723,11 +734,11 @@ def _run_ffmpeg_with_progress(
                     command=tuple(command),
                 )
             )
-    stdout, stderr = process.communicate()
-    result = subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
-    if process.returncode:
+    stdout, stderr = ffmpeg_process.communicate()
+    result = subprocess.CompletedProcess(command, ffmpeg_process.returncode, stdout, stderr)
+    if ffmpeg_process.returncode:
         raise subprocess.CalledProcessError(
-            process.returncode,
+            ffmpeg_process.returncode,
             command,
             output=stdout,
             stderr=stderr,
@@ -852,7 +863,13 @@ def export_project(
                 mixed_audio_path=mixed_audio_path,
             )
         try:
-            subprocess.run(mix_command, check=True, capture_output=True, text=True)
+            subprocess.run(
+                mix_command,
+                check=True,
+                capture_output=True,
+                text=True,
+                **process.gui_subprocess_kwargs(),
+            )
         except subprocess.CalledProcessError as exc:
             msg = exc.stderr.strip() or exc.stdout.strip() or f"ffmpeg exited with {exc.returncode}"
             mix_failure = _audio_mix_diagnostics(
@@ -906,7 +923,13 @@ def export_project(
                     _cancelled,
                 )
             else:
-                mux_result = subprocess.run(mux_command, check=True, capture_output=True, text=True)
+                mux_result = subprocess.run(
+                    mux_command,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    **process.gui_subprocess_kwargs(),
+                )
         except subprocess.CalledProcessError as exc:
             _write_export_failure_debug(
                 project.project_path,

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import time
 from pathlib import Path
 
@@ -17,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from automatedub import process
 from automatedub_studio.backend.export_service import ExportResult, ExportStage
 from automatedub_studio.ui.responsive import scrollable_content, set_responsive_window_size
 
@@ -156,26 +158,22 @@ class ExportProgressDialog(QDialog):
 
     def _on_open_file(self) -> None:
         if self._output_path is not None:
-            import subprocess
-            import sys
             if sys.platform == "darwin":
-                subprocess.Popen(["open", str(self._output_path)])
+                process.popen(["open", str(self._output_path)])
             elif sys.platform == "win32":
-                subprocess.Popen(["explorer", str(self._output_path)])
+                process.popen(["explorer", str(self._output_path)])
             else:
-                subprocess.Popen(["xdg-open", str(self._output_path)])
+                process.popen(["xdg-open", str(self._output_path)])
 
     def _on_open_folder(self) -> None:
         if self._output_path is not None:
-            import subprocess
-            import sys
             folder = str(self._output_path.parent)
             if sys.platform == "darwin":
-                subprocess.Popen(["open", folder])
+                process.popen(["open", folder])
             elif sys.platform == "win32":
-                subprocess.Popen(["explorer", folder])
+                process.popen(["explorer", folder])
             else:
-                subprocess.Popen(["xdg-open", folder])
+                process.popen(["xdg-open", folder])
 
     def closeEvent(self, event):
         if not self._finished:

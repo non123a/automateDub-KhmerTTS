@@ -68,6 +68,9 @@ jobs:
         run: uv run --with pyinstaller python packaging/build.py --platform ${{ matrix.platform }}
       - name: Verify packaged runtime files
         run: uv run --with pyinstaller python packaging/verify_packaged_runtime.py --platform ${{ matrix.platform }}
+      - name: Verify Windows GUI subprocess policy
+        if: matrix.platform == 'windows'
+        run: uv run pytest -q tests/test_process.py
       - name: Build macOS DMG
         if: matrix.platform == 'macos'
         run: packaging/macos/create-dmg.sh

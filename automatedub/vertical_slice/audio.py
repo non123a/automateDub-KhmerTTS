@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from automatedub import process
 from automatedub.config import ToolConfig, resolve_executable
 from automatedub.vertical_slice.paths import audio_output_path
 
@@ -66,7 +67,9 @@ def extract_audio(
 
     command = build_extract_audio_command(ffmpeg, source, destination)
     try:
-        subprocess.run(command, check=True, capture_output=True, text=True)
+        subprocess.run(
+            command, check=True, capture_output=True, text=True, **process.gui_subprocess_kwargs()
+        )
     except subprocess.CalledProcessError as exc:
         message = exc.stderr.strip() or exc.stdout.strip() or f"ffmpeg exited with {exc.returncode}"
         raise VS0Error(f"audio extraction failed: {message}") from exc

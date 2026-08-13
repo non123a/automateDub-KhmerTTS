@@ -11,6 +11,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
+from automatedub import process
 from automatedub.config import ToolConfig
 from automatedub_studio.backend.export_service import (
     ExportEncoderCapabilities,
@@ -668,7 +669,13 @@ class ExportManager(QObject):
                 str(temporary_output),
             ]
         try:
-            subprocess.run(command, check=True, capture_output=True, text=True)
+            subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+                **process.gui_subprocess_kwargs(),
+            )
         except subprocess.CalledProcessError as exc:
             message = (
                 exc.stderr.strip()
@@ -854,7 +861,9 @@ def _default_renderer(
         loglevel="info",
     )
     try:
-        subprocess.run(command, check=True, capture_output=True, text=True)
+        subprocess.run(
+            command, check=True, capture_output=True, text=True, **process.gui_subprocess_kwargs()
+        )
     except subprocess.CalledProcessError as exc:
         message = exc.stderr.strip() or exc.stdout.strip() or f"ffmpeg exited with {exc.returncode}"
         raise ExportManagerError(f"video render failed: {message}") from exc

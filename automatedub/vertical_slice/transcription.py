@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from automatedub import process
 from automatedub.config import ToolConfig, resolve_executable
 
 
@@ -118,12 +119,20 @@ def build_whisper_cpp_command(
 
 def run_whisper_cpp(command: list[str]) -> None:
     try:
-        subprocess.run(command, check=True, capture_output=True, text=True)
+        subprocess.run(
+            command, check=True, capture_output=True, text=True, **process.gui_subprocess_kwargs()
+        )
     except subprocess.CalledProcessError as exc:
         if exc.returncode < 0 and "-ng" not in command:
             retry_command = [*command, "-ng"]
             try:
-                subprocess.run(retry_command, check=True, capture_output=True, text=True)
+                subprocess.run(
+                    retry_command,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    **process.gui_subprocess_kwargs(),
+                )
                 return
             except subprocess.CalledProcessError as retry_exc:
                 exc = retry_exc

@@ -7,6 +7,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from automatedub import process
 from automatedub.config import ToolConfig, load_tool_config, resolve_executable
 from automatedub.vertical_slice.duration_report import (
     DurationReportError,
@@ -121,7 +122,9 @@ def run_mix(
         mixed_audio_path=mixed_audio_path,
     )
     try:
-        subprocess.run(command, check=True, capture_output=True, text=True)
+        subprocess.run(
+            command, check=True, capture_output=True, text=True, **process.gui_subprocess_kwargs()
+        )
     except subprocess.CalledProcessError as exc:
         message = exc.stderr.strip() or exc.stdout.strip() or f"ffmpeg exited with {exc.returncode}"
         raise VS4Error(f"dialogue mix failed: {message}") from exc
@@ -172,7 +175,9 @@ def probe_audio_duration(ffprobe: str, audio_path: Path) -> float:
         str(audio_path),
     ]
     try:
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
+        result = subprocess.run(
+            command, check=True, capture_output=True, text=True, **process.gui_subprocess_kwargs()
+        )
     except subprocess.CalledProcessError as exc:
         message = (
             exc.stderr.strip()

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from automatedub import process
 from automatedub.config import ToolConfig, load_tool_config
 from automatedub.vertical_slice.mix import (
     MIX_SAMPLE_RATE,
@@ -93,7 +94,9 @@ def run_tts_combine(
 
     tts_combined_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        subprocess.run(command, check=True, capture_output=True, text=True)
+        subprocess.run(
+            command, check=True, capture_output=True, text=True, **process.gui_subprocess_kwargs()
+        )
     except subprocess.CalledProcessError as exc:
         message = exc.stderr.strip() or exc.stdout.strip() or f"ffmpeg exited with {exc.returncode}"
         raise TtsCombineError(f"tts combine failed: {message}") from exc
