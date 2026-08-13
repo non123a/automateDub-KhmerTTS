@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import enum
 import json
+import math
+import os
+import shutil
 import subprocess
 import tempfile
 import time
@@ -17,6 +20,7 @@ from automatedub.vertical_slice.duration_report import (
     probe_wav_duration_seconds,
 )
 from automatedub.vertical_slice.mix import (
+    MIX_SAMPLE_RATE,
     MixSpeechTrack,
     VS4Error,
     build_duck_windows,
@@ -29,6 +33,11 @@ from automatedub.vertical_slice.mix import (
 from automatedub.vertical_slice.tts import tts_segment_output_path
 from automatedub_studio.project.editable_project import EditableSegment
 from automatedub_studio.project.models import Project, Segment
+from automatedub_studio.timeline.timeline_clip import (
+    ORIGINAL_AUDIO_TRACK_ID,
+    ORIGINAL_MOVIE_AUDIO_TRACK_ID,
+    Timeline,
+)
 
 EXPORT_REENCODE_REQUIRED_CODECS = {"av1"}
 EXPORT_H264_ENCODER = "libx264"
@@ -300,6 +309,56 @@ def build_export_speech_tracks(
                 fade_out_ms=fade_out_ms,
             )
         )
+    return tracks
+
+
+def build_export_timeline_speech_tracks(
+    timeline: Timeline,
+    tool_config: ToolConfig,
+) -> list[MixSpeechTrack]:
+    """Build export inputs from the editable timeline, never transcript references.
+
+    Multiple TimelineClip objects can intentionally point at the same WAV.  Each
+    is a separate, independently positioned export input; reference-only and
+    muted clips are deliberately excluded.
+    """
+    tracks: list[MixSpeechTrack] = []
+    for timeline_track in timeline.tracks:
+        if (
+            not timeline_track.is_audio
+            or timeline_track.reference_only
+            or timeline_track.muted
+            or timeline_track.id == ORIGINAL_AUDIO_TRACK_ID
+            or timeline_track.id == ORIGINAL_MOVIE_AUDIO_TRACK_ID
+        ):
+            continue
+        for clip in timeline_track.clips:
+            if clip.muted or clip.source_path is None or not clip.source_path.is_file():
+                continue
+            try:
+                generated_duration = probe_wav_duration_seconds(clip.source_path)
+            except DurationReportError as exc:
+                raise ExportError(f"timeline clip {clip.id}: {exc}") from exc
+            base_atempo = compute_atempo(generated_duration, clip.duration)
+            atempo = round(min(2.0, max(0.5, base_atempo * clip.speaking_rate)), 4)
+            tracks.append(
+                MixSpeechTrack(
+                    id=len(tracks),
+                    start=clip.start_time,
+                    end=clip.end_time,
+                    delay_ms=max(
+                        0,
+                        int(round(clip.start_time * 1000))
+                        + tool_config.tts_sync_offset_ms,
+                    ),
+                    atempo=atempo,
+                    generated_duration=generated_duration,
+                    tts_path=clip.source_path,
+                    volume=clip.volume,
+                    fade_in_ms=round(clip.fade_in * 1000),
+                    fade_out_ms=round(clip.fade_out * 1000),
+                )
+            )
     return tracks
 
 
@@ -704,6 +763,7 @@ def export_project(
     editables: dict[int, EditableSegment],
     tool_config: ToolConfig,
     options: ExportOptions,
+    timeline: Timeline | None = None,
     on_stage: Callable[[ExportStage], None] | None = None,
     on_progress: Callable[[FFmpegProgress], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
@@ -755,8 +815,12 @@ def export_project(
 
     _stage(ExportStage.MIXING_AUDIO)
 
-    speech_tracks = build_export_speech_tracks(
-        project.segments, editables, project.tts_directory, tool_config
+    speech_tracks = (
+        build_export_timeline_speech_tracks(timeline, tool_config)
+        if timeline is not None
+        else build_export_speech_tracks(
+            project.segments, editables, project.tts_directory, tool_config
+        )
     )
     if not speech_tracks:
         raise ExportError("no synthesized speech WAV files were found — nothing to export")
@@ -768,8 +832,8 @@ def export_project(
 
     tmp_fd, tmp_name = tempfile.mkstemp(suffix=".wav", dir=output_path.parent)
     mixed_audio_path = Path(tmp_name)
+    mix_failure: dict | None = None
     try:
-        import os
         os.close(tmp_fd)
 
         if options.include_original_movie_audio:
@@ -791,6 +855,27 @@ def export_project(
             subprocess.run(mix_command, check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as exc:
             msg = exc.stderr.strip() or exc.stdout.strip() or f"ffmpeg exited with {exc.returncode}"
+            mix_failure = _audio_mix_diagnostics(
+                output_path=output_path,
+                mixed_audio_path=mixed_audio_path,
+                speech_tracks=speech_tracks,
+                source_audio_path=source_audio if options.include_original_movie_audio else None,
+            )
+            mix_failure.update(
+                {
+                    "phase": "audio_mix",
+                    "ffmpeg_command": mix_command,
+                    "exit_code": exc.returncode,
+                    "ffmpeg_stderr": msg,
+                }
+            )
+            if "no space left on device" in msg.lower():
+                free_space = _format_bytes(mix_failure["free_space_bytes"])
+                required = _format_bytes(mix_failure["estimated_temp_bytes"])
+                raise ExportError(
+                    "Export failed because there is not enough disk space. "
+                    f"Free space: {free_space}. Estimated temporary audio space: {required}."
+                ) from exc
             raise ExportError(f"audio mix failed: {msg}") from exc
 
         if not mixed_audio_path.exists():
@@ -865,7 +950,21 @@ def export_project(
             )
 
     finally:
+        if mix_failure is not None:
+            mix_failure["temporary_file_size_before_cleanup_bytes"] = (
+                mixed_audio_path.stat().st_size if mixed_audio_path.exists() else 0
+            )
         mixed_audio_path.unlink(missing_ok=True)
+        if mix_failure is not None:
+            mix_failure["temporary_file_cleaned"] = not mixed_audio_path.exists()
+            _write_export_failure_debug(
+                project.project_path,
+                mix_failure.get("ffmpeg_command", []),
+                output_path,
+                int(mix_failure.get("exit_code", 1)),
+                str(mix_failure.get("ffmpeg_stderr", "")),
+                diagnostics=mix_failure,
+            )
 
     _stage(ExportStage.FINALIZING)
 
@@ -887,6 +986,53 @@ def _duration_seconds(summary: ExportStreamSummary) -> float | None:
             return None
         return duration if duration > 0 else None
     return None
+
+
+def _audio_mix_diagnostics(
+    *,
+    output_path: Path,
+    mixed_audio_path: Path,
+    speech_tracks: list[MixSpeechTrack],
+    source_audio_path: Path | None,
+) -> dict:
+    """Collect compact, non-user-facing facts for a failed PCM mix."""
+    destination = output_path.parent
+    free_space = shutil.disk_usage(destination).free
+    timeline_end = max(
+        (
+            track.delay_ms / 1000.0 + track.generated_duration / track.atempo
+            for track in speech_tracks
+            if track.atempo > 0
+        ),
+        default=0.0,
+    )
+    source_duration = 0.0
+    if source_audio_path is not None and source_audio_path.is_file():
+        try:
+            source_duration = probe_wav_duration_seconds(source_audio_path)
+        except DurationReportError:
+            source_duration = 0.0
+    estimated_duration = max(timeline_end, source_duration)
+    return {
+        "output_path": str(output_path),
+        "temporary_directory": str(destination),
+        "temporary_audio_path": str(mixed_audio_path),
+        "free_space_bytes": free_space,
+        "audio_input_count": len(speech_tracks) + (1 if source_audio_path else 0),
+        "tts_input_count": len(speech_tracks),
+        "total_input_duration_seconds": round(
+            sum(track.generated_duration for track in speech_tracks) + source_duration, 3
+        ),
+        "estimated_mix_duration_seconds": round(estimated_duration, 3),
+        "estimated_temp_bytes": math.ceil(estimated_duration * MIX_SAMPLE_RATE * 2 + 44),
+        "source_audio_path": str(source_audio_path) if source_audio_path else None,
+    }
+
+
+def _format_bytes(value: int) -> str:
+    if value < 1024**3:
+        return f"{value / 1024**2:.1f} MB"
+    return f"{value / 1024**3:.2f} GB"
 
 
 def _write_export_debug(
@@ -946,6 +1092,8 @@ def _write_export_failure_debug(
     output_path: Path,
     exit_code: int,
     stderr: str,
+    *,
+    diagnostics: dict | None = None,
 ) -> None:
     debug_path = project_path / "exports" / "last_export_debug.json"
     debug_path.parent.mkdir(parents=True, exist_ok=True)
@@ -956,6 +1104,7 @@ def _write_export_failure_debug(
                 "output_path": str(output_path),
                 "exit_code": exit_code,
                 "ffmpeg_stderr": stderr,
+                "diagnostics": diagnostics or {},
             },
             indent=2,
             ensure_ascii=False,

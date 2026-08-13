@@ -8,6 +8,10 @@ from automatedub.vertical_slice.tts import tts_segment_output_path
 from automatedub_studio.edit.commands import ClipClipboard, PasteSegmentsCommand
 from automatedub_studio.project.editable_project import EditableSegment
 from automatedub_studio.project.models import Segment
+from automatedub_studio.timeline.timeline_clip import (
+    KHMER_TTS_TRACK_ID,
+    ORIGINAL_AUDIO_TRACK_ID,
+)
 from automatedub_studio.ui.main_window import MainWindow
 
 
@@ -31,7 +35,7 @@ def _segment(
     )
 
 
-def test_duplicate_selected_clip_preserves_properties_and_audio(qapp, tmp_path):
+def test_duplicate_selected_tts_clip_creates_only_an_independent_timeline_clip(qapp, tmp_path):
     project_dir = make_valid_project(tmp_path, segment_count=2)
     window = MainWindow(settings=_memory_settings())
     window.open_project_path(project_dir)
@@ -51,21 +55,53 @@ def test_duplicate_selected_clip_preserves_properties_and_audio(qapp, tmp_path):
 
     window._duplicate_selected_clips()
 
-    assert len(window.project.segments) == 3
-    duplicate = window.project.segments[-1]
-    assert duplicate.start == 1.0
-    assert duplicate.end == 2.0
-    assert duplicate.offset_ms == 0
-    copied_editable = window._editables[duplicate.id]
-    assert copied_editable.speed == 1.25
-    assert copied_editable.volume == 0.7
-    assert copied_editable.fade_in_ms == 120
-    assert copied_editable.fade_out_ms == 240
-    assert copied_editable.locked is True
-    assert copied_editable.edited_text == "edited"
-    assert tts_segment_output_path(window.project.tts_directory, duplicate.id).read_bytes() == (
-        b"duplicated audio"
+    assert len(window.project.segments) == 2
+    tts_clips = [
+        clip
+        for clip in window.timeline.timeline_clips
+        if clip.track_id == KHMER_TTS_TRACK_ID
+    ]
+    reference_clips = [
+        clip
+        for clip in window.timeline.timeline_clips
+        if clip.track_id == ORIGINAL_AUDIO_TRACK_ID
+    ]
+    assert len(tts_clips) == 3
+    assert len(reference_clips) == 2
+
+    duplicate = next(clip for clip in tts_clips if clip.id.startswith("khmer:0:copy:"))
+    assert duplicate.segment_id == 0
+    assert duplicate.start_time == 1.0
+    assert duplicate.end_time == 2.0
+    assert duplicate.source_path == source_audio
+    assert duplicate.source_path.read_bytes() == b"duplicated audio"
+    assert not (window.project.tts_directory / "0002.wav").exists()
+
+
+def test_duplicate_tts_clip_can_move_without_changing_original_or_reference(qapp, tmp_path):
+    project_dir = make_valid_project(tmp_path, segment_count=1)
+    window = MainWindow(settings=_memory_settings())
+    window.open_project_path(project_dir)
+    window.timeline.select_segment_ids([0])
+    original = next(
+        clip for clip in window.timeline.timeline_clips if clip.id == "khmer:0"
     )
+    reference = next(
+        clip for clip in window.timeline.timeline_clips if clip.id == "original:0"
+    )
+
+    window._duplicate_selected_clips()
+    duplicate = next(
+        clip
+        for clip in window.timeline.timeline_clips
+        if clip.id.startswith("khmer:0:copy:")
+    )
+    window._apply_timeline_clip_move(duplicate.id, KHMER_TTS_TRACK_ID, 12.0)
+
+    assert (original.start_time, original.end_time) == (0.0, 1.0)
+    assert (reference.start_time, reference.end_time) == (0.0, 1.0)
+    assert (duplicate.start_time, duplicate.end_time) == (12.0, 13.0)
+    assert len(window.project.segments) == 1
 
 
 def test_copy_and_paste_at_playhead_selects_new_clip(qapp, tmp_path):

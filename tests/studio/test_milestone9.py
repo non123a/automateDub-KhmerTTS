@@ -34,6 +34,7 @@ from automatedub_studio.backend.export_service import (
     FFmpegProgress,
     _run_ffmpeg_with_progress,
     build_export_speech_tracks,
+    build_export_timeline_speech_tracks,
     build_mux_command,
     build_tts_only_mix_command,
     choose_export_video_encoder,
@@ -45,6 +46,12 @@ from automatedub_studio.backend.export_service import (
 from automatedub_studio.backend.export_worker import ExportJob, ExportRunner
 from automatedub_studio.project.editable_project import EditableSegment
 from automatedub_studio.project.models import Project, Segment
+from automatedub_studio.timeline.timeline_clip import (
+    KHMER_TTS_TRACK_ID,
+    ORIGINAL_AUDIO_TRACK_ID,
+    Timeline,
+    TimelineClip,
+)
 from automatedub_studio.ui.export_dialog import ExportProgressDialog
 
 # ---------------------------------------------------------------------------
@@ -184,6 +191,66 @@ def test_build_export_speech_tracks_default_volume_is_one(tmp_path):
     assert tracks[0].volume == 1.0
     assert tracks[0].fade_in_ms == 0
     assert tracks[0].fade_out_ms == 0
+
+
+def test_build_export_timeline_speech_tracks_excludes_reference_only_clips(tmp_path):
+    project = _make_project(tmp_path, segment_count=1)
+    tts_path = project.tts_directory / "0000.wav"
+    timeline = Timeline.default()
+    reference = timeline.track_by_id(ORIGINAL_AUDIO_TRACK_ID)
+    tts = timeline.track_by_id(KHMER_TTS_TRACK_ID)
+    assert reference is not None and tts is not None
+    reference.clips.append(
+        TimelineClip(
+            id="original:0",
+            track_id=ORIGINAL_AUDIO_TRACK_ID,
+            start_time=0.0,
+            end_time=1.0,
+            source_path=project.extracted_audio_path,
+        )
+    )
+    tts.clips.extend(
+        [
+            TimelineClip(
+                id="khmer:0",
+                track_id=KHMER_TTS_TRACK_ID,
+                start_time=0.0,
+                end_time=1.0,
+                source_path=tts_path,
+            ),
+            TimelineClip(
+                id="khmer:0:copy:1",
+                track_id=KHMER_TTS_TRACK_ID,
+                start_time=0.5,
+                end_time=1.5,
+                source_path=tts_path,
+            ),
+        ]
+    )
+
+    tracks = build_export_timeline_speech_tracks(timeline, _default_tool_config())
+
+    assert [track.tts_path for track in tracks] == [tts_path, tts_path]
+    assert [track.delay_ms for track in tracks] == [0, 500]
+
+
+def test_build_export_timeline_speech_tracks_skips_muted_clip(tmp_path):
+    project = _make_project(tmp_path, segment_count=1)
+    timeline = Timeline.default()
+    tts = timeline.track_by_id(KHMER_TTS_TRACK_ID)
+    assert tts is not None
+    tts.clips.append(
+        TimelineClip(
+            id="khmer:0",
+            track_id=KHMER_TTS_TRACK_ID,
+            start_time=0.0,
+            end_time=1.0,
+            source_path=project.tts_directory / "0000.wav",
+            muted=True,
+        )
+    )
+
+    assert build_export_timeline_speech_tracks(timeline, _default_tool_config()) == []
 
 
 # ---------------------------------------------------------------------------
@@ -837,6 +904,78 @@ def test_export_project_ffmpeg_mix_failure_raises(tmp_path):
                 tool_config=_default_tool_config(),
                 options=ExportOptions(output_path=tmp_path / "out.mp4"),
             )
+
+
+def test_export_project_enospc_reports_diagnostics_and_cleans_temp_wav(tmp_path):
+    project = _make_project(tmp_path)
+    output_path = tmp_path / "out.mp4"
+    temp_paths: list[Path] = []
+
+    def fake_run(cmd, **kwargs):
+        if cmd[-1] == "-encoders":
+            return MagicMock(returncode=0)
+        if "-filter_complex" in cmd:
+            temporary = Path(cmd[-1])
+            temporary.write_bytes(b"partial wav")
+            temp_paths.append(temporary)
+            raise subprocess.CalledProcessError(
+                1, cmd, stderr="Error submitting a packet to the muxer: No space left on device"
+            )
+        return MagicMock(returncode=0)
+
+    with patch("subprocess.run", side_effect=fake_run):
+        with pytest.raises(ExportError, match="not enough disk space"):
+            export_project(
+                project=project,
+                editables={},
+                tool_config=_default_tool_config(),
+                options=ExportOptions(output_path=output_path),
+            )
+
+    assert temp_paths and all(not path.exists() for path in temp_paths)
+    debug = json.loads(
+        (project.project_path / "exports" / "last_export_debug.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    diagnostics = debug["diagnostics"]
+    assert diagnostics["phase"] == "audio_mix"
+    assert diagnostics["tts_input_count"] == len(project.segments)
+    assert diagnostics["audio_input_count"] == len(project.segments)
+    assert diagnostics["temporary_directory"] == str(tmp_path)
+    assert diagnostics["free_space_bytes"] >= 0
+    assert diagnostics["estimated_temp_bytes"] > 0
+    assert diagnostics["temporary_file_size_before_cleanup_bytes"] == len(b"partial wav")
+    assert diagnostics["temporary_file_cleaned"] is True
+
+
+def test_export_project_repeated_exports_leave_no_mix_wavs(tmp_path):
+    project = _make_project(tmp_path)
+    output_path = tmp_path / "out.mp4"
+    temporary_paths: list[Path] = []
+
+    def fake_run(cmd, **kwargs):
+        if "-filter_complex" not in cmd and "-c:v" not in cmd:
+            return MagicMock(returncode=0)
+        out = Path(cmd[-1])
+        if "-c:v" in cmd:
+            out.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+        elif "-filter_complex" in cmd:
+            out.write_bytes(make_valid_wav_bytes())
+            temporary_paths.append(out)
+        return MagicMock(returncode=0, stdout="", stderr="")
+
+    with patch("subprocess.run", side_effect=fake_run):
+        for _ in range(2):
+            export_project(
+                project=project,
+                editables={},
+                tool_config=_default_tool_config(),
+                options=ExportOptions(output_path=output_path),
+            )
+
+    assert len(temporary_paths) == 2
+    assert all(not path.exists() for path in temporary_paths)
 
 
 def test_export_project_ffmpeg_mux_failure_raises(tmp_path):

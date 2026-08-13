@@ -436,6 +436,7 @@ class ExportManager(QObject):
                 editables,
                 config,
                 configuration,
+                timeline=self.timeline,
                 on_progress=self._on_ffmpeg_progress,
             )
         )
@@ -756,9 +757,13 @@ def _default_renderer(
     tool_config: ToolConfig,
     configuration: ExportConfiguration,
     *,
+    timeline: Timeline | None = None,
     on_progress: Callable[[FFmpegProgress], None] | None = None,
 ) -> ExportResult:
-    if configuration.audio_mode == AudioMode.MIXED:
+    # Both dubbed modes must render the editable TimelineClip model.  The
+    # legacy precombined TTS WAV cannot represent moves, duplicates, mutes,
+    # fades, or overlaps made in the editor.
+    if configuration.audio_mode != AudioMode.ORIGINAL_ONLY:
         return export_project(
             project=project,
             editables=editables,
@@ -770,6 +775,7 @@ def _default_renderer(
                 video_preset=configuration.video_preset.value,
                 include_original_movie_audio=configuration.include_original_movie_audio,
             ),
+            timeline=timeline,
             on_progress=on_progress,
         )
     audio_path = _audio_path_for_mode(project, configuration.audio_mode)

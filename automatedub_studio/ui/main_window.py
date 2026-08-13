@@ -921,18 +921,65 @@ class MainWindow(QMainWindow):
         )
 
     def _duplicate_selected_clips(self) -> None:
-        if self.project is None:
-            return
-        selected = self._selected_segments_from_timeline_clips()
+        """Duplicate editable timeline clips without duplicating transcript segments.
+
+        A timeline clip may reference a transcript segment, but it is not owned
+        by that segment.  Treating duplicate as a segment paste used to rebuild
+        the paired Original Speech reference clip and copy a second TTS file.
+        """
+        selected = [
+            clip
+            for clip in self.timeline.selected_timeline_clips
+            if not clip.locked
+            and clip.track_id == KHMER_TTS_TRACK_ID
+            and clip.track_id not in REFERENCE_TRACK_IDS
+        ]
         if not selected:
+            self._show_reference_read_only_message()
             return
-        source_editables = {
-            segment.id: self._editables[segment.id]
-            for segment in selected
-            if segment.id in self._editables
-        }
-        paste_start = max(segment.end for segment in selected)
-        self._paste_segments(selected, source_editables, paste_start)
+
+        paste_start = max(clip.end_time for clip in selected)
+        source_start = min(clip.start_time for clip in selected)
+        duplicates: list[TimelineClip] = []
+        for clip in selected:
+            start_time = paste_start + (clip.start_time - source_start)
+            duplicates.append(
+                replace(
+                    clip,
+                    id=self._next_duplicate_clip_id(clip.id),
+                    start_time=start_time,
+                    end_time=start_time + clip.duration,
+                    selected=False,
+                )
+            )
+
+        for duplicate in duplicates:
+            self._undo_stack.push(
+                InsertTimelineClipCommand(
+                    duplicate,
+                    add_cb=self._add_timeline_clip_edit,
+                    remove_cb=self._remove_timeline_clip_edit,
+                )
+            )
+        self.timeline.select_timeline_clip_ids([clip.id for clip in duplicates])
+
+    def _next_duplicate_clip_id(self, source_id: str) -> str:
+        existing_ids = {clip.id for clip in self.timeline.timeline_clips}
+        copy_number = 1
+        while f"{source_id}:copy:{copy_number}" in existing_ids:
+            copy_number += 1
+        return f"{source_id}:copy:{copy_number}"
+
+    def _add_timeline_clip_edit(self, clip: TimelineClip) -> None:
+        self.timeline.add_timeline_clip(clip)
+        if self.project is not None:
+            save_timeline_edits(self.timeline.timeline, self.project.project_path)
+
+    def _remove_timeline_clip_edit(self, clip_id: str) -> TimelineClip | None:
+        removed = self.timeline.remove_timeline_clip(clip_id)
+        if self.project is not None:
+            save_timeline_edits(self.timeline.timeline, self.project.project_path)
+        return removed
 
     def _paste_segments(
         self,
@@ -988,8 +1035,8 @@ class MainWindow(QMainWindow):
             return
         cmd = InsertTimelineClipCommand(
             clip,
-            add_cb=self.timeline.add_timeline_clip,
-            remove_cb=self.timeline.remove_timeline_clip,
+            add_cb=self._add_timeline_clip_edit,
+            remove_cb=self._remove_timeline_clip_edit,
         )
         self._undo_stack.push(cmd)
 
