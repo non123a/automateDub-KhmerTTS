@@ -971,6 +971,28 @@ def test_stop_stops_video_and_audio(qapp, tmp_path):
     assert controller._sync_timer.isActive() is False
 
 
+def test_pause_for_export_preserves_position_and_quiesces_timeline_audio(qapp, tmp_path):
+    audio_path = tmp_path / "clip.wav"
+    make_wav(audio_path, seconds=1.0)
+    video = VideoPlayerWidget()
+    controller = PlaybackController(video)
+    controller.set_timeline(
+        make_timeline(make_timeline_clip("khmer:0", KHMER_TTS_TRACK_ID, audio_path))
+    )
+    controller.seek(500)
+    original_position = video.position_ms
+    controller._sync_timer.start()
+
+    controller.pause_for_export()
+
+    assert video.position_ms == original_position
+    assert not controller._sync_timer.isActive()
+    assert all(
+        player.playbackState() != QMediaPlayer.PlaybackState.PlayingState
+        for player, _output in controller._khmer_clip_players.values()
+    )
+
+
 def test_pause_stops_sync_timer(qapp, tmp_path):
     video_path = tmp_path / "video.mp4"
     video_path.write_bytes(b"\x00\x00\x00\x18ftypmp42")

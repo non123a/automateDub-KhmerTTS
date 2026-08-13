@@ -77,6 +77,17 @@ class ExportPipelineStage(StrEnum):
     VERIFY_OUTPUT = "Verifying Output"
 
 
+class ExportLifecycleState(StrEnum):
+    """The one authoritative lifecycle for a managed export run."""
+
+    IDLE = "idle"
+    STARTING = "starting"
+    EXPORTING = "exporting"
+    CANCELLING = "cancelling"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 @dataclass(frozen=True)
 class ExportConfiguration:
     output_folder: Path
@@ -385,6 +396,7 @@ class ExportEvent:
     output_size_bytes: int | None = None
     speed: float | None = None
     command: tuple[str, ...] = ()
+    job_id: int = 0
 
 
 @dataclass(frozen=True)
@@ -392,6 +404,7 @@ class ManagedExportResult:
     output_path: Path
     metadata_path: Path
     subtitle_path: Path | None = None
+    job_id: int = 0
 
 
 ExportRenderer = Callable[
@@ -408,6 +421,7 @@ class ExportManager(QObject):
     exportCompleted = Signal(object)
     exportFailed = Signal(object)
     exportCancelled = Signal()
+    stateChanged = Signal(object, int)
 
     def __init__(
         self,
@@ -444,6 +458,9 @@ class ExportManager(QObject):
         self._pool = thread_pool if thread_pool is not None else QThreadPool.globalInstance()
         self._active_worker: _ExportWorker | None = None
         self._cancelled = False
+        self._job_id = 0
+        self._active_job_id = 0
+        self.state = ExportLifecycleState.IDLE
         self.result: ManagedExportResult | None = None
         self.failure: ExportEvent | None = None
         self._current_stage = ExportPipelineStage.PREPARE_TIMELINE
@@ -459,7 +476,7 @@ class ExportManager(QObject):
     def start(self) -> None:
         if self.is_running:
             return
-        self._cancelled = False
+        self._begin_run()
         worker = _ExportWorker(self)
         self._active_worker = worker
         self._pool.start(worker)
@@ -469,9 +486,18 @@ class ExportManager(QObject):
             self.start()
 
     def cancel(self) -> None:
+        if self.state not in (ExportLifecycleState.STARTING, ExportLifecycleState.EXPORTING):
+            return
         self._cancelled = True
+        self._set_state(ExportLifecycleState.CANCELLING)
 
     def run_sync(self) -> ManagedExportResult:
+        if self.state in (
+            ExportLifecycleState.IDLE,
+            ExportLifecycleState.COMPLETED,
+            ExportLifecycleState.FAILED,
+        ):
+            self._begin_run()
         output_path = self.configuration.output_path
         output_path.parent.mkdir(parents=True, exist_ok=True)
         exports_dir = self.project.project_path / "exports"
@@ -480,6 +506,7 @@ class ExportManager(QObject):
         subtitle_path: Path | None = None
 
         try:
+            self._set_state(ExportLifecycleState.EXPORTING)
             capability_report = inspect_export_capabilities(
                 self.project,
                 self.timeline,
@@ -543,20 +570,36 @@ class ExportManager(QObject):
                 output_path.unlink(missing_ok=True)
                 self._emit_event(stage, "cancelled", 0, "Export cancelled", error=str(exc))
                 self.exportCancelled.emit()
+                self._set_state(ExportLifecycleState.IDLE)
                 raise ExportManagerError(str(exc)) from exc
             event = self._emit_event(stage, "failed", 0, str(exc), error=str(exc))
             self.failure = event
             self.exportFailed.emit(event)
+            self._set_state(ExportLifecycleState.FAILED)
             raise ExportManagerError(str(exc)) from exc
 
         result = ManagedExportResult(
             output_path=output_path,
             metadata_path=metadata_path,
             subtitle_path=subtitle_path,
+            job_id=self._active_job_id,
         )
         self.result = result
+        self._set_state(ExportLifecycleState.COMPLETED)
         self.exportCompleted.emit(result)
         return result
+
+    def _begin_run(self) -> None:
+        self._cancelled = False
+        self.failure = None
+        self.result = None
+        self._job_id += 1
+        self._active_job_id = self._job_id
+        self._set_state(ExportLifecycleState.STARTING)
+
+    def _set_state(self, state: ExportLifecycleState) -> None:
+        self.state = state
+        self.stateChanged.emit(state, self._active_job_id)
 
     def _run_stage(self, stage: ExportPipelineStage, message: str) -> None:
         self._ensure_not_cancelled()
@@ -727,6 +770,7 @@ class ExportManager(QObject):
             output_size_bytes,
             speed,
             command,
+            self._active_job_id,
         )
         self._current_stage = stage
         self.eventEmitted.emit(event)

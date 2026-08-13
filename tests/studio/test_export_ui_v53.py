@@ -15,8 +15,12 @@ from automatedub_studio.export.manager import (
     AudioMode,
     ExportCapabilityReport,
     ExportConfiguration,
+    ExportEvent,
+    ExportLifecycleState,
     ExportManager,
     ExportManagerError,
+    ExportPipelineStage,
+    ManagedExportResult,
     SubtitleMode,
     VideoEncodingPreset,
 )
@@ -304,6 +308,9 @@ def test_export_progress_window_observes_completion(qapp, tmp_path):
     assert window.output_path == result.output_path
     assert window.open_file_button.isEnabled()
     assert window.open_folder_button.isEnabled()
+    assert not window.cancel_button.isVisible()
+    assert not window.cancel_button.isEnabled()
+    assert manager.state == ExportLifecycleState.COMPLETED
 
 
 def _export_manager(tmp_path) -> ExportManager:
@@ -374,6 +381,51 @@ def test_export_progress_window_shows_failure_and_allows_retry(qapp, tmp_path):
     assert window.close_button.isEnabled()
     assert not window.open_file_button.isEnabled()
     assert not window.open_folder_button.isEnabled()
+    assert not window.cancel_button.isVisible()
+
+
+def test_export_progress_window_ignores_stale_run_events(qapp, tmp_path):
+    manager = _export_manager(tmp_path)
+    window = ExportProgressWindow(manager)
+    manager.run_sync()
+    completed_job_id = manager._active_job_id
+    manager.retry()
+    current_job_id = manager._active_job_id
+    assert current_job_id > completed_job_id
+
+    window._on_event(
+        ExportEvent(
+            ExportPipelineStage.ENCODE_VIDEO,
+            "progress",
+            25,
+            "stale update",
+            job_id=completed_job_id,
+        )
+    )
+
+    assert window.status_label.text() == "Starting export..."
+    assert window.progress.value() == 0
+
+    window._on_completed(
+        ManagedExportResult(
+            output_path=tmp_path / "stale.mp4",
+            metadata_path=tmp_path / "stale.export.json",
+            job_id=completed_job_id,
+        )
+    )
+    assert window.status_label.text() == "Starting export..."
+
+
+def test_export_progress_window_cancelling_state_disables_cancel(qapp, tmp_path):
+    manager = _export_manager(tmp_path)
+    window = ExportProgressWindow(manager)
+    manager._begin_run()
+    manager._set_state(ExportLifecycleState.EXPORTING)
+    manager.cancel()
+
+    assert window.status_label.text() == "Cancelling export..."
+    assert not window.cancel_button.isEnabled()
+    assert window.cancel_button.text() == "Cancelling..."
 
 
 @pytest.mark.parametrize("size", [QSize(480, 320), QSize(620, 440), QSize(1000, 720)])

@@ -70,6 +70,9 @@ class PlaybackController(QObject):
         self._tick_total_seconds = 0.0
         self._tick_worst_seconds = 0.0
         self._lookup_total_seconds = 0.0
+        self._play_request_started: float | None = None
+        self._first_play_lookup_seconds = 0.0
+        self._first_play_active_players = 0
 
         self._pending_seek_ms: dict[QMediaPlayer, int] = {}
         self._pending_play: set[QMediaPlayer] = set()
@@ -245,6 +248,11 @@ class PlaybackController(QObject):
 
     def pause(self) -> None:
         self._video_player.pause()
+
+    def pause_for_export(self) -> None:
+        """Pause active editor media while preserving the playhead for export."""
+        self.pause()
+        self._pause_player(self._audition_player)
 
     def stop(self) -> None:
         self._video_player.stop()
@@ -471,6 +479,10 @@ class PlaybackController(QObject):
             ) if self._tick_count else 0.0,
             "worst_playback_tick_ms": round(self._tick_worst_seconds * 1000, 3),
             "active_clip_lookup_ms_total": round(self._lookup_total_seconds * 1000, 3),
+            "first_play_active_audio_players": self._first_play_active_players,
+            "first_play_active_clip_lookup_ms": round(
+                self._first_play_lookup_seconds * 1000, 3
+            ),
         }
 
     def _release_all_clip_players(self) -> None:
@@ -583,10 +595,12 @@ class PlaybackController(QObject):
             self._play_if_needed(player)
 
     def _on_play_requested(self) -> None:
+        self._play_request_started = time.perf_counter()
         self._video_player.set_audio_muted(True)
         self._sync_audio_to_position(
-            self._video_player.position_ms, start_playing=True, force_seek=True
+            self._video_player.position_ms, start_playing=True
         )
+        self._first_play_active_players = len(self._khmer_clip_players)
         self._sync_timer.start()
 
     def _on_pause_requested(self) -> None:
@@ -607,7 +621,6 @@ class PlaybackController(QObject):
 
     def _on_video_position_changed(self, position_ms: int) -> None:
         if self._video_player.is_playing:
-            self._maybe_resync(position_ms)
             self._maybe_loop(position_ms)
 
     def _on_sync_tick(self) -> None:
@@ -656,7 +669,11 @@ class PlaybackController(QObject):
             for clip in self._active_audio_clips(position_ms)
             if clip.source_path is not None
         }
-        self._lookup_total_seconds += time.perf_counter() - lookup_started
+        lookup_elapsed = time.perf_counter() - lookup_started
+        self._lookup_total_seconds += lookup_elapsed
+        if self._play_request_started is not None:
+            self._first_play_lookup_seconds = lookup_elapsed
+            self._play_request_started = None
         for clip_id in list(self._khmer_clip_players):
             if clip_id not in current_active:
                 self._release_audio_player(clip_id)

@@ -1431,6 +1431,7 @@ class MainWindow(QMainWindow):
     def _export_video(self) -> None:
         if self.project is None:
             return
+        self.playback_controller.pause_for_export()
         default_name = f"{self.project.project_path.name}_dubbed"
         wizard = ExportWizard(
             default_output_folder=self.project.project_path / "exports",

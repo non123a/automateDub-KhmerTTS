@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QDialog,
     QFormLayout,
     QGridLayout,
     QGroupBox,
@@ -20,17 +21,20 @@ from PySide6.QtWidgets import (
 
 from automatedub_studio.export.manager import (
     ExportEvent,
+    ExportLifecycleState,
     ExportManager,
     ManagedExportResult,
 )
 from automatedub_studio.ui.responsive import scrollable_content, set_responsive_window_size
 
 
-class ExportProgressWindow(QWidget):
+class ExportProgressWindow(QDialog):
     def __init__(self, export_manager: ExportManager, parent=None):
         super().__init__(parent)
         self.export_manager = export_manager
         self.output_path: Path | None = None
+        self._active_job_id = 0
+        self._terminal = False
         self.setWindowTitle("Export Progress")
         self.setWindowModality(Qt.WindowModality.ApplicationModal)
         self.setWindowFlag(Qt.WindowType.WindowCloseButtonHint, False)
@@ -129,11 +133,14 @@ class ExportProgressWindow(QWidget):
         )
 
         self.export_manager.eventEmitted.connect(self._on_event)
+        self.export_manager.stateChanged.connect(self._on_state_changed)
         self.export_manager.exportCompleted.connect(self._on_completed)
         self.export_manager.exportFailed.connect(self._on_failed)
         self.export_manager.exportCancelled.connect(self._on_cancelled)
 
     def _on_event(self, event: ExportEvent) -> None:
+        if event.job_id != self._active_job_id or self._terminal:
+            return
         if event.status == "started":
             self.error_label.clear()
             self.retry_button.setEnabled(False)
@@ -173,28 +180,57 @@ class ExportProgressWindow(QWidget):
         stage_progress = stage_index * 100 + event.progress
         self.progress.setValue(round(stage_progress / len(self.export_manager.stages)))
 
+    def _on_state_changed(self, state: ExportLifecycleState, job_id: int) -> None:
+        if job_id < self._active_job_id:
+            return
+        self._active_job_id = job_id
+        if state == ExportLifecycleState.STARTING:
+            self._terminal = False
+            self.progress.setValue(0)
+            self.status_label.setText("Starting export...")
+            self.error_label.clear()
+            self.retry_button.setEnabled(False)
+            self.cancel_button.setVisible(True)
+            self.cancel_button.setEnabled(True)
+            self.close_button.setEnabled(False)
+            return
+        if state == ExportLifecycleState.CANCELLING:
+            self.status_label.setText("Cancelling export...")
+            self.cancel_button.setText("Cancelling...")
+            self.cancel_button.setEnabled(False)
+
     def _on_completed(self, result: ManagedExportResult) -> None:
+        if result.job_id != self._active_job_id:
+            return
+        self._terminal = True
         self.output_path = result.output_path
         self.status_label.setText("Export Complete")
         self.telemetry_label.setText("Output verified and ready.")
         self.progress.setValue(100)
         self.retry_button.setEnabled(False)
         self.cancel_button.setEnabled(False)
+        self.cancel_button.setVisible(False)
         self.open_file_button.setEnabled(True)
         self.open_folder_button.setEnabled(True)
         self.close_button.setEnabled(True)
 
     def _on_failed(self, event: ExportEvent) -> None:
+        if event.job_id != self._active_job_id:
+            return
+        self._terminal = True
         self.status_label.setText("Export Failed")
         self.error_label.setText(event.error or event.message)
         self.telemetry_label.clear()
         self.retry_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
+        self.cancel_button.setVisible(False)
         self.close_button.setEnabled(True)
 
     def _on_cancelled(self) -> None:
+        self._terminal = True
         self.status_label.setText("Export cancelled")
         self.cancel_button.setEnabled(False)
+        self.cancel_button.setVisible(False)
         self.close_button.setEnabled(True)
 
     def _settings_text(self) -> str:
