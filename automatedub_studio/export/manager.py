@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import threading
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
 from enum import StrEnum
@@ -11,15 +12,17 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Signal
 
-from automatedub import process
 from automatedub.config import ToolConfig
 from automatedub_studio.backend.export_service import (
+    ExportCancelledError,
     ExportEncoderCapabilities,
     ExportOptions,
+    ExportProcessController,
     ExportResult,
     ExportStreamSummary,
     ExportSystemCapabilities,
     FFmpegProgress,
+    _run_ffmpeg_cancellable,
     build_mux_command,
     choose_export_video_encoder,
     export_project,
@@ -85,6 +88,7 @@ class ExportLifecycleState(StrEnum):
     STARTING = "starting"
     EXPORTING = "exporting"
     CANCELLING = "cancelling"
+    CANCELLED = "cancelled"
     COMPLETED = "completed"
     FAILED = "failed"
 
@@ -453,12 +457,16 @@ class ExportManager(QObject):
                 configuration,
                 timeline=self.timeline,
                 on_progress=self._on_ffmpeg_progress,
+                is_cancelled=self._cancellation_controller.is_cancelled,
+                process_controller=self._cancellation_controller,
             )
         )
         self.verifier = verifier if verifier is not None else verify_export_output
         self._pool = thread_pool if thread_pool is not None else QThreadPool.globalInstance()
         self._active_worker: _ExportWorker | None = None
         self._cancelled = False
+        self._cancellation_controller = ExportProcessController()
+        self._state_lock = threading.Lock()
         self._job_id = 0
         self._active_job_id = 0
         self.state = ExportLifecycleState.IDLE
@@ -491,11 +499,14 @@ class ExportManager(QObject):
             return
         self._cancelled = True
         self._set_state(ExportLifecycleState.CANCELLING)
+        # This only signals the child process; it never waits from the UI thread.
+        self._cancellation_controller.request_cancel()
 
     def run_sync(self) -> ManagedExportResult:
         if self.state in (
             ExportLifecycleState.IDLE,
             ExportLifecycleState.COMPLETED,
+            ExportLifecycleState.CANCELLED,
             ExportLifecycleState.FAILED,
         ):
             self._begin_run()
@@ -567,11 +578,11 @@ class ExportManager(QObject):
             self._write_metadata(metadata_path, rendered.output_path, subtitle_path)
         except Exception as exc:
             stage = self._current_stage_for_failure()
-            if self._cancelled:
+            if self._cancelled or isinstance(exc, ExportCancelledError):
                 output_path.unlink(missing_ok=True)
                 self._emit_event(stage, "cancelled", 0, "Export cancelled", error=str(exc))
                 self.exportCancelled.emit()
-                self._set_state(ExportLifecycleState.IDLE)
+                self._set_state(ExportLifecycleState.CANCELLED)
                 raise ExportManagerError(str(exc)) from exc
             event = self._emit_event(stage, "failed", 0, str(exc), error=str(exc))
             self.failure = event
@@ -592,6 +603,7 @@ class ExportManager(QObject):
 
     def _begin_run(self) -> None:
         self._cancelled = False
+        self._cancellation_controller = ExportProcessController()
         self.failure = None
         self.result = None
         self._job_id += 1
@@ -599,7 +611,8 @@ class ExportManager(QObject):
         self._set_state(ExportLifecycleState.STARTING)
 
     def _set_state(self, state: ExportLifecycleState) -> None:
-        self.state = state
+        with self._state_lock:
+            self.state = state
         self.stateChanged.emit(state, self._active_job_id)
 
     def _run_stage(self, stage: ExportPipelineStage, message: str) -> None:
@@ -669,13 +682,13 @@ class ExportManager(QObject):
                 str(temporary_output),
             ]
         try:
-            subprocess.run(
+            _run_ffmpeg_cancellable(
                 command,
-                check=True,
-                capture_output=True,
-                text=True,
-                **process.gui_subprocess_kwargs(),
+                is_cancelled=self._cancellation_controller.is_cancelled,
+                process_controller=self._cancellation_controller,
             )
+        except ExportCancelledError as exc:
+            raise ExportManagerError("export cancelled") from exc
         except subprocess.CalledProcessError as exc:
             message = (
                 exc.stderr.strip()
@@ -706,8 +719,8 @@ class ExportManager(QObject):
         )
 
     def _ensure_not_cancelled(self) -> None:
-        if self._cancelled:
-            raise ExportManagerError("export cancelled")
+        if self._cancelled or self._cancellation_controller.is_cancelled():
+            raise ExportCancelledError("export cancelled")
 
     def _current_stage_for_failure(self) -> ExportPipelineStage:
         return self._current_stage
@@ -810,6 +823,8 @@ def _default_renderer(
     *,
     timeline: Timeline | None = None,
     on_progress: Callable[[FFmpegProgress], None] | None = None,
+    is_cancelled: Callable[[], bool] | None = None,
+    process_controller: ExportProcessController | None = None,
 ) -> ExportResult:
     # Both dubbed modes must render the editable TimelineClip model.  The
     # legacy precombined TTS WAV cannot represent moves, duplicates, mutes,
@@ -828,6 +843,8 @@ def _default_renderer(
             ),
             timeline=timeline,
             on_progress=on_progress,
+            is_cancelled=is_cancelled,
+            process_controller=process_controller,
         )
     audio_path = _audio_path_for_mode(project, configuration.audio_mode)
     ffmpeg = _resolve_ffmpeg(tool_config)
@@ -861,9 +878,13 @@ def _default_renderer(
         loglevel="info",
     )
     try:
-        subprocess.run(
-            command, check=True, capture_output=True, text=True, **process.gui_subprocess_kwargs()
+        _run_ffmpeg_cancellable(
+            command,
+            is_cancelled=is_cancelled,
+            process_controller=process_controller,
         )
+    except ExportCancelledError as exc:
+        raise ExportManagerError("export cancelled") from exc
     except subprocess.CalledProcessError as exc:
         message = exc.stderr.strip() or exc.stdout.strip() or f"ffmpeg exited with {exc.returncode}"
         raise ExportManagerError(f"video render failed: {message}") from exc

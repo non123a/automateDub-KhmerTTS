@@ -9,10 +9,12 @@ import os
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from queue import Empty, Queue
 
 from automatedub import process
 from automatedub.config import ToolConfig
@@ -47,10 +49,69 @@ H264_ENCODER_PREFERENCE = ("h264_videotoolbox", "libx264")
 H265_ENCODER_PREFERENCE = ("hevc_videotoolbox", "libx265")
 STREAM_COPY_SAFE_CODECS = {"h264", "hevc", "h265", "mpeg4"}
 STREAM_COPY_SAFE_CONTAINERS = {"mp4", "mov"}
+FFMPEG_TERMINATE_GRACE_SECONDS = 3.0
+FFMPEG_KILL_GRACE_SECONDS = 2.0
 
 
 class ExportError(RuntimeError):
     """Raised when export cannot complete."""
+
+
+class ExportCancelledError(ExportError):
+    """Raised after a requested export process has been stopped."""
+
+
+class ExportProcessController:
+    """Thread-safe, non-blocking cancellation for the active FFmpeg process.
+
+    ``request_cancel`` is deliberately safe to call from a Qt slot: it only
+    sets an event and asks the child process to terminate.  Waiting, draining
+    pipes, escalation to ``kill``, and cleanup remain in the export worker.
+    """
+
+    def __init__(self) -> None:
+        self._cancelled = threading.Event()
+        self._lock = threading.Lock()
+        self._process: subprocess.Popen[str] | None = None
+        self._termination_requested = False
+
+    def is_cancelled(self) -> bool:
+        return self._cancelled.is_set()
+
+    def register(self, child: subprocess.Popen[str]) -> None:
+        with self._lock:
+            self._process = child
+            should_terminate = self._cancelled.is_set() and not self._termination_requested
+            if should_terminate:
+                self._termination_requested = True
+        if should_terminate:
+            _request_process_termination(child)
+
+    def clear(self, child: subprocess.Popen[str]) -> None:
+        with self._lock:
+            if self._process is child:
+                self._process = None
+
+    def request_cancel(self) -> bool:
+        """Request cancellation and return immediately without waiting for FFmpeg."""
+        self._cancelled.set()
+        with self._lock:
+            child = self._process
+            if child is None or self._termination_requested:
+                return False
+            self._termination_requested = True
+        _request_process_termination(child)
+        return True
+
+
+def _request_process_termination(child: subprocess.Popen[str]) -> None:
+    """Best-effort, non-blocking graceful shutdown of an FFmpeg child."""
+    try:
+        if child.poll() is None:
+            child.terminate()
+    except OSError:
+        # A concurrently exiting process is already settled by the worker.
+        pass
 
 
 class ExportStage(enum.StrEnum):
@@ -680,8 +741,14 @@ def _run_ffmpeg_with_progress(
     duration_seconds: float | None,
     on_progress: Callable[[FFmpegProgress], None],
     is_cancelled: Callable[[], bool] | None = None,
+    process_controller: ExportProcessController | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run FFmpeg while consuming its key/value progress pipe."""
+    """Run FFmpeg while consuming progress without starving stderr.
+
+    Both pipes are drained in lightweight reader threads.  The export worker
+    polls for cancellation rather than blocking in a stdout iterator, which
+    means a Cancel click can interrupt quiet or stalled FFmpeg processes.
+    """
     if command and command[-1] != "-progress":
         command = [*command[:-1], "-progress", "pipe:1", "-nostats", command[-1]]
     started = time.monotonic()
@@ -693,12 +760,70 @@ def _run_ffmpeg_with_progress(
         bufsize=1,
         **process.gui_subprocess_kwargs(),
     )
+    if process_controller is not None:
+        process_controller.register(ffmpeg_process)
+
+    stdout_lines: Queue[str | None] = Queue()
+    stderr_lines: list[str] = []
+
+    def read_stdout() -> None:
+        if ffmpeg_process.stdout is not None:
+            for line in ffmpeg_process.stdout:
+                stdout_lines.put(line)
+        stdout_lines.put(None)
+
+    def read_stderr() -> None:
+        if ffmpeg_process.stderr is not None:
+            stderr_lines.extend(ffmpeg_process.stderr)
+
+    stdout_reader = threading.Thread(target=read_stdout, name="ffmpeg-progress-reader", daemon=True)
+    stderr_reader = threading.Thread(target=read_stderr, name="ffmpeg-stderr-reader", daemon=True)
+    stdout_reader.start()
+    stderr_reader.start()
+
     values: dict[str, str] = {}
-    if ffmpeg_process.stdout is not None:
-        for line in ffmpeg_process.stdout:
-            if is_cancelled is not None and is_cancelled():
-                ffmpeg_process.terminate()
-                break
+    stdout_output: list[str] = []
+    cancelled = False
+    kill_deadline: float | None = None
+    final_deadline: float | None = None
+    killed = False
+    stdout_closed = False
+
+    try:
+        while not stdout_closed or ffmpeg_process.poll() is None:
+            if is_cancelled is not None and is_cancelled() and not cancelled:
+                cancelled = True
+                _request_process_termination(ffmpeg_process)
+                kill_deadline = time.monotonic() + FFMPEG_TERMINATE_GRACE_SECONDS
+            if (
+                cancelled
+                and not killed
+                and kill_deadline is not None
+                and time.monotonic() >= kill_deadline
+                and ffmpeg_process.poll() is None
+            ):
+                try:
+                    ffmpeg_process.kill()
+                except OSError:
+                    pass
+                killed = True
+                final_deadline = time.monotonic() + FFMPEG_KILL_GRACE_SECONDS
+            if (
+                killed
+                and final_deadline is not None
+                and time.monotonic() >= final_deadline
+                and ffmpeg_process.poll() is None
+            ):
+                raise ExportError("FFmpeg did not exit after forced cancellation")
+
+            try:
+                line = stdout_lines.get(timeout=0.05)
+            except Empty:
+                continue
+            if line is None:
+                stdout_closed = True
+                continue
+            stdout_output.append(line)
             line = line.strip()
             if not line or "=" not in line:
                 continue
@@ -734,16 +859,53 @@ def _run_ffmpeg_with_progress(
                     command=tuple(command),
                 )
             )
-    stdout, stderr = ffmpeg_process.communicate()
-    result = subprocess.CompletedProcess(command, ffmpeg_process.returncode, stdout, stderr)
-    if ffmpeg_process.returncode:
-        raise subprocess.CalledProcessError(
-            ffmpeg_process.returncode,
-            command,
-            output=stdout,
-            stderr=stderr,
-        )
+        # Child exit is observable without a blocking unbounded communicate.
+        returncode = ffmpeg_process.wait(timeout=1.0)
+    except subprocess.TimeoutExpired as exc:
+        raise ExportError("FFmpeg did not exit after cancellation") from exc
+    finally:
+        if process_controller is not None:
+            process_controller.clear(ffmpeg_process)
+        stdout_reader.join(timeout=1.0)
+        stderr_reader.join(timeout=1.0)
+        for stream in (ffmpeg_process.stdout, ffmpeg_process.stderr):
+            if stream is not None:
+                stream.close()
+
+    stdout = "".join(stdout_output)
+    stderr = "".join(stderr_lines)
+    if cancelled:
+        raise ExportCancelledError("export cancelled")
+    result = subprocess.CompletedProcess(command, returncode, stdout, stderr)
+    if returncode:
+        raise subprocess.CalledProcessError(returncode, command, output=stdout, stderr=stderr)
     return result
+
+
+def _run_ffmpeg_cancellable(
+    command: list[str],
+    *,
+    is_cancelled: Callable[[], bool] | None = None,
+    process_controller: ExportProcessController | None = None,
+) -> subprocess.CompletedProcess[str]:
+    """Run an FFmpeg command with the same cancellable pipe handling."""
+    # Keep the service's established direct-call behavior when no managed
+    # cancellation context exists.  Managed exports always supply a controller.
+    if process_controller is None:
+        return subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            **process.gui_subprocess_kwargs(),
+        )
+    return _run_ffmpeg_with_progress(
+        command,
+        None,
+        lambda _progress: None,
+        is_cancelled,
+        process_controller,
+    )
 
 
 def _int_or_none(value: str | None) -> int | None:
@@ -778,6 +940,7 @@ def export_project(
     on_stage: Callable[[ExportStage], None] | None = None,
     on_progress: Callable[[FFmpegProgress], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
+    process_controller: ExportProcessController | None = None,
 ) -> ExportResult:
     def _stage(s: ExportStage) -> None:
         if on_stage:
@@ -863,12 +1026,10 @@ def export_project(
                 mixed_audio_path=mixed_audio_path,
             )
         try:
-            subprocess.run(
+            _run_ffmpeg_cancellable(
                 mix_command,
-                check=True,
-                capture_output=True,
-                text=True,
-                **process.gui_subprocess_kwargs(),
+                is_cancelled=is_cancelled,
+                process_controller=process_controller,
             )
         except subprocess.CalledProcessError as exc:
             msg = exc.stderr.strip() or exc.stdout.strip() or f"ffmpeg exited with {exc.returncode}"
@@ -921,15 +1082,17 @@ def export_project(
                     duration,
                     on_progress,
                     _cancelled,
+                    process_controller,
                 )
             else:
-                mux_result = subprocess.run(
+                mux_result = _run_ffmpeg_cancellable(
                     mux_command,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                    **process.gui_subprocess_kwargs(),
+                    is_cancelled=is_cancelled,
+                    process_controller=process_controller,
                 )
+        except ExportCancelledError as exc:
+            output_path.unlink(missing_ok=True)
+            raise ExportError("export cancelled") from exc
         except subprocess.CalledProcessError as exc:
             _write_export_failure_debug(
                 project.project_path,

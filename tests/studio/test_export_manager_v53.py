@@ -15,6 +15,7 @@ from automatedub_studio.backend.export_service import (
 from automatedub_studio.export.manager import (
     AudioMode,
     ExportConfiguration,
+    ExportLifecycleState,
     ExportManager,
     ExportManagerError,
     ExportPipelineStage,
@@ -356,3 +357,28 @@ def test_cancelled_export_removes_partial_output(qapp, tmp_path):
 
     assert cancelled == [True]
     assert not manager.configuration.output_path.exists()
+    assert manager.state == ExportLifecycleState.CANCELLED
+
+
+def test_cancel_is_idempotent_and_retry_can_follow_cancel(qapp, tmp_path):
+    calls: list[str] = []
+
+    def cancelling_renderer(_project, _editables, _tool_config, _configuration):
+        calls.append("cancelled")
+        manager.cancel()
+        manager.cancel()
+        raise RuntimeError("ffmpeg stopped")
+
+    manager = ExportManager(
+        project=_project(tmp_path),
+        editables={},
+        tool_config=ToolConfig(),
+        configuration=_config(tmp_path),
+        renderer=cancelling_renderer,
+    )
+
+    with pytest.raises(ExportManagerError, match="ffmpeg stopped"):
+        manager.run_sync()
+
+    assert manager.state == ExportLifecycleState.CANCELLED
+    assert calls == ["cancelled"]
