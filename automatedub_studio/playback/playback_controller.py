@@ -51,6 +51,7 @@ class PlaybackController(QObject):
         self._active_khmer_clip_ids: set[str] = set()
         self._playback_rate = 1.0
         self._loop_selection_enabled = False
+        self._shutdown = False
 
         # Original Movie Audio is optional and owns no player until inserted.
         self._original_audio_player: QMediaPlayer | None = None
@@ -489,6 +490,29 @@ class PlaybackController(QObject):
         for clip_id in list(self._khmer_clip_players):
             self._release_audio_player(clip_id)
         self._active_khmer_clip_ids.clear()
+
+    def shutdown(self) -> None:
+        """Stop timers and release all Qt Multimedia children deterministically."""
+        if self._shutdown:
+            return
+        self._shutdown = True
+        self._sync_timer.stop()
+        self._release_all_clip_players()
+        if self._original_audio_player is not None:
+            self._stop_player(self._original_audio_player)
+        self._original_audio_player = None
+        self._original_audio_output = None
+        for player, output in self._all_pool_players:
+            self._stop_player(player)
+            player.setSource(QUrl())
+            player.deleteLater()
+            output.deleteLater()
+        self._all_pool_players.clear()
+        self._available_audio_players.clear()
+        self._stop_player(self._audition_player)
+        self._audition_player.setSource(QUrl())
+        self._audition_player.deleteLater()
+        self._audition_output.deleteLater()
 
     def _acquire_audio_player(self, clip: TimelineClip) -> tuple[QMediaPlayer, QAudioOutput]:
         if clip.track_id == ORIGINAL_MOVIE_AUDIO_TRACK_ID:

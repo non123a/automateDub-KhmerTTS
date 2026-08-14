@@ -68,6 +68,7 @@ class VideoPlayerWidget(QWidget):
 
         self._slider_pressed = False
         self._has_video = False
+        self._shutdown = False
 
         self._media_player = QMediaPlayer(self)
         self._audio_output = QAudioOutput(self)
@@ -151,6 +152,25 @@ class VideoPlayerWidget(QWidget):
         self._time_label.setText(_DEFAULT_TIME_LABEL)
         self._media_player.setSource(QUrl.fromLocalFile(str(video_path)))
         self._force_visual_only_audio()
+
+    def shutdown(self) -> None:
+        """Stop the backend before the widget or its media files are destroyed.
+
+        Qt Multimedia opens media asynchronously. Clearing the source after
+        stopping prevents a queued FFmpeg callback from outliving a temporary
+        file or the widget that owns the player.
+        """
+        if self._shutdown:
+            return
+        self._shutdown = True
+        self._media_player.stop()
+        self._media_player.setSource(QUrl())
+        self._has_video = False
+        self._set_controls_enabled(False)
+
+    def closeEvent(self, event) -> None:
+        self.shutdown()
+        super().closeEvent(event)
 
     def toggle_play_pause(self) -> None:
         if self.is_playing:

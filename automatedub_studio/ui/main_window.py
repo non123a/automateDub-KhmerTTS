@@ -1545,4 +1545,6 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         self._settings.setValue(_GEOMETRY_KEY, self.saveGeometry())
+        self.playback_controller.shutdown()
+        self.video_player.shutdown()
         super().closeEvent(event)

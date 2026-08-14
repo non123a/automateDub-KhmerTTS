@@ -8,6 +8,10 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      # Keep Qt Multimedia on its headless platform in CI; production GUI
+      # startup is unaffected because this is workflow-scoped.
+      QT_QPA_PLATFORM: offscreen
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

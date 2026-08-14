@@ -73,6 +73,17 @@ def test_video_player_embedded_audio_muted_on_creation(qapp):
     assert widget._audio_output.volume() == 0.0
 
 
+def test_video_player_shutdown_clears_async_media_source(qapp, tmp_path):
+    widget = VideoPlayerWidget()
+    media = tmp_path / "missing.mp4"
+    widget.load_video(media)
+
+    widget.shutdown()
+
+    assert widget._media_player.source().isEmpty()
+    assert widget._has_video is False
+
+
 # ---------------------------------------------------------------------------
 # load_video(None)
 # ---------------------------------------------------------------------------

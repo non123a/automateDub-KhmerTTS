@@ -18,6 +18,25 @@ def qapp():
     return app
 
 
+@pytest.fixture(autouse=True)
+def cleanup_qt_widgets():
+    """Flush multimedia teardown between tests.
+
+    QMediaPlayer opens media asynchronously; leaving top-level widgets alive
+    until Python shutdown lets queued FFmpeg callbacks outlive temp fixtures.
+    """
+    yield
+    app = QApplication.instance()
+    if app is None:
+        return
+    for widget in list(app.topLevelWidgets()):
+        widget.close()
+        widget.deleteLater()
+    app.processEvents()
+    app.sendPostedEvents(None, 0)
+    app.processEvents()
+
+
 def make_valid_project(root: Path, segment_count: int = 3, with_video: bool = False) -> Path:
     """Build a minimal-but-valid AutomateDub output/ directory under `root`."""
     project_dir = root / "output"
