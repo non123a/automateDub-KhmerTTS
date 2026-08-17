@@ -664,6 +664,36 @@ def test_export_project_success(tmp_path):
     assert ExportStage.COMPLETED.value in stages
 
 
+def test_export_project_places_mix_wav_in_supplied_short_workspace(tmp_path):
+    project = _make_project(tmp_path)
+    output_path = tmp_path / "very" / "long" / "destination" / "out.mp4"
+    workspace = tmp_path / "w"
+    commands: list[list[str]] = []
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        target = Path(command[-1])
+        if "-c:v" in command:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_bytes(b"\x00\x00\x00\x18ftypmp42")
+        else:
+            target.write_bytes(make_valid_wav_bytes())
+        return MagicMock(returncode=0)
+
+    with patch("subprocess.run", side_effect=fake_run):
+        export_project(
+            project=project,
+            editables={},
+            tool_config=_default_tool_config(),
+            options=ExportOptions(output_path=output_path),
+            intermediate_directory=workspace,
+        )
+
+    mix_command = next(command for command in commands if "-filter_complex" in command)
+    assert Path(mix_command[-1]).parent == workspace
+    assert not list(workspace.glob("*.wav"))
+
+
 def test_export_project_rejects_audio_only_mux_output(tmp_path):
     project = _make_project(tmp_path)
     output_path = tmp_path / "out.mp4"

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 import subprocess
+import tempfile
 import threading
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
@@ -91,6 +94,38 @@ class ExportLifecycleState(StrEnum):
     CANCELLED = "cancelled"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+WINDOWS_MAX_PATH = 260
+
+
+def export_path_length(path: Path) -> int:
+    """Return the absolute path length passed to Windows/FFmpeg."""
+    return len(str(path.expanduser().absolute()))
+
+
+def validate_export_output_path(path: Path, *, platform: str | None = None) -> None:
+    """Fail before rendering when the user-selected Windows destination is unsafe."""
+    if (platform or os.name) != "nt":
+        return
+    length = export_path_length(path)
+    if length >= WINDOWS_MAX_PATH:
+        raise ExportManagerError(
+            "The selected output location is too long for Windows. "
+            "Please choose a shorter folder or filename "
+            f"({length} characters; Windows limit is {WINDOWS_MAX_PATH - 1})."
+        )
+
+
+def _export_workspace() -> tempfile.TemporaryDirectory[str]:
+    """Create a short, application-owned workspace for disposable export files."""
+    root = Path(tempfile.gettempdir()) / "AutomateDub"
+    root.mkdir(parents=True, exist_ok=True)
+    return tempfile.TemporaryDirectory(prefix="exp-", dir=root)
+
+
+def _path_summary(label: str, path: Path) -> str:
+    return f"{label}: {path.name} ({export_path_length(path)} characters)"
 
 
 @dataclass(frozen=True)
@@ -447,6 +482,7 @@ class ExportManager(QObject):
         self.tool_config = tool_config
         self.configuration = configuration
         self.timeline = timeline
+        self._uses_default_renderer = renderer is None
         self.renderer = (
             renderer
             if renderer is not None
@@ -459,6 +495,7 @@ class ExportManager(QObject):
                 on_progress=self._on_ffmpeg_progress,
                 is_cancelled=self._cancellation_controller.is_cancelled,
                 process_controller=self._cancellation_controller,
+                intermediate_directory=self._workspace_path,
             )
         )
         self.verifier = verifier if verifier is not None else verify_export_output
@@ -473,6 +510,7 @@ class ExportManager(QObject):
         self.result: ManagedExportResult | None = None
         self.failure: ExportEvent | None = None
         self._current_stage = ExportPipelineStage.PREPARE_TIMELINE
+        self._workspace_path: Path | None = None
 
     @property
     def is_running(self) -> bool:
@@ -511,14 +549,17 @@ class ExportManager(QObject):
         ):
             self._begin_run()
         output_path = self.configuration.output_path
-        output_path.parent.mkdir(parents=True, exist_ok=True)
         exports_dir = self.project.project_path / "exports"
-        exports_dir.mkdir(parents=True, exist_ok=True)
         metadata_path = exports_dir / f"{output_path.stem}.export.json"
         subtitle_path: Path | None = None
+        workspace = _export_workspace()
+        self._workspace_path = Path(workspace.name)
 
         try:
             self._set_state(ExportLifecycleState.EXPORTING)
+            validate_export_output_path(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            exports_dir.mkdir(parents=True, exist_ok=True)
             capability_report = inspect_export_capabilities(
                 self.project,
                 self.timeline,
@@ -541,7 +582,7 @@ class ExportManager(QObject):
                     "Burned Into Video requires re-encoding. Select H.264 or H.265."
             )
             self._run_stage(ExportPipelineStage.PREPARE_TIMELINE, "Timeline ready")
-            subtitle_path = self._generate_subtitles(output_path)
+            subtitle_path = self._generate_subtitles(output_path, self._workspace_path)
             self._run_stage(
                 ExportPipelineStage.RENDER_AUDIO,
                 "Audio rendered; subtitles generated" if subtitle_path else "Audio rendered",
@@ -552,6 +593,12 @@ class ExportManager(QObject):
                 self.configuration,
                 include_original_movie_audio=timeline_has_original_movie_audio(self.timeline),
             )
+            if self._uses_default_renderer:
+                render_configuration = replace(
+                    render_configuration,
+                    output_folder=self._workspace_path,
+                    filename="video.mp4",
+                )
             rendered = self.renderer(
                 self.project,
                 self.editables,
@@ -562,9 +609,12 @@ class ExportManager(QObject):
                 SubtitleMode.EMBEDDED,
                 SubtitleMode.BURNED_IN,
             ):
-                self._apply_subtitles(rendered.output_path, subtitle_path)
+                self._apply_subtitles(rendered.output_path, subtitle_path, self._workspace_path)
                 subtitle_path.unlink(missing_ok=True)
                 subtitle_path = None
+            if self._uses_default_renderer:
+                self._move_to_final_output(rendered.output_path, output_path)
+                rendered = ExportResult(output_path=output_path)
             self._emit_event(
                 ExportPipelineStage.ENCODE_VIDEO,
                 "completed",
@@ -577,6 +627,8 @@ class ExportManager(QObject):
             self._emit_event(ExportPipelineStage.VERIFY_OUTPUT, "completed", 100, "Output verified")
             self._write_metadata(metadata_path, rendered.output_path, subtitle_path)
         except Exception as exc:
+            workspace.cleanup()
+            self._workspace_path = None
             stage = self._current_stage_for_failure()
             if self._cancelled or isinstance(exc, ExportCancelledError):
                 output_path.unlink(missing_ok=True)
@@ -597,6 +649,8 @@ class ExportManager(QObject):
             job_id=self._active_job_id,
         )
         self.result = result
+        workspace.cleanup()
+        self._workspace_path = None
         self._set_state(ExportLifecycleState.COMPLETED)
         self.exportCompleted.emit(result)
         return result
@@ -622,16 +676,20 @@ class ExportManager(QObject):
         self._ensure_not_cancelled()
         self._emit_event(stage, "completed", 100, message)
 
-    def _generate_subtitles(self, output_path: Path) -> Path | None:
+    def _generate_subtitles(self, output_path: Path, workspace: Path) -> Path | None:
         if self.configuration.subtitle_mode == SubtitleMode.NONE:
             return None
-        subtitle_path = output_path.with_suffix(".srt")
+        subtitle_path = (
+            output_path.with_suffix(".srt")
+            if self.configuration.subtitle_mode == SubtitleMode.EXTERNAL_SRT
+            else workspace / "subtitles.srt"
+        )
         subtitle_path.write_text(_build_srt(self.project), encoding="utf-8")
         return subtitle_path
 
-    def _apply_subtitles(self, output_path: Path, subtitle_path: Path) -> None:
+    def _apply_subtitles(self, output_path: Path, subtitle_path: Path, workspace: Path) -> None:
         ffmpeg = _resolve_ffmpeg(self.tool_config)
-        temporary_output = output_path.with_name(f"{output_path.stem}.subtitled.mp4")
+        temporary_output = workspace / "subtitled.mp4"
         if self.configuration.subtitle_mode == SubtitleMode.EMBEDDED:
             command = [
                 ffmpeg,
@@ -681,6 +739,13 @@ class ExportManager(QObject):
                 "copy",
                 str(temporary_output),
             ]
+        self._emit_event(
+            ExportPipelineStage.ENCODE_VIDEO,
+            "progress",
+            80,
+            "Applying subtitles",
+            command=tuple(command),
+        )
         try:
             _run_ffmpeg_cancellable(
                 command,
@@ -689,6 +754,12 @@ class ExportManager(QObject):
             )
         except ExportCancelledError as exc:
             raise ExportManagerError("export cancelled") from exc
+        except OSError as exc:
+            raise ExportManagerError(
+                "subtitle render could not start: "
+                f"{exc}. {_path_summary('Output', output_path)}; "
+                f"{_path_summary('Intermediate', temporary_output)}"
+            ) from exc
         except subprocess.CalledProcessError as exc:
             message = (
                 exc.stderr.strip()
@@ -698,7 +769,25 @@ class ExportManager(QObject):
             raise ExportManagerError(f"subtitle render failed: {message}") from exc
         if not temporary_output.exists():
             raise ExportManagerError("subtitle render did not produce an MP4")
-        temporary_output.replace(output_path)
+        try:
+            # Workspace and destination can be on different volumes.
+            shutil.move(str(temporary_output), str(output_path))
+        except OSError as exc:
+            raise ExportManagerError(
+                "subtitle render could not finalize output: "
+                f"{exc}. {_path_summary('Output', output_path)}"
+            ) from exc
+
+    def _move_to_final_output(self, rendered_path: Path, output_path: Path) -> None:
+        """Move the completed short-workspace MP4 to the user's destination."""
+        try:
+            shutil.move(str(rendered_path), str(output_path))
+        except OSError as exc:
+            raise ExportManagerError(
+                "export could not write the selected output location: "
+                f"{exc}. {_path_summary('Output', output_path)}; "
+                f"{_path_summary('Intermediate', rendered_path)}"
+            ) from exc
 
     def _write_metadata(
         self,
@@ -825,6 +914,7 @@ def _default_renderer(
     on_progress: Callable[[FFmpegProgress], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
     process_controller: ExportProcessController | None = None,
+    intermediate_directory: Path | None = None,
 ) -> ExportResult:
     # Both dubbed modes must render the editable TimelineClip model.  The
     # legacy precombined TTS WAV cannot represent moves, duplicates, mutes,
@@ -845,6 +935,7 @@ def _default_renderer(
             on_progress=on_progress,
             is_cancelled=is_cancelled,
             process_controller=process_controller,
+            intermediate_directory=intermediate_directory,
         )
     audio_path = _audio_path_for_mode(project, configuration.audio_mode)
     ffmpeg = _resolve_ffmpeg(tool_config)

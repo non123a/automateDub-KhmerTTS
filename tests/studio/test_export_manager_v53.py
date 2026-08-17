@@ -21,6 +21,7 @@ from automatedub_studio.export.manager import (
     ExportPipelineStage,
     SubtitleMode,
     VideoEncodingPreset,
+    validate_export_output_path,
     validate_export_presets,
     verify_export_output,
 )
@@ -82,6 +83,17 @@ def test_export_configuration_builds_mp4_output_path(tmp_path):
     config = ExportConfiguration(output_folder=tmp_path, filename="movie")
 
     assert config.output_path == tmp_path / "movie.mp4"
+
+
+def test_windows_rejects_an_excessively_long_final_output_before_export(tmp_path):
+    long_output = tmp_path.joinpath(*(["deep_export_folder"] * 20), "movie.mp4")
+
+    with pytest.raises(ExportManagerError, match="selected output location is too long"):
+        validate_export_output_path(long_output, platform="nt")
+
+
+def test_windows_accepts_a_normal_length_final_output(tmp_path):
+    validate_export_output_path(tmp_path / "movie.mp4", platform="nt")
 
 
 def test_export_validation_disables_fastest_for_av1_source(tmp_path):
@@ -195,6 +207,52 @@ def test_export_manager_generates_external_subtitles(qapp, tmp_path):
     text = result.subtitle_path.read_text(encoding="utf-8")
     assert "00:00:01,000 --> 00:00:02,500" in text
     assert "target subtitle" in text
+
+
+def test_burned_in_subtitles_use_short_workspace_not_output_stem(qapp, tmp_path):
+    manager = ExportManager(
+        project=_project(tmp_path),
+        editables={},
+        tool_config=ToolConfig(),
+        configuration=_config(tmp_path, subtitle_mode=SubtitleMode.BURNED_IN),
+        renderer=_renderer,
+        verifier=_skip_verification,
+    )
+    workspace = tmp_path / "w"
+    workspace.mkdir()
+    output_path = tmp_path / ("long-output-name-" * 12 + ".mp4")
+
+    subtitle_path = manager._generate_subtitles(output_path, workspace)
+
+    assert subtitle_path == workspace / "subtitles.srt"
+    assert subtitle_path.is_file()
+
+
+def test_default_renderer_uses_short_workspace_then_moves_final_output(qapp, tmp_path, monkeypatch):
+    captured: dict[str, Path] = {}
+
+    def fake_default_renderer(_project, _editables, _tool_config, configuration, **_kwargs):
+        captured["intermediate"] = configuration.output_path
+        configuration.output_path.write_bytes(b"media")
+        return ExportResult(output_path=configuration.output_path)
+
+    monkeypatch.setattr(export_manager, "_default_renderer", fake_default_renderer)
+    configuration = _config(tmp_path)
+    manager = ExportManager(
+        project=_project(tmp_path),
+        editables={},
+        tool_config=ToolConfig(),
+        configuration=configuration,
+        verifier=_skip_verification,
+    )
+
+    result = manager.run_sync()
+
+    assert captured["intermediate"].name == "video.mp4"
+    assert captured["intermediate"].parent.name.startswith("exp-")
+    assert result.output_path == configuration.output_path
+    assert result.output_path.read_bytes() == b"media"
+    assert not captured["intermediate"].exists()
 
 
 def test_export_manager_stops_and_reports_failed_stage(qapp, tmp_path):

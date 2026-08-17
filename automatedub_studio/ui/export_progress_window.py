@@ -221,6 +221,12 @@ class ExportProgressWindow(QDialog):
         self.status_label.setText("Export Failed")
         self.error_label.setText(event.error or event.message)
         self.telemetry_label.clear()
+        output_path = self.export_manager.configuration.output_path
+        self.details_output_label.setText(
+            f"{output_path.name} ({len(str(output_path.absolute()))} characters)"
+        )
+        self.details_stage_label.setText(event.stage.value)
+        self.details_log_label.setText(event.error or event.message)
         self.retry_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self.cancel_button.setVisible(False)

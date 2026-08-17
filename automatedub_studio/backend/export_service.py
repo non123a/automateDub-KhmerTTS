@@ -941,6 +941,7 @@ def export_project(
     on_progress: Callable[[FFmpegProgress], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
     process_controller: ExportProcessController | None = None,
+    intermediate_directory: Path | None = None,
 ) -> ExportResult:
     def _stage(s: ExportStage) -> None:
         if on_stage:
@@ -1004,7 +1005,9 @@ def export_project(
 
     duck_windows = build_duck_windows(speech_tracks)
 
-    tmp_fd, tmp_name = tempfile.mkstemp(suffix=".wav", dir=output_path.parent)
+    temp_directory = intermediate_directory or output_path.parent
+    temp_directory.mkdir(parents=True, exist_ok=True)
+    tmp_fd, tmp_name = tempfile.mkstemp(prefix="mix-", suffix=".wav", dir=temp_directory)
     mixed_audio_path = Path(tmp_name)
     mix_failure: dict | None = None
     try:
@@ -1031,6 +1034,11 @@ def export_project(
                 is_cancelled=is_cancelled,
                 process_controller=process_controller,
             )
+        except OSError as exc:
+            raise ExportError(
+                "audio mix could not start: "
+                f"{exc}. Temporary audio path length: {len(str(mixed_audio_path.absolute()))}."
+            ) from exc
         except subprocess.CalledProcessError as exc:
             msg = exc.stderr.strip() or exc.stdout.strip() or f"ffmpeg exited with {exc.returncode}"
             mix_failure = _audio_mix_diagnostics(
@@ -1093,6 +1101,12 @@ def export_project(
         except ExportCancelledError as exc:
             output_path.unlink(missing_ok=True)
             raise ExportError("export cancelled") from exc
+        except OSError as exc:
+            raise ExportError(
+                "video render could not start: "
+                f"{exc}. Output path length: {len(str(output_path.absolute()))}; "
+                f"temporary audio path length: {len(str(mixed_audio_path.absolute()))}."
+            ) from exc
         except subprocess.CalledProcessError as exc:
             _write_export_failure_debug(
                 project.project_path,
